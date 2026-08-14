@@ -1,0 +1,5 @@
+.DS_Store
+spike/.venv/
+spike/spike.db
+__pycache__/
+*.pyc
