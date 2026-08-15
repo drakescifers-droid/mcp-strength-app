@@ -19,6 +19,16 @@ final class MeasurementType {
     var id: UUID
     var name: String
     var group: MeasurementGroup
+    /// Display order within `group`. Seeded, not alphabetical: the reference is
+    /// anatomical, and that order becomes muscle memory (see measurement-seed.json).
+    ///
+    /// **The `= 0` is load-bearing, do not remove it.** A default on the DECLARATION is
+    /// what lets SwiftData lightweight-migrate a store written before this property
+    /// existed; a default only in `init` is invisible to migration, and opening an older
+    /// store then throws from `ModelContainer(for:)` — which crashed the app on launch
+    /// before this was fixed. Rows migrated in at 0 are corrected on the next launch,
+    /// because the seed importer rewrites sortOrder on existing rows too.
+    var sortOrder: Int = 0
 
     @Relationship(deleteRule: .nullify, inverse: \MeasurementEntry.type)
     var entries: [MeasurementEntry] = []
@@ -26,11 +36,13 @@ final class MeasurementType {
     init(
         id: UUID = UUID(),
         name: String,
-        group: MeasurementGroup = .core
+        group: MeasurementGroup = .core,
+        sortOrder: Int = 0
     ) {
         self.id = id
         self.name = name
         self.group = group
+        self.sortOrder = sortOrder
     }
 }
 

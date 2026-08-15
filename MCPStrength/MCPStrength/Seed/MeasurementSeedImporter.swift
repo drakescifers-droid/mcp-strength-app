@@ -13,14 +13,15 @@
 import Foundation
 import SwiftData
 
-/// One row of the seed file. Mirrors the JSON shape: `id`, `name`, `group`, and `unit`.
-/// `id` is a literal UUID baked into the file — it is never generated at import time
-/// (see the seeded-IDs contract below).
+/// One row of the seed file. Mirrors the JSON shape: `id`, `name`, `group`, `unit`,
+/// and `sortOrder`. `id` is a literal UUID baked into the file — it is never generated
+/// at import time (see the seeded-IDs contract below).
 struct MeasurementSeedRow: Codable, Sendable, Equatable {
     let id: UUID
     let name: String
     let group: MeasurementGroup
     let unit: String
+    let sortOrder: Int
 }
 
 /// Imports seed rows into a SwiftData `ModelContext`.
@@ -52,6 +53,8 @@ struct MeasurementSeedRow: Codable, Sendable, Equatable {
 ///     existing ones untouched.
 ///   * NON-DESTRUCTIVE — the importer never deletes anything; a type the user recorded against
 ///     keeps its entries regardless of re-import.
+///   * Library-defined fields refreshed on a match: `name`, `group`, `sortOrder`. `sortOrder`
+///     is included so a re-seed can correct the list order of types that already exist.
 ///
 /// ## Default unit
 ///
@@ -83,16 +86,20 @@ enum MeasurementSeedImporter {
         for row in rows {
             if let type = byID[row.id] {
                 // Existing row: update library-defined fields in place. The id is untouched
-                // (stability). The unit is not stored on the model (see "Default unit" above),
-                // so there is nothing else to refresh here.
+                // (stability). sortOrder is refreshed so a re-seed can correct the list
+                // order of types that already exist — the reason the field is on the model
+                // rather than derived from name. The unit is not stored on the model (see
+                // "Default unit" above).
                 type.name = row.name
                 type.group = row.group
+                type.sortOrder = row.sortOrder
             } else {
                 // New row: insert with the literal id from the seed file. Never UUID().
                 let type = MeasurementType(
                     id: row.id,
                     name: row.name,
-                    group: row.group
+                    group: row.group,
+                    sortOrder: row.sortOrder
                 )
                 context.insert(type)
                 byID[row.id] = type

@@ -43,11 +43,18 @@ struct MeasurementsScreen: View {
     }
 
     private var coreTypes: [MeasurementType] {
-        types.filter { $0.group == .core }.sorted { $0.name < $1.name }
+        types.filter { $0.group == .core }.sorted(by: Self.bySortOrder)
     }
 
     private var bodyPartTypes: [MeasurementType] {
-        types.filter { $0.group == .bodyPart }.sorted { $0.name < $1.name }
+        types.filter { $0.group == .bodyPart }.sorted(by: Self.bySortOrder)
+    }
+
+    /// Seeded anatomical/priority order; name is only a tiebreak so a missing or
+    /// colliding sortOrder does not scramble the list into hash order.
+    private static func bySortOrder(_ lhs: MeasurementType, _ rhs: MeasurementType) -> Bool {
+        if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
+        return lhs.name < rhs.name
     }
 
     var body: some View {

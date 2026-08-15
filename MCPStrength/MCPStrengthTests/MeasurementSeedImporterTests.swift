@@ -40,13 +40,14 @@ struct MeasurementSeedImporterTests {
     private static let chestID = UUID(uuidString: "41bb7a68-8487-4288-8673-c313bb440a84")!
 
     /// A small, hand-built fixture set (NOT the bundled file) so tests drive the pure core
-    /// directly and never depend on bundle plumbing.
+    /// directly and never depend on bundle plumbing. Groups are numbered independently
+    /// from 0, matching the seed-file contract.
     private var fixtureRows: [MeasurementSeedRow] {
         [
-            MeasurementSeedRow(id: Self.weightID, name: "Weight", group: .core, unit: "lb"),
-            MeasurementSeedRow(id: Self.bodyFatID, name: "Body Fat %", group: .core, unit: "%"),
-            MeasurementSeedRow(id: Self.neckID, name: "Neck", group: .bodyPart, unit: "in"),
-            MeasurementSeedRow(id: Self.chestID, name: "Chest", group: .bodyPart, unit: "in"),
+            MeasurementSeedRow(id: Self.weightID, name: "Weight", group: .core, unit: "lb", sortOrder: 0),
+            MeasurementSeedRow(id: Self.bodyFatID, name: "Body Fat %", group: .core, unit: "%", sortOrder: 1),
+            MeasurementSeedRow(id: Self.neckID, name: "Neck", group: .bodyPart, unit: "in", sortOrder: 0),
+            MeasurementSeedRow(id: Self.chestID, name: "Chest", group: .bodyPart, unit: "in", sortOrder: 1),
         ]
     }
 
@@ -124,6 +125,47 @@ struct MeasurementSeedImporterTests {
         #expect(survivor.type?.id == Self.weightID) // still attached to the seeded type
     }
 
+    // (4) Seeded rows carry the sortOrder from the fixture (groups numbered independently).
+    @Test func seedingWritesSortOrderOnInsertedRows() throws {
+        let context = try makeContainer()
+        try MeasurementSeedImporter.importRows(fixtureRows, into: context)
+
+        let all = try fetchAll(context)
+        let weight = try #require(all.first { $0.id == Self.weightID })
+        #expect(weight.sortOrder == 0)
+        let bodyFat = try #require(all.first { $0.id == Self.bodyFatID })
+        #expect(bodyFat.sortOrder == 1)
+        // Body-part numbering restarts at 0 — Neck must sort before Chest.
+        let neck = try #require(all.first { $0.id == Self.neckID })
+        #expect(neck.sortOrder == 0)
+        let chest = try #require(all.first { $0.id == Self.chestID })
+        #expect(chest.sortOrder == 1)
+        #expect(neck.sortOrder < chest.sortOrder)
+    }
+
+    // (5) A re-seed refreshes sortOrder on a pre-existing row rather than leaving it stale.
+    // This is the upgrade path: types imported before sortOrder existed (or with a wrong
+    // value) pick up the corrected order without being re-inserted.
+    @Test func reSeedUpdatesStaleSortOrderOnExistingRow() throws {
+        let context = try makeContainer()
+        let stale = MeasurementType(
+            id: Self.weightID,
+            name: "Weight",
+            group: .core,
+            sortOrder: 99
+        )
+        context.insert(stale)
+        try context.save()
+
+        try MeasurementSeedImporter.importRows(fixtureRows, into: context)
+
+        let all = try fetchAll(context)
+        #expect(all.count == 4) // matched by id, not duplicated
+        let weight = try #require(all.first { $0.id == Self.weightID })
+        #expect(weight.sortOrder == 0) // refreshed from the seed, not left at 99
+        #expect(weight.id == Self.weightID) // id is the contract; never rewritten
+    }
+
     // MARK: - Bundled seed file (keeps the shipped file honest)
 
     // The real `measurement-seed.json` decodes, has unique ids, and covers exactly the two groups
@@ -163,10 +205,28 @@ struct MeasurementSeedImporterTests {
         ]
         #expect(Set(bodyPart.map(\.name)) == expectedBodyParts)
 
+        // sortOrder is unique within each group and follows the reference: Weight first
+        // in Core; anatomical top-down in Body Part (Neck before Chest).
+        let coreOrders = core.map(\.sortOrder)
+        #expect(Set(coreOrders).count == coreOrders.count)
+        let bodyPartOrders = bodyPart.map(\.sortOrder)
+        #expect(Set(bodyPartOrders).count == bodyPartOrders.count)
+        let weightRow = try #require(core.first { $0.name == "Weight" })
+        #expect(weightRow.sortOrder == 0)
+        #expect(weightRow.sortOrder == coreOrders.min())
+        let neckRow = try #require(bodyPart.first { $0.name == "Neck" })
+        let chestRow = try #require(bodyPart.first { $0.name == "Chest" })
+        #expect(neckRow.sortOrder < chestRow.sortOrder)
+
         // Importing the real bundled file into a fresh context inserts exactly one row per seed.
         let context = try makeContainer()
         try MeasurementSeedImporter.importRows(rows, into: context)
         let all = try fetchAll(context)
         #expect(all.count == rows.count)
+        // Persisted sortOrder matches the seed (not left at the model default of 0).
+        for row in rows {
+            let persisted = try #require(all.first { $0.id == row.id })
+            #expect(persisted.sortOrder == row.sortOrder)
+        }
     }
 }
