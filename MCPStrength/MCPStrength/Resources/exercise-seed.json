@@ -1,0 +1,247 @@
+[
+  {
+    "id": "6aaeeb2d-d324-4999-91fb-ceb5487fd80e",
+    "name": "Bench Press (Barbell)",
+    "bodyPart": "chest",
+    "category": "barbell",
+    "aliases": [
+      "bench press",
+      "barbell bench press"
+    ]
+  },
+  {
+    "id": "9a3540e5-9841-4efe-a09a-7e2509a2e4eb",
+    "name": "Squat (Barbell)",
+    "bodyPart": "legs",
+    "category": "barbell",
+    "aliases": [
+      "back squat",
+      "barbell squat"
+    ]
+  },
+  {
+    "id": "ccd9e6e1-38a5-46d0-bc1b-eca51aed41bc",
+    "name": "Deadlift (Barbell)",
+    "bodyPart": "back",
+    "category": "barbell",
+    "aliases": [
+      "deadlift",
+      "conventional deadlift"
+    ]
+  },
+  {
+    "id": "d8849bdc-f8b4-4c67-ace7-ae04311542fa",
+    "name": "Overhead Press (Barbell)",
+    "bodyPart": "shoulders",
+    "category": "barbell",
+    "aliases": [
+      "ohp",
+      "military press",
+      "shoulder press"
+    ]
+  },
+  {
+    "id": "5b3e00a2-b1bf-470e-9782-408984ab130e",
+    "name": "Barbell Row",
+    "bodyPart": "back",
+    "category": "barbell",
+    "aliases": [
+      "bent over row",
+      "row"
+    ]
+  },
+  {
+    "id": "2aa0a5f0-2a1b-4e0b-83c8-9e3b1578fa5d",
+    "name": "Lateral Raise (Dumbbell)",
+    "bodyPart": "shoulders",
+    "category": "dumbbell",
+    "aliases": [
+      "dumbbell lateral raise",
+      "side raise"
+    ]
+  },
+  {
+    "id": "8b0b1284-eda2-418d-8991-0de0269a7601",
+    "name": "Bicep Curl (Dumbbell)",
+    "bodyPart": "arms",
+    "category": "dumbbell",
+    "aliases": [
+      "dumbbell curl",
+      "db curl"
+    ]
+  },
+  {
+    "id": "94bdcb4a-9469-448d-af17-b62e68f1abb5",
+    "name": "Dumbbell Row",
+    "bodyPart": "back",
+    "category": "dumbbell",
+    "aliases": [
+      "db row",
+      "row"
+    ]
+  },
+  {
+    "id": "f0504978-717f-443f-9a18-aa5feedfdd58",
+    "name": "Incline Bench Press (Dumbbell)",
+    "bodyPart": "chest",
+    "category": "dumbbell",
+    "aliases": [
+      "incline db press"
+    ]
+  },
+  {
+    "id": "8de7cc2a-06ac-40fd-b99c-e5461f67a107",
+    "name": "Chest Fly (Machine)",
+    "bodyPart": "chest",
+    "category": "machineOther",
+    "aliases": [
+      "pec deck",
+      "machine fly"
+    ]
+  },
+  {
+    "id": "99fb367c-8860-467d-8bc3-05e7545312be",
+    "name": "Leg Press",
+    "bodyPart": "legs",
+    "category": "machineOther",
+    "aliases": [
+      "leg press"
+    ]
+  },
+  {
+    "id": "07fc8389-e0d3-45d3-af79-4dd97d777bd2",
+    "name": "Lat Pulldown",
+    "bodyPart": "back",
+    "category": "machineOther",
+    "aliases": [
+      "pulldown",
+      "cable pulldown"
+    ]
+  },
+  {
+    "id": "a7d8825a-ed41-49c8-9c49-406db9ea9a36",
+    "name": "Seated Cable Row",
+    "bodyPart": "back",
+    "category": "machineOther",
+    "aliases": [
+      "cable row",
+      "row"
+    ]
+  },
+  {
+    "id": "32b233a3-6633-4d88-94b7-15869ad6fc82",
+    "name": "Leg Extension",
+    "bodyPart": "legs",
+    "category": "machineOther",
+    "aliases": [
+      "leg extensions"
+    ]
+  },
+  {
+    "id": "7c4b861c-40ef-4b09-a6f8-25335ad18495",
+    "name": "Leg Curl (Machine)",
+    "bodyPart": "legs",
+    "category": "machineOther",
+    "aliases": [
+      "leg curl",
+      "hamstring curl"
+    ]
+  },
+  {
+    "id": "0f13df5a-edf6-4935-a7dc-a3f08ac6298c",
+    "name": "Triceps Pushdown (Cable)",
+    "bodyPart": "arms",
+    "category": "machineOther",
+    "aliases": [
+      "triceps pushdown",
+      "pushdown"
+    ]
+  },
+  {
+    "id": "7cd2a197-95fe-4ecb-8454-1d163ad5fd41",
+    "name": "Pull Up",
+    "bodyPart": "back",
+    "category": "weightedBodyweight",
+    "aliases": [
+      "pullup",
+      "chin up"
+    ]
+  },
+  {
+    "id": "f32d2257-6616-4b8e-9dbc-2765293a6e50",
+    "name": "Dip",
+    "bodyPart": "chest",
+    "category": "weightedBodyweight",
+    "aliases": [
+      "dips",
+      "chest dip"
+    ]
+  },
+  {
+    "id": "23ba51e7-0b8d-44ba-9a95-f55a6389af0c",
+    "name": "Assisted Pull Up",
+    "bodyPart": "back",
+    "category": "assistedBodyweight",
+    "aliases": [
+      "assisted pullup"
+    ]
+  },
+  {
+    "id": "e3e0ddfb-5f39-4a21-ad26-c8f146c5f355",
+    "name": "Assisted Dip",
+    "bodyPart": "arms",
+    "category": "assistedBodyweight",
+    "aliases": [
+      "assisted dips"
+    ]
+  },
+  {
+    "id": "186337a0-2a33-4f27-bc65-5a946e8b9646",
+    "name": "Crunch",
+    "bodyPart": "core",
+    "category": "repsOnly",
+    "aliases": [
+      "ab crunch"
+    ]
+  },
+  {
+    "id": "30f510b3-91a9-4414-ac39-c58c34d19c4a",
+    "name": "Push Up",
+    "bodyPart": "chest",
+    "category": "repsOnly",
+    "aliases": [
+      "pushup",
+      "press up"
+    ]
+  },
+  {
+    "id": "e66230c3-e9df-41d7-98e7-dce2abeae51e",
+    "name": "Running (Cardio)",
+    "bodyPart": "cardio",
+    "category": "cardio",
+    "aliases": [
+      "treadmill run",
+      "running"
+    ]
+  },
+  {
+    "id": "ddc0ddfd-4ff3-4e47-9c7f-2469f2f7ca84",
+    "name": "Rowing (Cardio)",
+    "bodyPart": "cardio",
+    "category": "cardio",
+    "aliases": [
+      "row erg",
+      "erg"
+    ]
+  },
+  {
+    "id": "3c484e9d-8347-4d1f-bcdf-378ecdc33a23",
+    "name": "Plank",
+    "bodyPart": "core",
+    "category": "duration",
+    "aliases": [
+      "front plank",
+      "plank hold"
+    ]
+  }
+]
