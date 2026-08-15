@@ -63,17 +63,20 @@ These are not oversights. Each was cut with a reason, and the reason is the poin
 
 Small, none blocking, roughly in the order I would do them.
 
-1. **Set-type editing.** `SetTypeBadge` renders all four types (normal / warmup / drop set /
-   failure) and the model supports them, but nothing can *set* one. This is the last
-   "schema exists, UI cannot reach it" gap — the same category rep ranges and RPE were in until
-   they were fixed.
-2. **Folder creation.** Template grouping renders when `TemplateFolder` rows exist; there is no way
+1. **Folder creation.** Template grouping renders when `TemplateFolder` rows exist; there is no way
    to create, rename or assign one. Display-only today.
-3. **Measurement ordering.** The list is alphabetical; the reference is anatomical (Weight first in
+2. **Measurement ordering.** The list is alphabetical; the reference is anatomical (Weight first in
    Core; Neck → Shoulders → Chest → … in Body Part). Wants a `sortOrder` field in
    `measurement-seed.json`. Worth doing before the order becomes muscle memory.
-4. **Seed call placement.** The exercise seed runs at `ModelContainer` construction; the measurement
+3. **Seed call placement.** The exercise seed runs at `ModelContainer` construction; the measurement
    seed runs from `ContentView`. Both work, both are idempotent, but they should live together.
+4. **Set-type annotation in the Previous column.** The reference renders a prior drop set as
+   `75 lb × 11 (D)`; `PreviousText` currently formats weight and reps only. Small, and now
+   reachable — set types can finally *be* something other than normal.
+
+> **Set-type editing is done** (was #1 here). The badge opens a menu of all four types, and
+> working-set numbering now excludes lettered sets — `SetNumbering` owns that rule as a pure
+> function rather than as arithmetic repeated in three view bodies.
 
 ---
 
