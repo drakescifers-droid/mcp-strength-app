@@ -10,11 +10,12 @@ This is the one document that is expected to go stale, so it is deliberately nar
 | Why is the schema shaped this way? | `01-data-model.md` |
 | Why Supabase, how does sync work, what about observability? | `02-architecture.md` |
 | What is the MCP tool contract? | `03-mcp-tools.md` |
+| Why does the Postgres schema differ from the SwiftData one? | `05-database.md` |
 | Which worker models are good at what? | `~/ringer/docs/MODEL-NOTES.md` |
 | **What is built, what is half-built, and what did we skip on purpose?** | **this file** |
 
-Do not duplicate the other four here. If a design question is genuinely open, it belongs in
-`01`/`02`/`03` under their Open questions sections, not in this list.
+Do not duplicate the other five here. If a design question is genuinely open, it belongs in
+`01`/`02`/`03`/`05` under their Open questions sections, not in this list.
 
 ---
 
@@ -34,7 +35,24 @@ and a five-tab shell.
 true today — with the standing caveat that it should **not** hold real training data until Phase 2
 provides sync and backup, because a local-only store has no recovery story.
 
-**Phases 2–4 — not started.** Backend and sync, then the real multi-user MCP server, then product.
+**Phase 2 — started. The database exists; nothing talks to it yet.**
+
+`supabase/migrations/` holds the Postgres schema, the sync trigger, the RLS policies and the seeded
+library, all applied and tested against a throwaway container by `./supabase/tests/run.sh`. Twelve
+tables mirroring the SwiftData model, with one deliberate split (`exercise_preferences`) and four
+reserved-word renames. `05-database.md` is the decisions record.
+
+**No project is provisioned and no client code exists**, so this is schema-on-disk, not a backend.
+The app is still local-only and the standing caveat below still holds in full.
+
+What lands next is the part `02-architecture.md` flags as easy to get wrong: the sync engine, and
+the **visible sync state** designed alongside it rather than retrofitted. Two things from the schema
+work feed straight into it — pull on `server_updated_at` with a five-second overlap window, never on
+`updated_at`; and settle the canonical-units question *before* there is real history, because
+converting stored values afterwards is a migration against numbers a user typed. Both are written up
+in `05-database.md`.
+
+**Phases 3–4 — not started.** The real multi-user MCP server, then product.
 
 ---
 
