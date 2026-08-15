@@ -102,4 +102,8 @@ enum Typography {
     static let badge = Font.system(size: 13, weight: .bold)
     /// Button labels.
     static let button = Font.system(size: 16, weight: .semibold)
+    /// Template card titles. Smaller than `body` on purpose: the card is one
+    /// column of a two-column grid and shares its top row with trailing
+    /// controls, so 17pt truncated real template names to "New Templ…".
+    static let cardTitle = Font.system(size: 15, weight: .semibold)
 }

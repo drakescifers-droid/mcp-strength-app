@@ -394,9 +394,10 @@ private struct TemplateCard: View {
             VStack(alignment: .leading, spacing: Spacing.compact) {
                 HStack(alignment: .top, spacing: Spacing.compact) {
                     Text(template.name)
-                        .font(Typography.body.weight(.semibold))
+                        .font(Typography.cardTitle)
                         .foregroundStyle(Theme.textPrimary)
                         .lineLimit(2)
+                        .minimumScaleFactor(0.85)
                         .multilineTextAlignment(.leading)
 
                     Spacer(minLength: 0)
