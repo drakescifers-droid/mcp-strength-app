@@ -33,11 +33,18 @@ struct StartWorkoutTab: View {
     /// TemplateStarter) and the root transition.
     var onStartTemplate: (Template) -> Void = { _ in }
 
-    @State private var editingTemplate: Template?
-    @State private var showingEditor = false
-    /// Destination folder for a NEW template opened from a folder's menu.
-    /// `nil` on the section-header "+ Template" path (unfiled).
-    @State private var editorFolder: TemplateFolder?
+    /// Presentation payload for TemplateEditorScreen. `id` is a fresh UUID
+    /// because identity is the presentation, not the template — a new
+    /// template has no id to key `.sheet(item:)` off of.
+    private struct EditorTarget: Identifiable {
+        let id = UUID()
+        let template: Template?
+        let folder: TemplateFolder?
+    }
+
+    /// Destination for the template editor. `folder` is set when opened
+    /// from a folder menu; `nil` on the section-header "+ Template" path.
+    @State private var editorTarget: EditorTarget?
 
     @State private var showingAddFolder = false
     @State private var newFolderName = ""
@@ -65,11 +72,11 @@ struct StartWorkoutTab: View {
             .background(Theme.surface)
             .navigationTitle("Start Workout")
             .navigationBarTitleDisplayMode(.large)
-            .sheet(isPresented: $showingEditor, onDismiss: {
-                editingTemplate = nil
-                editorFolder = nil
-            }) {
-                TemplateEditorScreen(template: editingTemplate, folder: editorFolder)
+            // item: so the folder travels with the binding. A boolean
+            // isPresented flip from a Menu action races dismissal, and
+            // the sheet can build against stale companion state (folder nil).
+            .sheet(item: $editorTarget) { target in
+                TemplateEditorScreen(template: target.template, folder: target.folder)
             }
             .alert("Rename Folder", isPresented: Binding(
                 get: { renamingFolder != nil },
@@ -120,9 +127,7 @@ struct StartWorkoutTab: View {
             newFolderName = ""
             showingAddFolder = true
         } onNewTemplate: {
-            editingTemplate = nil
-            editorFolder = nil
-            showingEditor = true
+            editorTarget = EditorTarget(template: nil, folder: nil)
         }
 
         if folders.isEmpty && templates.isEmpty {
@@ -206,9 +211,7 @@ struct StartWorkoutTab: View {
                 folder.isCollapsed.toggle()
             }
             Button("Add Template") {
-                editingTemplate = nil
-                editorFolder = folder
-                showingEditor = true
+                editorTarget = EditorTarget(template: nil, folder: folder)
             }
             Button("Rename") {
                 renameText = folder.name
@@ -264,9 +267,7 @@ struct StartWorkoutTab: View {
                 TemplateCard(
                     template: template,
                     onTap: {
-                        editingTemplate = template
-                        editorFolder = nil
-                        showingEditor = true
+                        editorTarget = EditorTarget(template: template, folder: nil)
                     },
                     onStart: { onStartTemplate(template) }
                 )
