@@ -402,7 +402,7 @@ struct StartWorkoutTab: View {
     }
 
     /// Drop onto a card: insert at that card's position in its list after the
-    /// dragged id has been removed (the TemplateOrdering index convention).
+    /// dragged id has been removed (the ListOrdering index convention).
     private func handleCardDrop(_ items: [String], onto target: Template) -> Bool {
         guard let raw = items.first, let id = UUID(uuidString: raw) else { return false }
         if id == target.id { return true }
@@ -424,7 +424,7 @@ struct StartWorkoutTab: View {
         guard let moved = templates.first(where: { $0.id == id }) else { return false }
         let source = orderedIDs(in: moved.folder)
         let destination = orderedIDs(in: destFolder)
-        let result = TemplateOrdering.move(id, from: source, to: destination, at: index)
+        let result = ListOrdering.move(id, from: source, to: destination, at: index)
         let byID = Dictionary(uniqueKeysWithValues: templates.map { ($0.id, $0) })
         for (i, tid) in result.source.enumerated() {
             byID[tid]?.order = i

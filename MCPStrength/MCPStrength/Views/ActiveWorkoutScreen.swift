@@ -41,6 +41,12 @@ struct ActiveWorkoutScreen: View {
     @State private var restingSetID: UUID?
     @State private var showingRestControls = false
 
+    // Non-nil while an exercise title is being dragged. Every block
+    // collapses to its title row so the user can actually see (and
+    // drop onto) exercises that would otherwise be two screens of
+    // sets away.
+    @State private var draggingExerciseID: UUID?
+
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -59,6 +65,9 @@ struct ActiveWorkoutScreen: View {
                             now: now,
                             restTimer: restTimer,
                             restingSetID: restingSetID,
+                            isCollapsed: isReordering,
+                            onReorderLift: { draggingExerciseID = workoutExercise.id },
+                            onReorderEnded: { draggingExerciseID = nil },
                             onStartRest: { setID, seconds in
                                 startRest(for: setID, seconds: seconds)
                             },
@@ -66,6 +75,15 @@ struct ActiveWorkoutScreen: View {
                                 showingRestControls = true
                             }
                         )
+                        .dropDestination(for: String.self) { items, _ in
+                            handleExerciseDrop(items, onto: workoutExercise)
+                        } isTargeted: { targeted in
+                            // Payload isn't readable until drop. Any non-nil
+                            // id is enough to collapse the list.
+                            if targeted, draggingExerciseID == nil {
+                                draggingExerciseID = workoutExercise.id
+                            }
+                        }
                     }
 
                     bottomActions
@@ -168,6 +186,9 @@ struct ActiveWorkoutScreen: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.bottom, Spacing.compact)
+        // Same 0.4 the rest-progress border already uses — dim the
+        // chrome so only the collapsed title rows read as drop targets.
+        .opacity(isReordering ? 0.4 : 1)
     }
 
     private var workoutDateText: String {
@@ -184,6 +205,7 @@ struct ActiveWorkoutScreen: View {
             Button("Cancel Workout") { showingCancelConfirm = true }
                 .buttonStyle(.tintedDestructive)
         }
+        .opacity(isReordering ? 0.4 : 1)
     }
 
     // MARK: - Derived
@@ -191,6 +213,8 @@ struct ActiveWorkoutScreen: View {
     private var sortedExercises: [WorkoutExercise] {
         workout.exercises.sorted { $0.order < $1.order }
     }
+
+    private var isReordering: Bool { draggingExerciseID != nil }
 
     private var elapsedSeconds: Int {
         max(0, Int(now.timeIntervalSince(workout.startedAt)))
@@ -230,12 +254,36 @@ struct ActiveWorkoutScreen: View {
         restTimer = RestTimer()
         restTimer.start(duration: TimeInterval(max(0, seconds)), at: Date())
     }
+
+    /// Drop onto an exercise row: insert at that row's position after the
+    /// dragged id has been removed (the ListOrdering index convention).
+    /// Same-list — source and destination are the workout's ordered ids.
+    private func handleExerciseDrop(_ items: [String], onto target: WorkoutExercise) -> Bool {
+        defer { draggingExerciseID = nil }
+        guard let raw = items.first, let id = UUID(uuidString: raw) else { return false }
+        if id == target.id { return true }
+
+        let ids = sortedExercises.map(\.id)
+        var dest = ids
+        dest.removeAll { $0 == id }
+        guard let index = dest.firstIndex(of: target.id) else { return false }
+
+        let result = ListOrdering.move(id, from: ids, to: ids, at: index)
+        let byID = Dictionary(uniqueKeysWithValues: workout.exercises.map { ($0.id, $0) })
+        for (i, eid) in result.destination.enumerated() {
+            byID[eid]?.order = i
+        }
+        return true
+    }
 }
 
 // MARK: - ExerciseBlock
 
 /// One exercise's section: name, column header, the set rows with rest
-/// dividers between them, and the "+ Add Set" button.
+/// dividers between them, and the "+ Add Set" button. While a reorder
+/// drag is active the block collapses to the title row — a full set
+/// list is taller than the screen, so without collapsing you cannot
+/// drop onto an exercise two screens away.
 private struct ExerciseBlock: View {
     let workoutExercise: WorkoutExercise
     let allWorkouts: [Workout]
@@ -243,60 +291,77 @@ private struct ExerciseBlock: View {
     let now: Date
     let restTimer: RestTimer
     let restingSetID: UUID?
+    let isCollapsed: Bool
+    var onReorderLift: () -> Void = {}
+    var onReorderEnded: () -> Void = {}
     let onStartRest: (UUID, Int) -> Void
     let onOpenRestControls: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.comfortable) {
+            // Name only today — this block has no stat chip or `...`
+            // menu. Full-width so the title row is the lift target,
+            // not just the glyph bounds of the name.
             Text(workoutExercise.exercise?.name ?? "Unknown Exercise")
                 .font(Typography.body.weight(.semibold))
                 .foregroundStyle(Theme.accent)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .draggable(workoutExercise.id.uuidString) {
+                    Text(workoutExercise.exercise?.name ?? "Unknown Exercise")
+                        .font(Typography.body.weight(.semibold))
+                        .foregroundStyle(Theme.accent)
+                        .onAppear(perform: onReorderLift)
+                        .onDisappear(perform: onReorderEnded)
+                }
 
-            SetRowColumnHeader(trailingIcon: "checkmark")
+            if !isCollapsed {
+                SetRowColumnHeader(trailingIcon: "checkmark")
 
-            VStack(spacing: 0) {
-                ForEach(Array(sortedSets.enumerated()), id: \.element.id) { index, set in
-                    SetRow(
-                        setType: Binding(get: { set.setType }, set: { set.setType = $0 }),
-                        setNumber: workingNumbers[index],
-                        previousText: previousText(for: set, position: index),
-                        weight: Binding(get: { set.weight }, set: { set.weight = $0 }),
-                        prescription: Binding(
-                            get: { RepRange.fromWorkout(reps: set.reps) },
-                            set: { newValue in
-                                // A performance has a number, not a range — only
-                                // .fixed (or nil) is ever written here; a range
-                                // is rejected by the parser with allowRange:false.
-                                set.reps = newValue.flatMap { range -> Int? in
-                                    if case .fixed(let n) = range { return n }
-                                    return nil
+                VStack(spacing: 0) {
+                    ForEach(Array(sortedSets.enumerated()), id: \.element.id) { index, set in
+                        SetRow(
+                            setType: Binding(get: { set.setType }, set: { set.setType = $0 }),
+                            setNumber: workingNumbers[index],
+                            previousText: previousText(for: set, position: index),
+                            weight: Binding(get: { set.weight }, set: { set.weight = $0 }),
+                            prescription: Binding(
+                                get: { RepRange.fromWorkout(reps: set.reps) },
+                                set: { newValue in
+                                    // A performance has a number, not a range — only
+                                    // .fixed (or nil) is ever written here; a range
+                                    // is rejected by the parser with allowRange:false.
+                                    set.reps = newValue.flatMap { range -> Int? in
+                                        if case .fixed(let n) = range { return n }
+                                        return nil
+                                    }
                                 }
-                            }
-                        ),
-                        allowRange: false,
-                        rpe: Binding(get: { set.rpe }, set: { set.rpe = $0 }),
-                        trailing: .completion(
-                            isCompleted: set.isCompleted,
-                            onToggle: { toggleComplete(set) }
+                            ),
+                            allowRange: false,
+                            rpe: Binding(get: { set.rpe }, set: { set.rpe = $0 }),
+                            trailing: .completion(
+                                isCompleted: set.isCompleted,
+                                onToggle: { toggleComplete(set) }
+                            )
                         )
-                    )
 
-                    if index < sortedSets.count - 1 {
-                        restDividerOrBar(for: set)
-                    } else {
-                        // A rest after the LAST set of an exercise still counts:
-                        // there is no divider below to replace, but the user
-                        // still rests before moving on. Show the progress bar
-                        // only when a rest is actually running for this set.
-                        if isResting(set) {
+                        if index < sortedSets.count - 1 {
                             restDividerOrBar(for: set)
+                        } else {
+                            // A rest after the LAST set of an exercise still counts:
+                            // there is no divider below to replace, but the user
+                            // still rests before moving on. Show the progress bar
+                            // only when a rest is actually running for this set.
+                            if isResting(set) {
+                                restDividerOrBar(for: set)
+                            }
                         }
                     }
                 }
-            }
 
-            AddSetButton(label: "+ Add Set (\(formatTime(defaultRestSeconds)))") {
-                addSet()
+                AddSetButton(label: "+ Add Set (\(formatTime(defaultRestSeconds)))") {
+                    addSet()
+                }
             }
         }
     }

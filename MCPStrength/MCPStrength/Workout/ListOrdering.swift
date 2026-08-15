@@ -1,18 +1,18 @@
 //
-//  TemplateOrdering.swift
+//  ListOrdering.swift
 //  MCPStrength
 //
-//  Reorder / re-file a template by moving its id between two ordered id lists.
-//  Position within a folder (or the unfiled list) is meaningful: a drop inserts
-//  at the card under the finger, it does not append. This file owns that pure
-//  rule so it can be unit-tested without a store and shared by the home-tab
-//  drop handlers — computing an index from a CGPoint inside a LazyVGrid would
-//  be untestable and fragile.
+//  Reorder an item by moving its id between two ordered id lists — templates
+//  in a folder (or the unfiled list), exercises in a workout. Position is
+//  meaningful: a drop inserts at the row under the finger, it does not
+//  append. This file owns that pure rule so it can be unit-tested without a
+//  store and shared by the drop handlers — computing an index from a CGPoint
+//  would be untestable and fragile.
 //
 
 import Foundation
 
-enum TemplateOrdering {
+enum ListOrdering {
     /// Moves `id` from `source` to `destination` at `index`.
     ///
     /// `index` is the desired final position IN THE DESTINATION LIST AFTER
