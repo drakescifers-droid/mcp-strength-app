@@ -12,7 +12,17 @@ import SwiftData
 struct MCPStrengthApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Exercise.self,
+            TemplateFolder.self,
+            Template.self,
+            TemplateExercise.self,
+            TemplateSet.self,
+            ProgramDay.self,
+            Workout.self,
+            WorkoutExercise.self,
+            WorkoutSet.self,
+            MeasurementType.self,
+            MeasurementEntry.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
