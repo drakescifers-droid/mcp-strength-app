@@ -34,6 +34,13 @@ struct ActiveWorkoutScreen: View {
     @State private var showingExercisePicker = false
     @State private var showingCancelConfirm = false
 
+    // Rest timer is lifted to this owner so both the per-set progress bars and
+    // the top-bar timer button can reach it. `restingSetID` identifies which
+    // set's divider is currently live; the model itself carries no set info.
+    @State private var restTimer = RestTimer()
+    @State private var restingSetID: UUID?
+    @State private var showingRestControls = false
+
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -42,11 +49,22 @@ struct ActiveWorkoutScreen: View {
 
             ScrollView {
                 VStack(spacing: Spacing.spacious) {
+                    workoutHeaderBlock
+
                     ForEach(sortedExercises, id: \.id) { workoutExercise in
                         ExerciseBlock(
                             workoutExercise: workoutExercise,
                             allWorkouts: allWorkouts,
-                            inProgressWorkout: workout
+                            inProgressWorkout: workout,
+                            now: now,
+                            restTimer: restTimer,
+                            restingSetID: restingSetID,
+                            onStartRest: { setID, seconds in
+                                startRest(for: setID, seconds: seconds)
+                            },
+                            onOpenRestControls: {
+                                showingRestControls = true
+                            }
                         )
                     }
 
@@ -62,6 +80,12 @@ struct ActiveWorkoutScreen: View {
                 addExercise(exercise)
                 showingExercisePicker = false
             })
+        }
+        .sheet(isPresented: $showingRestControls) {
+            RestControlsSheet(
+                restTimer: $restTimer,
+                now: now
+            )
         }
         .confirmationDialog(
             "Cancel this workout? Sets logged so far will be discarded.",
@@ -79,13 +103,13 @@ struct ActiveWorkoutScreen: View {
     private var header: some View {
         HStack(spacing: Spacing.comfortable) {
             Button {
-                // Live rest countdown is deliberately out of scope (see task
-                // brief). The button is a real, large tap target that exists
-                // for layout fidelity and future wiring.
+                if restingSetID != nil {
+                    showingRestControls = true
+                }
             } label: {
                 Image(systemName: "timer")
                     .font(Typography.body)
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(restingSetID == nil ? Theme.textSecondary : Theme.accent)
                     .frame(width: 40, height: 40)
                     .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.chip))
             }
@@ -106,6 +130,48 @@ struct ActiveWorkoutScreen: View {
         }
         .padding(.horizontal, Spacing.screenMargin)
         .padding(.vertical, Spacing.compact)
+    }
+
+    // MARK: - Workout header block
+
+    // The title strip between the top bar and the first exercise: the workout
+    // name, then the start date and the running elapsed time. The name comes
+    // straight from the model — this view never generates or renames it.
+    private var workoutHeaderBlock: some View {
+        VStack(alignment: .leading, spacing: Spacing.compact) {
+            Text(workout.name)
+                .font(Typography.title)
+                .foregroundStyle(Theme.textPrimary)
+
+            HStack(spacing: Spacing.spacious) {
+                Label {
+                    Text(workoutDateText)
+                        .font(Typography.secondary)
+                        .foregroundStyle(Theme.textSecondary)
+                } icon: {
+                    Image(systemName: "calendar")
+                        .font(Typography.secondary)
+                        .foregroundStyle(Theme.textSecondary)
+                }
+
+                Label {
+                    Text(formatTime(elapsedSeconds))
+                        .font(Typography.secondary)
+                        .foregroundStyle(Theme.textSecondary)
+                        .monospacedDigit()
+                } icon: {
+                    Image(systemName: "clock")
+                        .font(Typography.secondary)
+                        .foregroundStyle(Theme.textSecondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, Spacing.compact)
+    }
+
+    private var workoutDateText: String {
+        workout.startedAt.formatted(.dateTime.month().day().year())
     }
 
     // MARK: - Bottom actions
@@ -154,6 +220,15 @@ struct ActiveWorkoutScreen: View {
         context.delete(workout)
         onCancel()
     }
+
+    /// Begin the rest countdown for the set the user just checked complete.
+    /// Replaces any rest already in flight (e.g. the user checks a second set
+    /// before the first rest finished).
+    private func startRest(for setID: UUID, seconds: Int) {
+        restingSetID = setID
+        restTimer = RestTimer()
+        restTimer.start(duration: TimeInterval(max(0, seconds)), at: Date())
+    }
 }
 
 // MARK: - ExerciseBlock
@@ -164,6 +239,11 @@ private struct ExerciseBlock: View {
     let workoutExercise: WorkoutExercise
     let allWorkouts: [Workout]
     let inProgressWorkout: Workout
+    let now: Date
+    let restTimer: RestTimer
+    let restingSetID: UUID?
+    let onStartRest: (UUID, Int) -> Void
+    let onOpenRestControls: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.comfortable) {
@@ -178,11 +258,20 @@ private struct ExerciseBlock: View {
                     SetRow(
                         set: set,
                         setNumber: index + 1,
-                        previousText: previousText(for: set, position: index)
+                        previousText: previousText(for: set, position: index),
+                        onCompleted: { onStartRest(set.id, set.restSeconds) }
                     )
 
                     if index < sortedSets.count - 1 {
-                        restDivider(restSeconds: set.restSeconds)
+                        restDividerOrBar(for: set)
+                    } else {
+                        // A rest after the LAST set of an exercise still counts:
+                        // there is no divider below to replace, but the user
+                        // still rests before moving on. Show the progress bar
+                        // only when a rest is actually running for this set.
+                        if isResting(set) {
+                            restDividerOrBar(for: set)
+                        }
                     }
                 }
             }
@@ -234,7 +323,29 @@ private struct ExerciseBlock: View {
         .foregroundStyle(Theme.textSecondary)
     }
 
-    // MARK: - Rest divider
+    // MARK: - Rest divider / progress bar
+
+    /// True when this set owns the live rest countdown and the countdown is
+    /// still visibly running (not yet elapsed and not skipped).
+    private func isResting(_ set: WorkoutSet) -> Bool {
+        restingSetID == set.id && !restTimer.isFinished(at: now)
+    }
+
+    /// Renders the divider below `set`. When that set's rest is running the
+    /// thin rule is replaced by a full-width depleting progress bar; otherwise
+    /// the existing thin-rule-plus-time divider is used.
+    @ViewBuilder
+    private func restDividerOrBar(for set: WorkoutSet) -> some View {
+        if isResting(set) {
+            RestProgressBar(
+                timer: restTimer,
+                now: now,
+                onTap: onOpenRestControls
+            )
+        } else {
+            restDivider(restSeconds: set.restSeconds)
+        }
+    }
 
     private func restDivider(restSeconds: Int) -> some View {
         HStack(spacing: Spacing.compact) {
@@ -287,6 +398,7 @@ private struct SetRow: View {
     let set: WorkoutSet
     let setNumber: Int
     let previousText: String
+    var onCompleted: () -> Void = {}
 
     @State private var weightText: String = ""
     @State private var repsText: String = ""
@@ -303,7 +415,7 @@ private struct SetRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .lineLimit(1)
 
-            TextField("0", text: $weightText)
+            TextField("", text: $weightText)
                 .keyboardType(.decimalPad)
                 .textInputAutocapitalization(.never)
                 .foregroundStyle(Theme.textPrimary)
@@ -311,7 +423,7 @@ private struct SetRow: View {
                 .frame(width: 64)
                 .onChange(of: weightText) { _, newValue in commitWeight(newValue) }
 
-            TextField("0", text: $repsText)
+            TextField("", text: $repsText)
                 .keyboardType(.numberPad)
                 .textInputAutocapitalization(.never)
                 .foregroundStyle(Theme.textPrimary)
@@ -323,6 +435,12 @@ private struct SetRow: View {
                 .frame(width: 36)
         }
         .padding(.vertical, Spacing.compact)
+        // A subtle success tint behind a completed set so finished rows read
+        // differently from pending ones at a glance.
+        .background(
+            set.isCompleted ? Theme.success.opacity(0.12) : Color.clear,
+            in: .rect(cornerRadius: Radius.chip)
+        )
         .onAppear { syncFromModel() }
     }
 
@@ -373,6 +491,11 @@ private struct SetRow: View {
     private func toggleComplete() {
         set.isCompleted.toggle()
         set.completedAt = set.isCompleted ? Date() : nil
+        // Starting a rest only fires when the set becomes complete —
+        // unchecking does not start one.
+        if set.isCompleted {
+            onCompleted()
+        }
     }
 }
 
@@ -409,6 +532,132 @@ private func formatTime(_ total: Int) -> String {
     let m = max(0, total) / 60
     let s = max(0, total) % 60
     return String(format: "%d:%02d", m, s)
+}
+
+// MARK: - RestProgressBar
+
+/// Replaces a set's rest divider while that set's rest countdown is running:
+/// a full-width accent bar that depletes left-to-right as time runs out, with
+/// the remaining time centred on it in `m:ss`. A thin light border outlines
+/// it. Tapping the bar presents the timer controls.
+private struct RestProgressBar: View {
+    let timer: RestTimer
+    let now: Date
+    var onTap: () -> Void = {}
+
+    private var remainingSeconds: Int {
+        Int(timer.remaining(at: now).rounded())
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let progress = timer.progress(at: now)
+            ZStack {
+                // Track
+                Rectangle()
+                    .fill(Theme.fieldFill)
+                // Accent fill depletes from the left as time runs out.
+                Rectangle()
+                    .fill(Theme.accent)
+                    .frame(width: proxy.size.width * progress)
+                    .animation(.linear(duration: 1), value: progress)
+            }
+            .overlay {
+                Text(formatTime(remainingSeconds))
+                    .font(Typography.body.weight(.semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                    .monospacedDigit()
+            }
+            .overlay(
+                // Thin light border.
+                Rectangle()
+                    .stroke(Theme.textSecondary.opacity(0.4), lineWidth: 1)
+            )
+            .clipShape(.rect(cornerRadius: Radius.chip))
+            .contentShape(Rectangle())
+            .onTapGesture { onTap() }
+        }
+        .frame(height: 40)
+        .padding(.vertical, Spacing.compact)
+    }
+}
+
+// MARK: - RestControlsSheet
+
+/// The timer control panel: a large Pause/Resume button, −15s / +15s, Reset,
+/// and Skip. Presented from the top-bar timer button or by tapping a live
+/// progress bar. Deliberately simple — a plain sheet, no alerts.
+private struct RestControlsSheet: View {
+    @Binding var restTimer: RestTimer
+    let now: Date
+
+    @Environment(\.dismiss) private var dismiss
+
+    private var isPaused: Bool {
+        restTimer.state == .paused
+    }
+
+    var body: some View {
+        VStack(spacing: Spacing.spacious) {
+            Text("Rest")
+                .font(Typography.title)
+                .foregroundStyle(Theme.textPrimary)
+
+            Text(formatTime(Int(restTimer.remaining(at: now).rounded())))
+                .font(Typography.title)
+                .monospacedDigit()
+                .foregroundStyle(Theme.accent)
+
+            Button {
+                if isPaused {
+                    restTimer.resume(at: Date())
+                } else {
+                    restTimer.pause(at: Date())
+                }
+            } label: {
+                Text(isPaused ? "Resume" : "Pause")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.primaryAction)
+            .frame(maxWidth: .infinity)
+
+            HStack(spacing: Spacing.comfortable) {
+                Button {
+                    restTimer.adjust(by: -15, at: Date())
+                } label: {
+                    Text("−15s")
+                }
+                .buttonStyle(.tintedAccent)
+
+                Button {
+                    restTimer.adjust(by: 15, at: Date())
+                } label: {
+                    Text("+15s")
+                }
+                .buttonStyle(.tintedAccent)
+            }
+
+            Button {
+                restTimer.reset(at: Date())
+            } label: {
+                Text("Reset")
+            }
+            .buttonStyle(.tintedAccent)
+
+            Button {
+                restTimer.skip()
+                dismiss()
+            } label: {
+                Text("Skip Rest")
+            }
+            .buttonStyle(.tintedDestructive)
+        }
+        .padding(.horizontal, Spacing.screenMargin)
+        .padding(.vertical, Spacing.spacious)
+        .frame(maxWidth: .infinity)
+        .background(Theme.surface)
+        .presentationDetents([.medium])
+    }
 }
 
 // MARK: - Preview
