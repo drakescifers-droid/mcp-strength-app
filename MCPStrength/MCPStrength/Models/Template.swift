@@ -62,6 +62,19 @@ final class Template {
     @Relationship(deleteRule: .cascade, inverse: \TemplateExercise.template)
     var exercises: [TemplateExercise] = []
 
+    /// Workouts already performed from this template.
+    ///
+    /// **NULLIFY, never cascade.** Deleting a template must never delete the workouts
+    /// performed from it — tidying up your templates would silently destroy training
+    /// history. Nullify clears `Workout.template` on each of them instead, leaving the
+    /// workout and its `name` (a stored copy, see docs/01 § Workouts) intact.
+    ///
+    /// Declaring the inverse is what makes that happen at all. Without it,
+    /// `Workout.template` was an untracked reference that kept pointing at a deleted
+    /// object rather than going nil.
+    @Relationship(deleteRule: .nullify, inverse: \Workout.template)
+    var workouts: [Workout] = []
+
     init(
         id: UUID = UUID(),
         name: String,

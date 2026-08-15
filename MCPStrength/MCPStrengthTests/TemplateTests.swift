@@ -245,11 +245,8 @@ struct TemplateTests {
         // survives the template being renamed or deleted.
         #expect(started.name == "Pull Day")
 
-        // NOTE: deliberately NOT asserting `started.template == nil`. Workout.template
-        // is declared as a bare `var template: Template?` with no @Relationship and no
-        // delete rule, so SwiftData's behaviour for the dangling reference is
-        // unspecified — it currently stays non-nil. That is a real schema question
-        // (see the open item), but it is not this contract, and a test should not
-        // pin behaviour the model never promised.
+        // Template.workouts now declares `.nullify` with an explicit inverse, so the
+        // dangling reference is gone: the workout survives and its link goes nil.
+        #expect(started.template == nil)
     }
 }
