@@ -9,15 +9,8 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    @Query private var exercises: [Exercise]
-
     var body: some View {
-        NavigationStack {
-            List(exercises) { exercise in
-                Text(exercise.name)
-            }
-            .navigationTitle("Exercises")
-        }
+        ExercisesScreen()
     }
 }
 

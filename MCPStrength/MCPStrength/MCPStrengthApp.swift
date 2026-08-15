@@ -52,6 +52,12 @@ struct MCPStrengthApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                // The design tokens are a dark-only palette, sampled from the dark reference
+                // app (see Design/Theme.swift). System-provided chrome — navigation titles,
+                // pickers, keyboards — takes its colours from the environment colour scheme,
+                // NOT from our tokens, so without this the title renders black on #293136.
+                // Remove this only when a light palette actually exists.
+                .preferredColorScheme(.dark)
         }
         .modelContainer(sharedModelContainer)
     }
