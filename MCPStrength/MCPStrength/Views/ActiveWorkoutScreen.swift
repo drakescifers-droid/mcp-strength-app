@@ -257,8 +257,8 @@ private struct ExerciseBlock: View {
             VStack(spacing: 0) {
                 ForEach(Array(sortedSets.enumerated()), id: \.element.id) { index, set in
                     SetRow(
-                        setType: set.setType,
-                        setNumber: index + 1,
+                        setType: Binding(get: { set.setType }, set: { set.setType = $0 }),
+                        setNumber: workingNumbers[index],
                         previousText: previousText(for: set, position: index),
                         weight: Binding(get: { set.weight }, set: { set.weight = $0 }),
                         prescription: Binding(
@@ -303,6 +303,13 @@ private struct ExerciseBlock: View {
 
     private var sortedSets: [WorkoutSet] {
         workoutExercise.sets.sorted { $0.order < $1.order }
+    }
+
+    // Working-set numbers parallel to `sortedSets`: only `.normal` sets consume
+    // a number, so warm-ups / drop sets / failure sets render a letter and the
+    // numbering of normal sets continues past them (docs/01-data-model.md § SetType).
+    private var workingNumbers: [Int?] {
+        SetNumbering.workingNumbers(for: sortedSets.map(\.setType))
     }
 
     private var defaultRestSeconds: Int {

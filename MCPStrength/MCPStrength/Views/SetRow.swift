@@ -48,8 +48,8 @@ enum SetRowTrailing {
 /// reps text is left as-is and flagged with a destructive tint so the user can
 /// fix the typo — nothing wrong is ever written.
 struct SetRow: View {
-    let setType: SetType
-    let setNumber: Int
+    @Binding var setType: SetType
+    let setNumber: Int?
     let previousText: String
     @Binding var weight: Double?
     @Binding var prescription: RepRange?
@@ -64,7 +64,7 @@ struct SetRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.compact) {
-            SetTypeBadge(setType: setType, setNumber: setNumber)
+            setTypeMenu
                 .frame(width: 28)
 
             Text(previousText)
@@ -93,6 +93,38 @@ struct SetRow: View {
         .padding(.vertical, Spacing.compact)
         .background(rowTint, in: .rect(cornerRadius: Radius.chip))
         .onAppear { syncFromModel() }
+    }
+
+    // MARK: - Set-type menu
+
+    // The leading badge is also a Menu: tapping it offers all four set types
+    // with a checkmark on the current value. Same idiom as `rpeField` below —
+    // the badge itself is the menu's label so the row's look is unchanged.
+    private var setTypeMenu: some View {
+        Menu {
+            ForEach(SetType.allCases, id: \.self) { type in
+                Button {
+                    setType = type
+                } label: {
+                    if type == setType {
+                        Label(setTypeLabel(type), systemImage: "checkmark")
+                    } else {
+                        Text(setTypeLabel(type))
+                    }
+                }
+            }
+        } label: {
+            SetTypeBadge(setType: setType, setNumber: setNumber)
+        }
+    }
+
+    private func setTypeLabel(_ type: SetType) -> String {
+        switch type {
+        case .normal:  return "Normal"
+        case .warmup:  return "Warm up"
+        case .dropSet: return "Drop set"
+        case .failure: return "Failure"
+        }
     }
 
     // MARK: - Reps field

@@ -18,11 +18,13 @@ import SwiftUI
 //                                separate literal — see Theme.failure)
 
 /// A small rounded badge that renders the right glyph and colour for a set type.
-/// Pass the working-set `index` (1-based) for `.normal`; it is ignored for the
-/// lettered types.
+/// Pass the working-set number (1-based, already excluding lettered types) for
+/// `.normal`; it is ignored for the lettered types. `nil` should never occur
+/// for `.normal` — `SetNumbering.workingNumbers` always yields a number for it —
+/// but the type is kept total and falls back to "-" rather than crash.
 struct SetTypeBadge: View {
     let setType: SetType
-    var setNumber: Int
+    var setNumber: Int?
 
     var body: some View {
         Text(glyph)
@@ -34,7 +36,7 @@ struct SetTypeBadge: View {
 
     private var glyph: String {
         switch setType {
-        case .normal:  return "\(setNumber)"
+        case .normal:  return setNumber.map { "\($0)" } ?? "-"
         case .warmup:  return "W"
         case .dropSet: return "D"
         case .failure: return "F"

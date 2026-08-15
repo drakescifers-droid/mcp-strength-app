@@ -110,6 +110,13 @@ private struct ExerciseDetailBlock: View {
         workoutExercise.sets.sorted { $0.order < $1.order }
     }
 
+    // Working-set numbers parallel to `sortedSets`: this screen is read-only
+    // history, so the type is NOT editable here — only the numbering is fixed
+    // so warm-ups no longer consume a working-set slot (docs/01-data-model.md § SetType).
+    private var workingNumbers: [Int?] {
+        SetNumbering.workingNumbers(for: sortedSets.map(\.setType))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.comfortable) {
             Text(workoutExercise.exercise?.name ?? "Unknown Exercise")
@@ -122,7 +129,7 @@ private struct ExerciseDetailBlock: View {
                 ForEach(Array(sortedSets.enumerated()), id: \.element.id) { index, set in
                     ReadOnlySetRow(
                         setType: set.setType,
-                        setNumber: index + 1,
+                        setNumber: workingNumbers[index],
                         weight: set.weight,
                         reps: set.reps,
                         isCompleted: set.isCompleted
@@ -146,7 +153,7 @@ private struct ExerciseDetailBlock: View {
 /// TextFields — nothing can be changed.
 private struct ReadOnlySetRow: View {
     let setType: SetType
-    let setNumber: Int
+    let setNumber: Int?
     let weight: Double?
     let reps: Int?
     let isCompleted: Bool

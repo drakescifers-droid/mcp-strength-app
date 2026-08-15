@@ -145,6 +145,10 @@ struct TemplateEditorScreen: View {
     @ViewBuilder
     private func exerciseBlock(at index: Int) -> some View {
         let draft = exercises[index]
+        // Working-set numbers parallel to `draft.sets`: only `.normal` sets
+        // consume a number, so lettered types are skipped and normal numbering
+        // continues past them (docs/01-data-model.md § SetType).
+        let workingNumbers = SetNumbering.workingNumbers(for: draft.sets.map(\.setType))
 
         VStack(alignment: .leading, spacing: Spacing.comfortable) {
             Text(draft.exercise.name)
@@ -156,8 +160,8 @@ struct TemplateEditorScreen: View {
             VStack(spacing: 0) {
                 ForEach(Array(draft.sets.enumerated()), id: \.element.id) { setIndex, set in
                     SetRow(
-                        setType: set.setType,
-                        setNumber: setIndex + 1,
+                        setType: bindingForSetType(exercise: index, set: setIndex),
+                        setNumber: workingNumbers[setIndex],
                         previousText: previousText(for: draft.exercise, at: setIndex),
                         weight: bindingForWeight(exercise: index, set: setIndex),
                         prescription: bindingForPrescription(exercise: index, set: setIndex),
@@ -213,6 +217,13 @@ struct TemplateEditorScreen: View {
         Binding(
             get: { exercises[exercise].sets[set].rpe },
             set: { exercises[exercise].sets[set].rpe = $0 }
+        )
+    }
+
+    private func bindingForSetType(exercise: Int, set: Int) -> Binding<SetType> {
+        Binding(
+            get: { exercises[exercise].sets[set].setType },
+            set: { exercises[exercise].sets[set].setType = $0 }
         )
     }
 
