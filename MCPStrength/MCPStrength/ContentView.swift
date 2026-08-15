@@ -39,19 +39,6 @@ struct ContentView: View {
             }
         }
         .animation(.default, value: activeWorkout != nil)
-        // Seed the measurement-type library on first appearance. MCPStrengthApp.swift
-        // (not owned by this task) seeds the exercise library at container creation; the
-        // measurement seed is wired here — the root view's task — because it is the
-        // earliest legitimate hook inside an owned path. The import is idempotent and
-        // matches on the UUIDs baked into measurement-seed.json, so running it on every
-        // appearance is a no-op for types that already exist and never touches entries.
-        .task {
-            do {
-                try MeasurementSeedImporter.loadBundledSeed(into: context)
-            } catch {
-                assertionFailure("Measurement seed import failed: \(error)")
-            }
-        }
     }
 
     // MARK: - Tab view

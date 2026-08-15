@@ -29,18 +29,33 @@ struct MCPStrengthApp: App {
         do {
             let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
 
-            // Seed the exercise library on every launch. The import is idempotent and matches
-            // on the UUIDs baked into exercise-seed.json, so re-running it is a no-op for rows
-            // that already exist, adds any newly shipped ones, and never touches exercises the
-            // user created (isCustom == true). See docs/01-data-model.md § The seeded library.
+            // Seed the exercise and measurement-type libraries on every launch. Both
+            // imports are idempotent and match on the UUIDs baked into their seed JSON,
+            // so re-running them is a no-op for rows that already exist, adds any newly
+            // shipped ones, and never touches user-created rows. See docs/01-data-model.md
+            // § The seeded library and § Measurements.
             //
-            // A failure here is not fatal: the app still works with an empty or partial library,
-            // and the next launch retries. Crashing a user's app because a bundled JSON file
-            // could not be read would be a much worse outcome than a short exercise list.
+            // A failure here is not fatal: the app still works with an empty or partial
+            // library, and the next launch retries. Crashing a user's app because a
+            // bundled JSON file could not be read would be a much worse outcome than a
+            // short exercise list or a missing measurement type.
+            //
+            // THE TWO SEEDS ARE INDEPENDENT, and are kept that way deliberately: each gets
+            // its own do/catch so one failing cannot skip the other, and its own
+            // ModelContext so a partial write from a failed import cannot ride along on the
+            // other's save. They were separate call sites before they moved here together;
+            // sharing a context and a catch would have quietly turned one bad JSON file
+            // into two missing libraries, which is exactly what the paragraph above says
+            // this code is trying not to do.
             do {
                 try ExerciseSeedImporter.loadBundledSeed(into: ModelContext(container))
             } catch {
-                assertionFailure("Seed import failed: \(error)")
+                assertionFailure("Exercise seed import failed: \(error)")
+            }
+            do {
+                try MeasurementSeedImporter.loadBundledSeed(into: ModelContext(container))
+            } catch {
+                assertionFailure("Measurement seed import failed: \(error)")
             }
 
             return container
