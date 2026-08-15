@@ -15,11 +15,23 @@ import Foundation
 
 enum WorkoutHistory {
 
-    /// A snapshot of a previously-logged set's load. `nil` fields mean that
-    /// value was not recorded for that set.
+    /// A snapshot of a previously-logged set's load. `nil` weight/reps mean
+    /// that value was not recorded. `setType` is carried so the Previous
+    /// column can tell a drop set from a working set at the same numbers.
     struct PreviousSet: Equatable, Sendable {
         let weight: Double?
         let reps: Int?
+        let setType: SetType
+
+        /// `setType` defaults to `.normal` so call sites we do not own
+        /// (HistoryScreen best-set text, existing tests) keep compiling.
+        /// A defaulted `let` is omitted from the synthesized memberwise
+        /// init, so this is spelled out.
+        init(weight: Double?, reps: Int?, setType: SetType = .normal) {
+            self.weight = weight
+            self.reps = reps
+            self.setType = setType
+        }
     }
 
     /// Find the weight × reps for the set at `position` (0-based, in order) of
@@ -51,6 +63,6 @@ enum WorkoutHistory {
         let sortedSets = workoutExercise.sets.sorted { $0.order < $1.order }
         guard position >= 0, position < sortedSets.count else { return nil }
         let set = sortedSets[position]
-        return PreviousSet(weight: set.weight, reps: set.reps)
+        return PreviousSet(weight: set.weight, reps: set.reps, setType: set.setType)
     }
 }

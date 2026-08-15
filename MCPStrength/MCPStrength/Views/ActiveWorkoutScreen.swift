@@ -396,8 +396,21 @@ enum PreviousText {
         if let r = prev.reps {
             parts.append("× \(r)")
         }
+        // No load recorded — do not render a lone "(D)" / "(W)" / "(F)".
+        // That would read as history when there is none.
         guard !parts.isEmpty else { return "—" }
-        return parts.joined(separator: " ")
+        return parts.joined(separator: " ") + letterSuffix(for: prev.setType)
+    }
+
+    /// Suffixed only for lettered types. `.normal` is silent: most sets are
+    /// normal, and the reference never tags them.
+    private static func letterSuffix(for setType: SetType) -> String {
+        switch setType {
+        case .warmup:  return " (W)"
+        case .dropSet: return " (D)"
+        case .failure: return " (F)"
+        case .normal:  return ""
+        }
     }
 
     /// Whole-number weights drop the trailing ".0"; otherwise show the value

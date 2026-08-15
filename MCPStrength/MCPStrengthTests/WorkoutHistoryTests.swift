@@ -252,6 +252,55 @@ struct WorkoutHistoryTests {
         #expect(history[2].id == oldest.id)
     }
 
+    // MARK: - Previous set type + PreviousText suffixes
+
+    // previousSet copies the located set's setType, not just weight/reps —
+    // otherwise a drop set and a working set at the same load are identical.
+    @Test func previousSetCopiesSetTypeFromLocatedSet() throws {
+        let context = try makeContainer()
+        let exercise = makeExercise(in: context)
+
+        let completed = Workout(name: "Done", startedAt: Date(timeIntervalSinceNow: -86400))
+        completed.completedAt = Date(timeIntervalSinceNow: -86400)
+        context.insert(completed)
+        let we = WorkoutExercise(order: 0, workout: completed, exercise: exercise)
+        context.insert(we)
+        context.insert(WorkoutSet(
+            order: 0,
+            setType: .dropSet,
+            weight: 75,
+            reps: 11,
+            isCompleted: true,
+            completedAt: completed.completedAt!,
+            workoutExercise: we
+        ))
+
+        let workouts = try context.fetch(FetchDescriptor<Workout>())
+        let prev = WorkoutHistory.previousSet(for: exercise, at: 0, in: workouts)
+        #expect(prev?.weight == 75)
+        #expect(prev?.reps == 11)
+        #expect(prev?.setType == .dropSet)
+    }
+
+    // Lettered types get a suffix after the load; `.normal` does not.
+    @Test func previousTextAppendsSuffixForLetteredTypesOnly() {
+        #expect(PreviousText.format(.init(weight: 135, reps: 8, setType: .warmup)) == "135 lb × 8 (W)")
+        #expect(PreviousText.format(.init(weight: 75, reps: 11, setType: .dropSet)) == "75 lb × 11 (D)")
+        #expect(PreviousText.format(.init(weight: 225, reps: 5, setType: .failure)) == "225 lb × 5 (F)")
+        #expect(PreviousText.format(.init(weight: 225, reps: 5, setType: .normal)) == "225 lb × 5")
+        #expect(PreviousText.format(.init(weight: 225, reps: 5)) == "225 lb × 5")
+    }
+
+    // No prior set, and a prior set with a type but no load, both stay "—".
+    // A bare "(D)" would look like data where there is none.
+    @Test func previousTextKeepsEmDashWhenThereIsNoLoad() {
+        #expect(PreviousText.format(nil) == "—")
+        #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .dropSet)) == "—")
+        #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .warmup)) == "—")
+        #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .failure)) == "—")
+        #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .normal)) == "—")
+    }
+
     // MARK: - Helpers
 
     @discardableResult
