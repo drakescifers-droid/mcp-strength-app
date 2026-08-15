@@ -239,6 +239,11 @@ struct StartWorkoutTab: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, Spacing.comfortable)
+        // Empty folders have no cards to drop onto; the header is the append
+        // target so they stay reachable. Also the end-of-list target.
+        .dropDestination(for: String.self) { items, _ in
+            return handleFolderDrop(items, onto: folder)
+        }
     }
 
     // Trailing Menu — same idiom as SetRow.setTypeMenu: the glyph is the
@@ -317,7 +322,9 @@ struct StartWorkoutTab: View {
                 existing: templates.map(\.name)
             ),
             note: template.note,
-            order: FolderEditing.nextOrder(after: templates.map(\.order)),
+            // Per-folder position: land after the last card in THIS folder,
+            // not after the global max.
+            order: templates.filter { $0.folder?.id == template.folder?.id }.count,
             lastPerformedAt: nil,
             folder: template.folder
         )
@@ -377,8 +384,56 @@ struct StartWorkoutTab: View {
                     onDuplicate: { duplicateTemplate(template) },
                     onDelete: { templatePendingDelete = template }
                 )
+                // Long-press starts the drag; the card's tap still opens overview.
+                .draggable(template.id.uuidString)
+                .dropDestination(for: String.self) { items, _ in
+                    return handleCardDrop(items, onto: template)
+                }
             }
         }
+    }
+
+    /// Ids of templates in `folder` (nil = unfiled), sorted by per-folder `order`.
+    private func orderedIDs(in folder: TemplateFolder?) -> [UUID] {
+        templates
+            .filter { $0.folder?.id == folder?.id }
+            .sorted { $0.order < $1.order }
+            .map(\.id)
+    }
+
+    /// Drop onto a card: insert at that card's position in its list after the
+    /// dragged id has been removed (the TemplateOrdering index convention).
+    private func handleCardDrop(_ items: [String], onto target: Template) -> Bool {
+        guard let raw = items.first, let id = UUID(uuidString: raw) else { return false }
+        if id == target.id { return true }
+        var dest = orderedIDs(in: target.folder)
+        dest.removeAll { $0 == id }
+        guard let index = dest.firstIndex(of: target.id) else { return false }
+        return applyTemplateMove(id, to: target.folder, at: index)
+    }
+
+    /// Drop onto a folder header: append. Makes empty folders reachable.
+    private func handleFolderDrop(_ items: [String], onto folder: TemplateFolder) -> Bool {
+        guard let raw = items.first, let id = UUID(uuidString: raw) else { return false }
+        var dest = orderedIDs(in: folder)
+        dest.removeAll { $0 == id }
+        return applyTemplateMove(id, to: folder, at: dest.count)
+    }
+
+    private func applyTemplateMove(_ id: UUID, to destFolder: TemplateFolder?, at index: Int) -> Bool {
+        guard let moved = templates.first(where: { $0.id == id }) else { return false }
+        let source = orderedIDs(in: moved.folder)
+        let destination = orderedIDs(in: destFolder)
+        let result = TemplateOrdering.move(id, from: source, to: destination, at: index)
+        let byID = Dictionary(uniqueKeysWithValues: templates.map { ($0.id, $0) })
+        for (i, tid) in result.source.enumerated() {
+            byID[tid]?.order = i
+        }
+        for (i, tid) in result.destination.enumerated() {
+            byID[tid]?.order = i
+        }
+        moved.folder = destFolder
+        return true
     }
 }
 

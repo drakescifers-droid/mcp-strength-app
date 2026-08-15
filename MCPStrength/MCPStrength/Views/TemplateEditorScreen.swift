@@ -347,7 +347,10 @@ struct TemplateEditorScreen: View {
                 context.delete(old)
             }
         } else {
-            let nextOrder = (try? context.fetchCount(FetchDescriptor<Template>())) ?? 0
+            // Per-folder position: a new template lands at the end of ITS
+            // folder (or the unfiled list), not after every template in the store.
+            let existing = (try? context.fetch(FetchDescriptor<Template>())) ?? []
+            let nextOrder = existing.filter { $0.folder?.id == folder?.id }.count
             target = Template(name: name, order: nextOrder, folder: folder)
             context.insert(target)
         }

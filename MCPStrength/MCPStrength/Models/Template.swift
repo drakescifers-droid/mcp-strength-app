@@ -18,6 +18,8 @@ enum SetType: String, Codable, CaseIterable, Sendable {
 final class TemplateFolder {
     var id: UUID
     var name: String
+    /// Position among folders, 0-based. Distinct from `Template.order`, which
+    /// is position within a folder (or the unfiled list) — not a global rank.
     var order: Int
     var isCollapsed: Bool
     var kind: FolderKind
@@ -54,6 +56,9 @@ final class Template {
     var id: UUID
     var name: String
     var note: String?
+    /// Position within its folder (or within the unfiled list when `folder` is
+    /// nil), 0-based, renumbered densely on move/reorder. This is NOT a global
+    /// rank — it used to be, and the next reader will assume it still is.
     var order: Int
     var lastPerformedAt: Date?
 
