@@ -76,6 +76,17 @@ entity has a natural writer:
 | **Measurements** | The app (or HealthKit). Append-only time series. | **None.** |
 | **Exercises** | Both, but almost always appends. | **Low.** Fuzzy-match on create (below). |
 | **Templates** | Both — this is where AI writes. | **Real, but rare.** |
+| **Programs** | Both, at very different rates — the app advances position after every session; AI writes structure occasionally. | **Low**, by construction — see below. |
+
+Programs look like the worst case on that table and aren't, because of how they're split in
+`01-data-model.md`. The frequently-written field (`cursor`, a single position advanced after each
+session) lives on the folder row; the rarely-written structure lives in separate `ProgramDay` rows. The
+every-session write and the occasional AI write therefore land on **different records**, so
+record-level last-write-wins never has to choose between them. `ProgramDay` was split out to allow
+repeated day slots (a 3-day A/B split needs `A, B, A`); this is a second, independent reason it is
+the right shape. The residual conflict — an AI edit to folder-level fields (`totalCycles`, `name`,
+`kind`) landing while the phone is offline mid-block — has the same shape and rarity as the
+Templates row.
 
 So only templates need genuine conflict handling, and only when the same template is edited in
 both places between syncs. Record-level last-write-wins on `updatedAt` is acceptable there: the
@@ -154,6 +165,59 @@ rather than creating a near-duplicate, and say that it did.
 
 ---
 
+## Observability
+
+Three different problems get called "error logging" here. They have different stakes and land in
+different phases.
+
+### 1. App crashes
+
+Lowest stakes, effectively solved by picking a tool. Xcode Organizer reports crashes for free once
+the app ships through the App Store; Sentry or Crashlytics if symbolicated non-fatals and
+breadcrumbs are wanted. Phase 4.
+
+### 2. Sync failures — the category that loses data
+
+**Local-first makes this invisible by construction.** The user logs a workout, SwiftData accepts it,
+the UI says done — and the push to Postgres fails. Nothing in the experience distinguishes that from
+success. They find out weeks later on another device, or never.
+
+So this needs more than a log line:
+
+- Failed pushes stay marked dirty and get retried, never silently dropped
+- A durable local record of what failed and why
+- Something **visible in the UI** — a sync state the user can see and act on
+
+Also worth recording: last-write-wins discards the losing edit silently. That is correct behavior,
+but *"my template reverted"* should be diagnosable rather than spooky — log the discard locally with
+both sides' `updated_at`.
+
+Design this in Phase 2 **alongside** the sync engine. Retrofitting visibility onto a sync layer that
+was written assuming success is far harder than building it in.
+
+### 3. MCP tool failures — the category with no feedback channel
+
+> **Design note — the usual bug-report channel does not exist here.** An ordinary app has a free
+> feedback loop: something breaks, a human sees it, they complain. An MCP server's client is an AI,
+> and AI clients absorb errors — the model gets a failure, works around it, and tells the user the
+> task succeeded. The failure never reaches anyone who could report it.
+
+Phase 0 produced a live example. The spike silently coerced an unrecognised `set_type` to `"normal"`
+and returned success; the client reported back that drop sets were unsupported — a confident bug
+report about the wrong thing, for a feature that worked fine. In production that surfaces as a user
+asking why a feature is missing when it is not.
+
+The consequence: this server needs server-side call logging **more** than a conventional backend
+does, precisely because its clients paper over the evidence. Per tool call, at minimum: tool name,
+arguments, outcome, duration, and anything the server ignored, coerced, or fuzzy-matched. The
+`ignored_fields` and `matched_to_existing` values in `03-mcp-tools.md` are not only responses to the
+model — they are the audit trail.
+
+Supabase Edge Functions provide the log sink, so this is a decision to record rather than
+infrastructure to build. Phase 3.
+
+---
+
 ## Phasing
 
 Ordered to de-risk the *uncertain* thing first, not the familiar thing.
@@ -167,6 +231,16 @@ instead of months finding out.
 **Phase 1 — the app, offline.**
 Real SwiftUI logging: templates, folders, live workout, set types, rest timers, history,
 measurements. Fully usable on-device, no backend. This is a working app you can train with.
+
+Also lands here, from Phase 0 (`03-mcp-tools.md`):
+
+- **Rep ranges and RPE on `TemplateSet`** — `repRangeStart` / `repRangeEnd` / `rpe`, plus `rpe` on
+  `WorkoutSet`. The spike proved a single integer rep count loses every prescription.
+- **`aliases` on Exercise**, and stable seeded UUIDs in the library file.
+- **The Program schema** — `TemplateFolder.kind`, `ProgramDay`, `cursor`, `totalCycles`. Schema
+  only; the program UI is deferred to a post-launch update. This one is easy to skip and expensive
+  to skip: because the UI ships after launch, letting the schema slide with it means adding a table
+  to a database already holding real training history.
 
 **Phase 2 — backend and sync.**
 Supabase, schema, RLS, auth, sync engine. The long unglamorous phase.

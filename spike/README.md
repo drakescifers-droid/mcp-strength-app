@@ -1,6 +1,19 @@
-# Phase 0 Spike
+# Phase 0 Spike — ⛔️ FROZEN, ANSWERED, DO NOT BUILD ON THIS
 
-**Throwaway.** Exists to answer one question before we build anything real:
+> **Status: closed 2026-08-14.** This spike did its job and is kept only as a reference for what
+> the MCP tool surface *felt like* to drive. **Do not extend it, fix it, or use it as a starting
+> point for anything.**
+>
+> - The findings live in **`../docs/03-mcp-tools.md`** — that is the real output, not this code.
+> - Its SQLite schema is **not** the Phase 1 schema. Phase 1 is SwiftData, per `../docs/01-data-model.md`.
+> - Known-wrong on purpose, all documented in `03`: unknown fields are silently discarded,
+>   `set_type` silently coerces to `"normal"`, duplicate template names create unreachable records,
+>   and there is no update or delete path.
+> - The local `spike.db` was deleted; it held throwaway test data from the Phase 0 session
+>   (including two templates named "Push Day", one of them unreachable). Rebuild per Setup below
+>   if you ever need to poke at it again.
+
+**Throwaway.** Existed to answer one question before we build anything real:
 
 > Does "here's a workout — put it in my app" actually feel like magic?
 
