@@ -213,6 +213,7 @@ struct ActiveWorkoutScreen: View {
     private func finish() {
         workout.completedAt = Date()
         workout.durationSeconds = elapsedSeconds
+        workout.totalVolume = WorkoutStats.totalVolume(for: workout)
         onFinish()
     }
 

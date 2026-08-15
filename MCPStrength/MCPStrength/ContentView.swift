@@ -64,6 +64,15 @@ struct ContentView: View {
                 .buttonStyle(.tintedAccent)
                 .padding(.horizontal, Spacing.screenMargin)
 
+                NavigationLink {
+                    HistoryScreen()
+                } label: {
+                    Text("History")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.tintedAccent)
+                .padding(.horizontal, Spacing.screenMargin)
+
                 Spacer()
             }
             .navigationTitle("MCPStrength")
