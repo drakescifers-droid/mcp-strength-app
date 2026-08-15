@@ -130,29 +130,6 @@ struct TemplateOverviewSheet: View {
     }
 }
 
-// MARK: - Body-part labels
-//
-// Same mapping as ExercisesScreen: the model raw values (fullBody) are not
-// UI labels. Duplicated here because the ExercisesScreen extension is
-// file-private and this task cannot move it.
-
-private extension BodyPart {
-    var displayName: String {
-        switch self {
-        case .arms:      "Arms"
-        case .back:      "Back"
-        case .cardio:    "Cardio"
-        case .chest:     "Chest"
-        case .core:      "Core"
-        case .fullBody:  "Full Body"
-        case .legs:      "Legs"
-        case .olympic:   "Olympic"
-        case .other:     "Other"
-        case .shoulders: "Shoulders"
-        }
-    }
-}
-
 // MARK: - Preview
 
 #Preview {
