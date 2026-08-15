@@ -10,10 +10,12 @@
 //  the old swipe-to-Start row provided.
 //
 //  Folder lifecycle (create, rename, delete, collapse, and filing a new
-//  template into a folder) lives here. Empty folders still render — a new
-//  folder has no templates, and hiding it would make create look like a no-op.
-//  When no TemplateFolder rows exist the grid is flat with no header, rather
-//  than an "Ungrouped" heading that says nothing.
+//  template into a folder) lives here. Template cards carry a per-card menu
+//  (edit, rename, duplicate, delete) — the only place a template can be
+//  deleted. Empty folders still render — a new folder has no templates, and
+//  hiding it would make create look like a no-op. When no TemplateFolder
+//  rows exist the grid is flat with no header, rather than an "Ungrouped"
+//  heading that says nothing.
 //
 
 import SwiftUI
@@ -53,6 +55,11 @@ struct StartWorkoutTab: View {
     @State private var renameText = ""
 
     @State private var folderPendingDelete: TemplateFolder?
+
+    @State private var renamingTemplate: Template?
+    @State private var templateRenameText = ""
+
+    @State private var templatePendingDelete: Template?
 
     private let columns = [
         GridItem(.flexible(), spacing: Spacing.comfortable),
@@ -96,6 +103,25 @@ struct StartWorkoutTab: View {
             ) {
                 Button("Delete Folder", role: .destructive) { deletePendingFolder() }
                 Button("Cancel", role: .cancel) { folderPendingDelete = nil }
+            }
+            .alert("Rename Template", isPresented: Binding(
+                get: { renamingTemplate != nil },
+                set: { if !$0 { renamingTemplate = nil } }
+            )) {
+                TextField("Template name", text: $templateRenameText)
+                Button("Cancel", role: .cancel) { renamingTemplate = nil }
+                Button("Save") { applyTemplateRename() }
+            }
+            .confirmationDialog(
+                "Delete this template? Workout history is kept.",
+                isPresented: Binding(
+                    get: { templatePendingDelete != nil },
+                    set: { if !$0 { templatePendingDelete = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Delete Template", role: .destructive) { deletePendingTemplate() }
+                Button("Cancel", role: .cancel) { templatePendingDelete = nil }
             }
         }
     }
@@ -230,7 +256,7 @@ struct StartWorkoutTab: View {
     }
 
     private func createFolder() {
-        guard let name = FolderEditing.normalizedName(newFolderName) else {
+        guard let name = NameEditing.normalized(newFolderName) else {
             newFolderName = ""
             return
         }
@@ -245,12 +271,72 @@ struct StartWorkoutTab: View {
 
     private func applyRename() {
         guard let folder = renamingFolder,
-              let name = FolderEditing.normalizedName(renameText) else {
+              let name = NameEditing.normalized(renameText) else {
             renamingFolder = nil
             return
         }
         folder.name = name
         renamingFolder = nil
+    }
+
+    private func applyTemplateRename() {
+        guard let template = renamingTemplate,
+              let name = NameEditing.normalized(templateRenameText) else {
+            renamingTemplate = nil
+            return
+        }
+        template.name = name
+        renamingTemplate = nil
+    }
+
+    private func deletePendingTemplate() {
+        guard let template = templatePendingDelete else { return }
+        // deleteRule: .cascade on exercises/sets, .nullify on workouts.
+        // context.delete(template) is sufficient. Do not loop over
+        // template.workouts — that would destroy training history.
+        context.delete(template)
+        templatePendingDelete = nil
+    }
+
+    private func duplicateTemplate(_ template: Template) {
+        let copy = Template(
+            name: TemplateEditing.duplicateName(
+                of: template.name,
+                existing: templates.map(\.name)
+            ),
+            note: template.note,
+            order: FolderEditing.nextOrder(after: templates.map(\.order)),
+            lastPerformedAt: nil,
+            folder: template.folder
+        )
+        context.insert(copy)
+
+        for sourceExercise in template.exercises.sorted(by: { $0.order < $1.order }) {
+            let copiedExercise = TemplateExercise(
+                order: sourceExercise.order,
+                supersetGroupID: sourceExercise.supersetGroupID,
+                note: sourceExercise.note,
+                stickyNote: sourceExercise.stickyNote,
+                defaultRestSeconds: sourceExercise.defaultRestSeconds,
+                template: copy,
+                exercise: sourceExercise.exercise
+            )
+            context.insert(copiedExercise)
+
+            for sourceSet in sourceExercise.sets.sorted(by: { $0.order < $1.order }) {
+                context.insert(TemplateSet(
+                    order: sourceSet.order,
+                    setType: sourceSet.setType,
+                    weight: sourceSet.weight,
+                    reps: sourceSet.reps,
+                    repRangeStart: sourceSet.repRangeStart,
+                    repRangeEnd: sourceSet.repRangeEnd,
+                    rpe: sourceSet.rpe,
+                    restSeconds: sourceSet.restSeconds,
+                    templateExercise: copiedExercise
+                ))
+            }
+        }
     }
 
     private func deletePendingFolder() {
@@ -269,7 +355,16 @@ struct StartWorkoutTab: View {
                     onTap: {
                         editorTarget = EditorTarget(template: template, folder: nil)
                     },
-                    onStart: { onStartTemplate(template) }
+                    onStart: { onStartTemplate(template) },
+                    onEdit: {
+                        editorTarget = EditorTarget(template: template, folder: nil)
+                    },
+                    onRename: {
+                        templateRenameText = template.name
+                        renamingTemplate = template
+                    },
+                    onDuplicate: { duplicateTemplate(template) },
+                    onDelete: { templatePendingDelete = template }
                 )
             }
         }
@@ -282,11 +377,17 @@ struct StartWorkoutTab: View {
 /// names joined and truncated to a few lines in `textSecondary`, and — when
 /// `lastPerformedAt` is set — a clock icon with a relative last-performed
 /// string ("Yesterday", "4 days ago"). Tapping the card opens the editor; the
-/// trailing play button starts a workout from it.
+/// trailing play button starts a workout from it; the trailing menu owns
+/// edit / rename / duplicate / delete. The card itself is dumb — mutations
+/// stay in StartWorkoutTab.
 private struct TemplateCard: View {
     let template: Template
     var onTap: () -> Void
     var onStart: () -> Void
+    var onEdit: () -> Void
+    var onRename: () -> Void
+    var onDuplicate: () -> Void
+    var onDelete: () -> Void
 
     var body: some View {
         Button(action: onTap) {
@@ -300,6 +401,7 @@ private struct TemplateCard: View {
 
                     Spacer(minLength: 0)
 
+                    cardMenu
                     startButton
                 }
 
@@ -322,6 +424,24 @@ private struct TemplateCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Spacing.comfortable)
             .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.card))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // Trailing Menu — same idiom as folderMenu: the glyph is the menu's
+    // label so the card stays a card, not a button cluster.
+    private var cardMenu: some View {
+        Menu {
+            Button("Edit Template") { onEdit() }
+            Button("Rename") { onRename() }
+            Button("Duplicate") { onDuplicate() }
+            Button("Delete", role: .destructive) { onDelete() }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(Typography.secondary.weight(.semibold))
+                .foregroundStyle(Theme.accent)
+                .frame(width: 28, height: 28)
+                .background(Theme.accentFill, in: .rect(cornerRadius: Radius.chip))
         }
         .buttonStyle(.plain)
     }

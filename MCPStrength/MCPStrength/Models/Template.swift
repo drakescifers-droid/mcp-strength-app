@@ -75,6 +75,15 @@ final class Template {
     @Relationship(deleteRule: .nullify, inverse: \Workout.template)
     var workouts: [Workout] = []
 
+    /// Program days that point at this template.
+    ///
+    /// **NULLIFY, never cascade.** Deleting a template should empty a program's
+    /// day slot, never delete the program or its other days. Declaring the
+    /// inverse is what makes `ProgramDay.template` go nil; without it the day
+    /// keeps pointing at a deleted object.
+    @Relationship(deleteRule: .nullify, inverse: \ProgramDay.template)
+    var programDays: [ProgramDay] = []
+
     init(
         id: UUID = UUID(),
         name: String,

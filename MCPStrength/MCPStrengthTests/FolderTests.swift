@@ -2,10 +2,10 @@
 //  FolderTests.swift
 //  MCPStrengthTests
 //
-//  Covers FolderEditing.nextOrder / normalizedName and the TemplateFolder
-//  delete-nullify contract — deleting a folder must leave its templates
-//  alive and unfiled. Lives in Workout/ (no SwiftUI) so the name/order
-//  rules can be tested in isolation; see docs/01-data-model.md § Templates.
+//  Covers FolderEditing.nextOrder, NameEditing.normalized, and the
+//  TemplateFolder delete-nullify contract — deleting a folder must leave
+//  its templates alive and unfiled. Name validation lives in NameEditing
+//  so folders and templates share one definition of a valid name.
 //
 
 import Testing
@@ -47,12 +47,12 @@ struct FolderTests {
     }
 
     @Test func normalizedNameTrimsWhitespace() {
-        #expect(FolderEditing.normalizedName("  Q2 2026\n") == "Q2 2026")
+        #expect(NameEditing.normalized("  Q2 2026\n") == "Q2 2026")
     }
 
     @Test func normalizedNameRejectsBlank() {
-        #expect(FolderEditing.normalizedName("") == nil)
-        #expect(FolderEditing.normalizedName("   \n  ") == nil)
+        #expect(NameEditing.normalized("") == nil)
+        #expect(NameEditing.normalized("   \n  ") == nil)
     }
 
     // The load-bearing contract: TemplateFolder.templates uses deleteRule
