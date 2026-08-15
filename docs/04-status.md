@@ -66,17 +66,20 @@ Small, none blocking, roughly in the order I would do them.
 1. **Moving an existing template between folders.** A template can be *created* into a folder, but
    not moved afterwards. The reference has no menu affordance for this either — it appears to be
    drag-to-reorder — so this needs a product decision before it needs code.
-2. **Template card title truncation.** Two trailing buttons (play + `•••`) squeeze the title, so
-   names now render as `New Templ…`. Cosmetic, wants a layout pass. Deliberately NOT delegated to
-   a verified worker run: a layout change's success criterion is visual, and no structural check
-   can assert "the title is readable" — a check that cannot fail is a task that cannot be
-   verified.
+2. **`BodyPart.displayName` is duplicated.** `TemplateOverviewSheet` carries its own copy because
+   the mapping in `ExercisesScreen` is file-private. Two copies of user-facing labels drift; the
+   fix is to lift one shared mapping onto `BodyPart` itself.
 
 > **Archive and Share are deliberately absent from the template menu.** The reference has both.
 > Archive has no schema *and no designed behaviour* — does it hide the row, where do you
 > unarchive, does it affect history? The Program schema precedent does **not** license adding a
 > column here: that shipped early because its design was settled and only its UI was deferred.
 > Design it, then build it. Share is out of scope.
+
+> **The template overview sheet is done, and the play button is gone.** Tapping a card opens an
+> overview (name, Last Performed, `3 × Exercise` rows, full-width Start Workout) with Edit as a
+> nested sheet it owns. The card carried a play button only because this screen did not exist;
+> removing it also gave the card title back the width the type-size change was working around.
 
 > **Measurement ordering, seed placement, and the Previous-column set-type annotation are done.**
 > Measurements sort anatomically from a seeded `sortOrder`; both seed importers now live in
