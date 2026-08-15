@@ -251,15 +251,20 @@ private struct ExerciseBlock: View {
                 .font(Typography.body.weight(.semibold))
                 .foregroundStyle(Theme.accent)
 
-            columnHeader
+            SetRowColumnHeader(trailingIcon: "checkmark")
 
             VStack(spacing: 0) {
                 ForEach(Array(sortedSets.enumerated()), id: \.element.id) { index, set in
                     SetRow(
-                        set: set,
+                        setType: set.setType,
                         setNumber: index + 1,
                         previousText: previousText(for: set, position: index),
-                        onCompleted: { onStartRest(set.id, set.restSeconds) }
+                        weight: Binding(get: { set.weight }, set: { set.weight = $0 }),
+                        reps: Binding(get: { set.reps }, set: { set.reps = $0 }),
+                        trailing: .completion(
+                            isCompleted: set.isCompleted,
+                            onToggle: { toggleComplete(set) }
+                        )
                     )
 
                     if index < sortedSets.count - 1 {
@@ -276,7 +281,9 @@ private struct ExerciseBlock: View {
                 }
             }
 
-            addButton
+            AddSetButton(label: "+ Add Set (\(formatTime(defaultRestSeconds)))") {
+                addSet()
+            }
         }
     }
 
@@ -284,43 +291,10 @@ private struct ExerciseBlock: View {
         workoutExercise.sets.sorted { $0.order < $1.order }
     }
 
-    private var addButton: some View {
-        Button {
-            addSet()
-        } label: {
-            Text("+ Add Set (\(formatTime(defaultRestSeconds)))")
-                .font(Typography.body)
-                .foregroundStyle(Theme.textPrimary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, Spacing.compact)
-                .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.button))
-        }
-        .buttonStyle(.plain)
-    }
-
     private var defaultRestSeconds: Int {
         // The model default a fresh set gets (90s). Shown on the button and
         // applied to the appended set.
         90
-    }
-
-    // MARK: - Column header
-
-    private var columnHeader: some View {
-        HStack(spacing: Spacing.compact) {
-            Text("Set")
-                .frame(width: 28, alignment: .leading)
-            Text("Previous")
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Text("lbs")
-                .frame(width: 64, alignment: .center)
-            Text("Reps")
-                .frame(width: 56, alignment: .center)
-            Image(systemName: "checkmark")
-                .frame(width: 36, alignment: .center)
-        }
-        .font(Typography.secondary)
-        .foregroundStyle(Theme.textSecondary)
     }
 
     // MARK: - Rest divider / progress bar
@@ -343,24 +317,22 @@ private struct ExerciseBlock: View {
                 onTap: onOpenRestControls
             )
         } else {
-            restDivider(restSeconds: set.restSeconds)
+            RestDivider(restSeconds: set.restSeconds)
         }
     }
 
-    private func restDivider(restSeconds: Int) -> some View {
-        HStack(spacing: Spacing.compact) {
-            Rectangle()
-                .fill(Theme.fieldFill)
-                .frame(height: 1)
-            Text(formatTime(restSeconds))
-                .font(Typography.secondary)
-                .foregroundStyle(Theme.accent)
-                .monospacedDigit()
-            Rectangle()
-                .fill(Theme.fieldFill)
-                .frame(height: 1)
+    // MARK: - Completion
+
+    /// Toggle the set's completion and start a rest when it becomes complete.
+    /// Owns the model mutation that the shared `SetRow` deliberately does not.
+    private func toggleComplete(_ set: WorkoutSet) {
+        set.isCompleted.toggle()
+        set.completedAt = set.isCompleted ? Date() : nil
+        // Starting a rest only fires when the set becomes complete —
+        // unchecking does not start one.
+        if set.isCompleted {
+            onStartRest(set.id, set.restSeconds)
         }
-        .padding(.vertical, Spacing.compact)
     }
 
     // MARK: - Previous
@@ -388,121 +360,11 @@ private struct ExerciseBlock: View {
     }
 }
 
-// MARK: - SetRow
-
-/// One editable set row: badge, previous, weight chip, reps chip, check.
-/// Weight/reps are held in local String state so the user can type "85."
-/// without the field snapping back to "85" mid-keystroke; values commit
-/// through to the model on every change that parses (or clears when empty).
-private struct SetRow: View {
-    let set: WorkoutSet
-    let setNumber: Int
-    let previousText: String
-    var onCompleted: () -> Void = {}
-
-    @State private var weightText: String = ""
-    @State private var repsText: String = ""
-    @State private var didSync: Bool = false
-
-    var body: some View {
-        HStack(spacing: Spacing.compact) {
-            SetTypeBadge(setType: set.setType, setNumber: setNumber)
-                .frame(width: 28)
-
-            Text(previousText)
-                .font(Typography.secondary)
-                .foregroundStyle(Theme.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .lineLimit(1)
-
-            TextField("", text: $weightText)
-                .keyboardType(.decimalPad)
-                .textInputAutocapitalization(.never)
-                .foregroundStyle(Theme.textPrimary)
-                .entryChipStyle()
-                .frame(width: 64)
-                .onChange(of: weightText) { _, newValue in commitWeight(newValue) }
-
-            TextField("", text: $repsText)
-                .keyboardType(.numberPad)
-                .textInputAutocapitalization(.never)
-                .foregroundStyle(Theme.textPrimary)
-                .entryChipStyle()
-                .frame(width: 56)
-                .onChange(of: repsText) { _, newValue in commitReps(newValue) }
-
-            checkButton
-                .frame(width: 36)
-        }
-        .padding(.vertical, Spacing.compact)
-        // A subtle success tint behind a completed set so finished rows read
-        // differently from pending ones at a glance.
-        .background(
-            set.isCompleted ? Theme.success.opacity(0.12) : Color.clear,
-            in: .rect(cornerRadius: Radius.chip)
-        )
-        .onAppear { syncFromModel() }
-    }
-
-    private var checkButton: some View {
-        Button {
-            toggleComplete()
-        } label: {
-            Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 28, weight: .regular))
-                .foregroundStyle(set.isCompleted ? Theme.success : Theme.textSecondary)
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Sync / commit
-
-    private func syncFromModel() {
-        guard !didSync else { return }
-        didSync = true
-        if let w = set.weight {
-            weightText = PreviousText.formatWeight(w)
-        }
-        if let r = set.reps {
-            repsText = String(r)
-        }
-    }
-
-    private func commitWeight(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        if trimmed.isEmpty {
-            set.weight = nil
-        } else if let value = Double(trimmed) {
-            set.weight = value
-        }
-        // Unparseable input (e.g. "85.") is left as-is locally without writing,
-        // so the user can finish typing the decimal.
-    }
-
-    private func commitReps(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        if trimmed.isEmpty {
-            set.reps = nil
-        } else if let value = Int(trimmed) {
-            set.reps = value
-        }
-    }
-
-    private func toggleComplete() {
-        set.isCompleted.toggle()
-        set.completedAt = set.isCompleted ? Date() : nil
-        // Starting a rest only fires when the set becomes complete —
-        // unchecking does not start one.
-        if set.isCompleted {
-            onCompleted()
-        }
-    }
-}
-
 // MARK: - PreviousText formatter
 
 /// Pure formatter for the "Previous" column. Split out so it can be reasoned
-/// about and tested independently of SwiftUI.
+/// about and tested independently of SwiftUI. Shared by the workout screen and
+/// the template editor via the `SetRow`'s `previousText` parameter.
 enum PreviousText {
     static func format(_ prev: WorkoutHistory.PreviousSet?) -> String {
         guard let prev else { return "—" }

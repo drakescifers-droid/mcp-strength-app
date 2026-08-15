@@ -47,6 +47,15 @@ struct ContentView: View {
                     .padding(.horizontal, Spacing.screenMargin)
 
                 NavigationLink {
+                    TemplatesScreen(onStart: { template in startWorkout(from: template) })
+                } label: {
+                    Text("Templates")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.tintedAccent)
+                .padding(.horizontal, Spacing.screenMargin)
+
+                NavigationLink {
                     ExercisesScreen()
                 } label: {
                     Text("Exercise Library")
@@ -66,26 +75,31 @@ struct ContentView: View {
     // MARK: - Actions
 
     private func startWorkout() {
-        let workout = Workout(name: workoutName(for: Date()), startedAt: Date())
+        let workout = Workout(name: WorkoutNaming.quickWorkoutName(for: Date()), startedAt: Date())
         context.insert(workout)
         activeWorkout = workout
     }
 
-    /// "Afternoon Workout" style name from the time of day.
-    private func workoutName(for date: Date) -> String {
-        let hour = Calendar.current.component(.hour, from: date)
-        let part: String
-        switch hour {
-        case 5..<12:  part = "Morning"
-        case 12..<17: part = "Afternoon"
-        case 17..<21: part = "Evening"
-        default:      part = "Night"
-        }
-        return "\(part) Workout"
+    /// Start a workout from a template. The workout takes the TEMPLATE's name
+    /// (copied at start, never read through the relationship), copies the
+    /// template's exercises and sets, and opens the active-workout screen.
+    private func startWorkout(from template: Template) {
+        let workout = TemplateStarter.start(from: template, in: context)
+        activeWorkout = workout
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: Exercise.self, inMemory: true)
+        .modelContainer(for: [
+            Exercise.self,
+            TemplateFolder.self,
+            Template.self,
+            TemplateExercise.self,
+            TemplateSet.self,
+            ProgramDay.self,
+            Workout.self,
+            WorkoutExercise.self,
+            WorkoutSet.self,
+        ], inMemory: true)
 }
