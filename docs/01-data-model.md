@@ -271,8 +271,19 @@ Workout
 
 **Workout** — `id`, `name`, `templateId?`, `startedAt`, `completedAt?`, `durationSeconds`,
 `note?`, `totalVolume`, `prCount`.
-`templateId` is nullable to support "Start an Empty Workout" / quick workouts (named
-"Afternoon Workout" by default in the reference).
+`templateId` is nullable to support "Start an Empty Workout" / quick workouts.
+
+**Workout naming has two cases, and only one of them is the time-of-day default.**
+
+| Started from | `name` |
+|---|---|
+| A template | **The template's name**, copied at start and persisted on the Workout |
+| Nothing (a quick workout) | A generated time-of-day name — "Afternoon Workout" in the reference |
+
+The template case is the normal one; the generated name is the fallback for the path that has
+no template to take a name from. `name` is stored on the Workout rather than read through
+`templateId`, so renaming or deleting a template later never rewrites the history of workouts
+already performed from it.
 
 **WorkoutSet** — same fields as TemplateSet **except `repRangeStart` / `repRangeEnd`** (a performance
 is a number, not a range — see the design note above), plus:
