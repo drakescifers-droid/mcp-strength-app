@@ -62,6 +62,17 @@ struct ExercisesScreen: View {
     @State private var bodyPartFilter: BodyPart?
     @State private var categoryFilter: ExerciseCategory?
 
+    @Environment(\.dismiss) private var dismiss
+
+    /// When non-nil the screen acts as an exercise picker: rows are tappable and
+    /// invoke this callback instead of being inert. "Add Exercises" in the
+    /// active-workout flow uses this; the library screen on its own leaves it
+    /// nil. This is the only addition needed to reuse the screen as a picker —
+    /// no second exercise list is built.
+    var onSelect: ((Exercise) -> Void)? = nil
+
+    private var pickerMode: Bool { onSelect != nil }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -79,8 +90,15 @@ struct ExercisesScreen: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Theme.surface)
-            .navigationTitle("Exercises")
+            .navigationTitle(pickerMode ? "Add Exercises" : "Exercises")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                if pickerMode {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                    }
+                }
+            }
         }
     }
 
@@ -176,7 +194,16 @@ struct ExercisesScreen: View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 ForEach(Array(visibleExercises.enumerated()), id: \.element.id) { index, exercise in
-                    ExerciseRow(exercise: exercise)
+                    if pickerMode {
+                        Button {
+                            onSelect?(exercise)
+                        } label: {
+                            ExerciseRow(exercise: exercise)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        ExerciseRow(exercise: exercise)
+                    }
                     if index < visibleExercises.count - 1 {
                         rowDivider
                     }
