@@ -63,25 +63,24 @@ These are not oversights. Each was cut with a reason, and the reason is the poin
 
 Small, none blocking, roughly in the order I would do them.
 
-1. **Measurement ordering.** The list is alphabetical; the reference is anatomical (Weight first in
-   Core; Neck → Shoulders → Chest → … in Body Part). Wants a `sortOrder` field in
-   `measurement-seed.json`. Worth doing before the order becomes muscle memory.
-2. **Seed call placement.** The exercise seed runs at `ModelContainer` construction; the measurement
-   seed runs from `ContentView`. Both work, both are idempotent, but they should live together.
-3. **Set-type annotation in the Previous column.** The reference renders a prior drop set as
-   `75 lb × 11 (D)`; `PreviousText` currently formats weight and reps only. Small, and now
-   reachable — set types can finally *be* something other than normal.
-4. **Moving an existing template between folders.** A template can be *created* into a folder, but
+1. **Moving an existing template between folders.** A template can be *created* into a folder, but
    not moved afterwards. The reference has no menu affordance for this either — it appears to be
    drag-to-reorder — so this needs a product decision before it needs code.
-5. **Template card title truncation.** Two trailing buttons (play + `•••`) squeeze the title, so
-   names now render as `New Templ…`. Cosmetic, wants a layout pass.
+2. **Template card title truncation.** Two trailing buttons (play + `•••`) squeeze the title, so
+   names now render as `New Templ…`. Cosmetic, wants a layout pass. Deliberately NOT delegated to
+   a verified worker run: a layout change's success criterion is visual, and no structural check
+   can assert "the title is readable" — a check that cannot fail is a task that cannot be
+   verified.
 
 > **Archive and Share are deliberately absent from the template menu.** The reference has both.
 > Archive has no schema *and no designed behaviour* — does it hide the row, where do you
 > unarchive, does it affect history? The Program schema precedent does **not** license adding a
 > column here: that shipped early because its design was settled and only its UI was deferred.
 > Design it, then build it. Share is out of scope.
+
+> **Measurement ordering, seed placement, and the Previous-column set-type annotation are done.**
+> Measurements sort anatomically from a seeded `sortOrder`; both seed importers now live in
+> `MCPStrengthApp` but stay independent; a prior drop set reads `75 lb × 11 (D)`.
 
 > **Set-type editing, folder lifecycle, and the per-template menu are all done.** Set types are
 > editable from the badge and working-set numbering excludes lettered sets. Folders can be
@@ -101,6 +100,14 @@ Small, none blocking, roughly in the order I would do them.
 
 ## Lessons worth not relearning
 
+- **Every `@Model` property needs a declaration-level default or optionality — `var x: Int = 0`,
+  not a default in `init`.** SwiftData's lightweight migration cannot see initializer defaults, so
+  adding `var sortOrder: Int` made `ModelContainer(for:)` throw when opening a store written
+  before the property existed, and the app died on launch. **Unit tests cannot catch this by
+  construction**: they build in-memory containers from the *current* schema, so there is never an
+  old store to migrate. Only launching the app against a previous build's store exposes it, which
+  is what the two UI tests are actually for. Cheap now; a broken-on-update app once Phase 2 gives
+  real users real history.
 - **Look at the running app.** Three bugs passed a green test suite and were caught only by
   launching it: a seed importer that nothing ever called, a navigation title rendering black on a
   dark background (system chrome does not read our tokens), and `totalVolume` that nothing computed
