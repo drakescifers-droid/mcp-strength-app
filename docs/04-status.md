@@ -63,15 +63,18 @@ These are not oversights. Each was cut with a reason, and the reason is the poin
 
 Small, none blocking, roughly in the order I would do them.
 
-1. **Reordering exercises inside a workout.** The reference lets you drag an exercise by its title
-   to reorder it, and everything else collapses while you do. Not built, and a different surface
-   from the template grid — `WorkoutExercise.order` already exists, so this is UI, not schema.
+_None outstanding._ The list has been empty before; things land on it as they are noticed.
 
 > **Archive and Share are deliberately absent from the template menu.** The reference has both.
 > Archive has no schema *and no designed behaviour* — does it hide the row, where do you
 > unarchive, does it affect history? The Program schema precedent does **not** license adding a
 > column here: that shipped early because its design was settled and only its UI was deferred.
 > Design it, then build it. Share is out of scope.
+
+> **Exercises can be reordered inside a workout by dragging the title**, and every exercise
+> collapses to its title row while the drag is active — a workout is taller than the screen, so
+> without collapsing you cannot reach an exercise two screens away. The list-move rule is shared
+> with the template grid as `ListOrdering`.
 
 > **Templates can be dragged between folders and reordered within one.** `Template.order` now
 > means position within its folder rather than a global rank — documented at the declaration,
