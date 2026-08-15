@@ -9,9 +9,11 @@
 //  each card starts a workout from that template without losing the reachability
 //  the old swipe-to-Start row provided.
 //
-//  Folder CREATION and management is out of scope here — this view only
-//  DISPLAYS grouping. When no TemplateFolder rows exist the grid is flat with
-//  no header, rather than an "Ungrouped" heading that says nothing.
+//  Folder lifecycle (create, rename, delete, collapse, and filing a new
+//  template into a folder) lives here. Empty folders still render — a new
+//  folder has no templates, and hiding it would make create look like a no-op.
+//  When no TemplateFolder rows exist the grid is flat with no header, rather
+//  than an "Ungrouped" heading that says nothing.
 //
 
 import SwiftUI
@@ -33,6 +35,17 @@ struct StartWorkoutTab: View {
 
     @State private var editingTemplate: Template?
     @State private var showingEditor = false
+    /// Destination folder for a NEW template opened from a folder's menu.
+    /// `nil` on the section-header "+ Template" path (unfiled).
+    @State private var editorFolder: TemplateFolder?
+
+    @State private var showingAddFolder = false
+    @State private var newFolderName = ""
+
+    @State private var renamingFolder: TemplateFolder?
+    @State private var renameText = ""
+
+    @State private var folderPendingDelete: TemplateFolder?
 
     private let columns = [
         GridItem(.flexible(), spacing: Spacing.comfortable),
@@ -52,8 +65,30 @@ struct StartWorkoutTab: View {
             .background(Theme.surface)
             .navigationTitle("Start Workout")
             .navigationBarTitleDisplayMode(.large)
-            .sheet(isPresented: $showingEditor, onDismiss: { editingTemplate = nil }) {
-                TemplateEditorScreen(template: editingTemplate)
+            .sheet(isPresented: $showingEditor, onDismiss: {
+                editingTemplate = nil
+                editorFolder = nil
+            }) {
+                TemplateEditorScreen(template: editingTemplate, folder: editorFolder)
+            }
+            .alert("Rename Folder", isPresented: Binding(
+                get: { renamingFolder != nil },
+                set: { if !$0 { renamingFolder = nil } }
+            )) {
+                TextField("New Folder", text: $renameText)
+                Button("Cancel", role: .cancel) { renamingFolder = nil }
+                Button("Save") { applyRename() }
+            }
+            .confirmationDialog(
+                "Delete this folder? Its templates will be kept and become unfiled.",
+                isPresented: Binding(
+                    get: { folderPendingDelete != nil },
+                    set: { if !$0 { folderPendingDelete = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Delete Folder", role: .destructive) { deletePendingFolder() }
+                Button("Cancel", role: .cancel) { folderPendingDelete = nil }
             }
         }
     }
@@ -79,14 +114,18 @@ struct StartWorkoutTab: View {
 
     @ViewBuilder
     private var templatesSection: some View {
-        // The "Templates" section header always carries the "+ Template" action
-        // so the create path is reachable whether or not any templates exist yet.
+        // The "Templates" section header always carries create actions so both
+        // paths stay reachable whether or not any rows exist yet.
         sectionHeader(title: "Templates") {
+            newFolderName = ""
+            showingAddFolder = true
+        } onNewTemplate: {
             editingTemplate = nil
+            editorFolder = nil
             showingEditor = true
         }
 
-        if templates.isEmpty {
+        if folders.isEmpty && templates.isEmpty {
             Text("No templates yet. Tap + Template to create one.")
                 .font(Typography.secondary)
                 .foregroundStyle(Theme.textSecondary)
@@ -95,10 +134,13 @@ struct StartWorkoutTab: View {
             templateGrid(templates)
         } else {
             ForEach(folders, id: \.id) { folder in
-                let folderTemplates = folder.templates.sorted { $0.order < $1.order }
-                if !folderTemplates.isEmpty {
-                    folderHeader(name: folder.name, count: folderTemplates.count)
-                    templateGrid(folderTemplates)
+                folderHeader(folder)
+                // Empty folders still render their header (count 0, menu
+                // reachable). A newly created folder has no templates; the
+                // old `if !folderTemplates.isEmpty` guard made Save look
+                // like a no-op.
+                if !folder.isCollapsed {
+                    templateGrid(folder.templates.sorted { $0.order < $1.order })
                 }
             }
             // Templates with no folder (when folders exist) get a trailing
@@ -110,30 +152,110 @@ struct StartWorkoutTab: View {
         }
     }
 
-    private func sectionHeader(title: String, onNewTemplate: @escaping () -> Void) -> some View {
+    private func sectionHeader(
+        title: String,
+        onNewFolder: @escaping () -> Void,
+        onNewTemplate: @escaping () -> Void
+    ) -> some View {
         HStack {
             Text(title)
                 .font(Typography.secondary.weight(.semibold))
                 .foregroundStyle(Theme.textSecondary)
             Spacer()
-            Button {
-                onNewTemplate()
-            } label: {
+            Button(action: onNewTemplate) {
                 Label("Template", systemImage: "plus")
+                    .font(Typography.secondary.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
+            }
+            .buttonStyle(.plain)
+            Button(action: onNewFolder) {
+                Image(systemName: "folder.badge.plus")
                     .font(Typography.secondary.weight(.semibold))
                     .foregroundStyle(Theme.accent)
             }
             .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .alert("Add New Folder", isPresented: $showingAddFolder) {
+            TextField("New Folder", text: $newFolderName)
+            Button("Cancel", role: .cancel) { newFolderName = "" }
+            Button("Save") { createFolder() }
+        }
     }
 
-    private func folderHeader(name: String, count: Int) -> some View {
-        Text("\(name) (\(count))")
-            .font(Typography.secondary.weight(.semibold))
-            .foregroundStyle(Theme.textSecondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, Spacing.comfortable)
+    private func folderHeader(_ folder: TemplateFolder) -> some View {
+        HStack(spacing: Spacing.compact) {
+            Image(systemName: "folder")
+                .font(Typography.secondary)
+                .foregroundStyle(Theme.textSecondary)
+            Text("\(folder.name) (\(folder.templates.count))")
+                .font(Typography.secondary.weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
+            Spacer(minLength: 0)
+            folderMenu(folder)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, Spacing.comfortable)
+    }
+
+    // Trailing Menu — same idiom as SetRow.setTypeMenu: the glyph is the
+    // menu's label so the row's look stays a header, not a button cluster.
+    private func folderMenu(_ folder: TemplateFolder) -> some View {
+        Menu {
+            Button(folder.isCollapsed ? "Expand Folder" : "Collapse Folder") {
+                folder.isCollapsed.toggle()
+            }
+            Button("Add Template") {
+                editingTemplate = nil
+                editorFolder = folder
+                showingEditor = true
+            }
+            Button("Rename") {
+                renameText = folder.name
+                renamingFolder = folder
+            }
+            Button("Delete", role: .destructive) {
+                folderPendingDelete = folder
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(Typography.secondary.weight(.semibold))
+                .foregroundStyle(Theme.accent)
+                .frame(width: 28, height: 28)
+                .background(Theme.accentFill, in: .rect(cornerRadius: Radius.chip))
+        }
+    }
+
+    private func createFolder() {
+        guard let name = FolderEditing.normalizedName(newFolderName) else {
+            newFolderName = ""
+            return
+        }
+        let folder = TemplateFolder(
+            name: name,
+            order: FolderEditing.nextOrder(after: folders.map(\.order)),
+            kind: .folder
+        )
+        context.insert(folder)
+        newFolderName = ""
+    }
+
+    private func applyRename() {
+        guard let folder = renamingFolder,
+              let name = FolderEditing.normalizedName(renameText) else {
+            renamingFolder = nil
+            return
+        }
+        folder.name = name
+        renamingFolder = nil
+    }
+
+    private func deletePendingFolder() {
+        guard let folder = folderPendingDelete else { return }
+        // deleteRule: .nullify — context.delete(folder) leaves templates
+        // alive and unfiled. Do not loop over folder.templates.
+        context.delete(folder)
+        folderPendingDelete = nil
     }
 
     private func templateGrid(_ templates: [Template]) -> some View {
@@ -143,6 +265,7 @@ struct StartWorkoutTab: View {
                     template: template,
                     onTap: {
                         editingTemplate = template
+                        editorFolder = nil
                         showingEditor = true
                     },
                     onStart: { onStartTemplate(template) }

@@ -55,6 +55,15 @@ struct TemplateEditorScreen: View {
     /// Save creates it, ✕ leaves the store untouched.
     let template: Template?
 
+    /// Destination folder for a NEW template. Ignored when `template` is
+    /// non-nil — editing an existing template does not re-file it.
+    let folder: TemplateFolder?
+
+    init(template: Template?, folder: TemplateFolder? = nil) {
+        self.template = template
+        self.folder = folder
+    }
+
     /// All history, for the "Previous" column — reused exactly as on the
     /// workout screen (see Views/WorkoutHistory.swift).
     @Query(sort: [SortDescriptor(\Workout.startedAt, order: .reverse)])
@@ -339,7 +348,7 @@ struct TemplateEditorScreen: View {
             }
         } else {
             let nextOrder = (try? context.fetchCount(FetchDescriptor<Template>())) ?? 0
-            target = Template(name: name, order: nextOrder)
+            target = Template(name: name, order: nextOrder, folder: folder)
             context.insert(target)
         }
 
