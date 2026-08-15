@@ -71,17 +71,23 @@ Small, none blocking, roughly in the order I would do them.
 3. **Set-type annotation in the Previous column.** The reference renders a prior drop set as
    `75 lb × 11 (D)`; `PreviousText` currently formats weight and reps only. Small, and now
    reachable — set types can finally *be* something other than normal.
-4. **Per-template overflow menu.** The reference gives each template card a `•••` with Edit /
-   Rename / Duplicate / Archive / Share / Delete. **There is no way to delete a template at all
-   today.** Archive and Share have no schema behind them and would need designing first.
-5. **Moving an existing template between folders.** A template can be *created* into a folder, but
+4. **Moving an existing template between folders.** A template can be *created* into a folder, but
    not moved afterwards. The reference has no menu affordance for this either — it appears to be
    drag-to-reorder — so this needs a product decision before it needs code.
+5. **Template card title truncation.** Two trailing buttons (play + `•••`) squeeze the title, so
+   names now render as `New Templ…`. Cosmetic, wants a layout pass.
 
-> **Set-type editing and folder lifecycle are both done** (they were #1 and #2 here). Set types
-> are editable from the badge and working-set numbering excludes lettered sets. Folders can be
+> **Archive and Share are deliberately absent from the template menu.** The reference has both.
+> Archive has no schema *and no designed behaviour* — does it hide the row, where do you
+> unarchive, does it affect history? The Program schema precedent does **not** license adding a
+> column here: that shipped early because its design was settled and only its UI was deferred.
+> Design it, then build it. Share is out of scope.
+
+> **Set-type editing, folder lifecycle, and the per-template menu are all done.** Set types are
+> editable from the badge and working-set numbering excludes lettered sets. Folders can be
 > created, renamed, deleted, collapsed, and filled via Add Template; deleting one keeps its
-> templates and unfiles them.
+> templates and unfiles them. Templates can now be renamed, duplicated, and — for the first
+> time — **deleted**, and deleting one keeps every workout performed from it.
 
 > **Lesson from the folder work, worth not relearning.** `Add Template` shipped through a green
 > structural check and 125 green tests while filing nothing, because `.sheet(isPresented:)` reads
