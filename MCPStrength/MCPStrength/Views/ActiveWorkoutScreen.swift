@@ -261,7 +261,20 @@ private struct ExerciseBlock: View {
                         setNumber: index + 1,
                         previousText: previousText(for: set, position: index),
                         weight: Binding(get: { set.weight }, set: { set.weight = $0 }),
-                        reps: Binding(get: { set.reps }, set: { set.reps = $0 }),
+                        prescription: Binding(
+                            get: { RepRange.fromWorkout(reps: set.reps) },
+                            set: { newValue in
+                                // A performance has a number, not a range — only
+                                // .fixed (or nil) is ever written here; a range
+                                // is rejected by the parser with allowRange:false.
+                                set.reps = newValue.flatMap { range -> Int? in
+                                    if case .fixed(let n) = range { return n }
+                                    return nil
+                                }
+                            }
+                        ),
+                        allowRange: false,
+                        rpe: Binding(get: { set.rpe }, set: { set.rpe = $0 }),
                         trailing: .completion(
                             isCompleted: set.isCompleted,
                             onToggle: { toggleComplete(set) }

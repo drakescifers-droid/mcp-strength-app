@@ -160,7 +160,9 @@ struct TemplateEditorScreen: View {
                         setNumber: setIndex + 1,
                         previousText: previousText(for: draft.exercise, at: setIndex),
                         weight: bindingForWeight(exercise: index, set: setIndex),
-                        reps: bindingForReps(exercise: index, set: setIndex),
+                        prescription: bindingForPrescription(exercise: index, set: setIndex),
+                        allowRange: true,
+                        rpe: bindingForRPE(exercise: index, set: setIndex),
                         trailing: .locked
                     )
 
@@ -187,10 +189,30 @@ struct TemplateEditorScreen: View {
         )
     }
 
-    private func bindingForReps(exercise: Int, set: Int) -> Binding<Int?> {
+    // The reps prescription is the SINGLE source of truth for the row's Reps
+    // field. Reading collapses `reps` / `repRangeStart` / `repRangeEnd` into one
+    // `RepRange?`; writing splits it back out — a fixed target writes `reps`
+    // and clears the range, a range writes the range and clears `reps`. The two
+    // are mutually exclusive by construction.
+    private func bindingForPrescription(exercise: Int, set: Int) -> Binding<RepRange?> {
         Binding(
-            get: { exercises[exercise].sets[set].reps },
-            set: { exercises[exercise].sets[set].reps = $0 }
+            get: {
+                let s = exercises[exercise].sets[set]
+                return RepRange.fromTemplate(reps: s.reps, start: s.repRangeStart, end: s.repRangeEnd)
+            },
+            set: { newValue in
+                let fields = newValue?.templateFields()
+                exercises[exercise].sets[set].reps = fields?.reps
+                exercises[exercise].sets[set].repRangeStart = fields?.start
+                exercises[exercise].sets[set].repRangeEnd = fields?.end
+            }
+        )
+    }
+
+    private func bindingForRPE(exercise: Int, set: Int) -> Binding<Double?> {
+        Binding(
+            get: { exercises[exercise].sets[set].rpe },
+            set: { exercises[exercise].sets[set].rpe = $0 }
         )
     }
 

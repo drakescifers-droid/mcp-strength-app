@@ -21,11 +21,17 @@ enum TemplateStarter {
     ///
     /// - The workout's `name` is the template's name, copied at start.
     /// - `Workout.template` is set so the relationship is recorded.
-    /// - Each set copies `weight`, `reps`, `setType`, and `restSeconds` as the
-    ///   starting values, and `isCompleted` is forced false on every set (a
-    ///   fresh performance has nothing completed yet).
-    /// - `repRangeStart` / `repRangeEnd` / `rpe` are template-only prescription
-    ///   fields and are NOT copied onto the workout's sets.
+    /// - Each set copies `weight`, `setType`, and `restSeconds`, and `rpe`
+    ///   (the prescribed effort target), and `isCompleted` is forced false on
+    ///   every set (a fresh performance has nothing completed yet).
+    /// - `reps` is pre-filled as follows: if the template set has a fixed
+    ///   `reps`, copy it unchanged; if it has a RANGE instead, pre-fill `reps`
+    ///   with `repRangeStart` — the BOTTOM of the range, where a lifter starts
+    ///   before adjusting up through the range as the set progresses.
+    ///   `WorkoutSet` deliberately has no range field (a plan has a range; a
+    ///   performance has a number — docs/01 § Prescribed effort), so the range
+    ///   itself is NOT copied, only the starting number is.
+    /// - `repRangeEnd` is template-only and is NOT copied onto the workout.
     @discardableResult
     static func start(
         from template: Template,
@@ -44,11 +50,14 @@ enum TemplateStarter {
             context.insert(workoutExercise)
 
             for templateSet in templateExercise.sets.sorted(by: { $0.order < $1.order }) {
+                // Fixed reps wins; otherwise fall back to the bottom of a range.
+                let prefillReps = templateSet.reps ?? templateSet.repRangeStart
                 let workoutSet = WorkoutSet(
                     order: templateSet.order,
                     setType: templateSet.setType,
                     weight: templateSet.weight,
-                    reps: templateSet.reps,
+                    reps: prefillReps,
+                    rpe: templateSet.rpe,
                     restSeconds: templateSet.restSeconds,
                     isCompleted: false,
                     workoutExercise: workoutExercise

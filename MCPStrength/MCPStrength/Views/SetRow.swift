@@ -29,25 +29,37 @@ enum SetRowTrailing {
 
 // MARK: - SetRow
 
-/// One editable set row: badge, previous, weight chip, reps chip, trailing.
+/// One editable set row: badge, previous, weight chip, reps chip, RPE chip,
+/// trailing.
 ///
-/// Weight and reps are passed as bindings so the row is decoupled from any
-/// particular model type — a `WorkoutSet` and a `TemplateSet` (or an in-memory
-/// draft) both plug in by handing over `Binding`s to their `weight` / `reps`.
+/// Weight is passed as a binding to `Double?`. Reps is passed as a binding to a
+/// `RepRange?` prescription: the template screen may carry a range ("6-8") or a
+/// fixed target ("8"); the workout screen carries only a fixed number. The
+/// `allowRange` flag controls whether a dashed form is accepted — the workout
+/// screen sets it false (a performance has a number, not a range).
 ///
-/// Weight/reps are held in local `String` state so the user can type "85."
-/// without the field snapping back to "85" mid-keystroke; values commit through
-/// to the binding on every change that parses (or clear when empty).
+/// RPE is optional everywhere and lives behind a compact Menu chip: empty shows
+/// the label "RPE" (discoverable, never invisible); set shows the value. An
+/// empty RPE never blocks anything.
+///
+/// Weight/reps text are held in local `String` state so the user can type "85."
+/// or "6-8" without the field snapping back mid-keystroke; values commit through
+/// to the binding on every change that parses (or clear when empty). Invalid
+/// reps text is left as-is and flagged with a destructive tint so the user can
+/// fix the typo — nothing wrong is ever written.
 struct SetRow: View {
     let setType: SetType
     let setNumber: Int
     let previousText: String
     @Binding var weight: Double?
-    @Binding var reps: Int?
+    @Binding var prescription: RepRange?
+    let allowRange: Bool
+    @Binding var rpe: Double?
     let trailing: SetRowTrailing
 
     @State private var weightText: String = ""
     @State private var repsText: String = ""
+    @State private var repsValid: Bool = true
     @State private var didSync: Bool = false
 
     var body: some View {
@@ -66,23 +78,81 @@ struct SetRow: View {
                 .textInputAutocapitalization(.never)
                 .foregroundStyle(Theme.textPrimary)
                 .entryChipStyle()
-                .frame(width: 64)
+                .frame(width: 56)
                 .onChange(of: weightText) { _, newValue in commitWeight(newValue) }
 
-            TextField("", text: $repsText)
-                .keyboardType(.numberPad)
-                .textInputAutocapitalization(.never)
-                .foregroundStyle(Theme.textPrimary)
-                .entryChipStyle()
-                .frame(width: 56)
-                .onChange(of: repsText) { _, newValue in commitReps(newValue) }
+            repsField
+                .frame(width: 52)
+
+            rpeField
+                .frame(width: 44)
 
             trailingView
-                .frame(width: 36)
+                .frame(width: 32)
         }
         .padding(.vertical, Spacing.compact)
         .background(rowTint, in: .rect(cornerRadius: Radius.chip))
         .onAppear { syncFromModel() }
+    }
+
+    // MARK: - Reps field
+
+    // Accepts "8" (a fixed target) on both screens, and "6-8" (a range) on the
+    // template screen. A fixed target clears any range; a range clears any
+    // fixed target — the two are mutually exclusive (see RepRange.templateFields).
+    // Invalid text is kept locally and tinted destructive; a wrong value is
+    // never written.
+    private var repsField: some View {
+        TextField("", text: $repsText)
+            .keyboardType(allowRange ? .default : .numberPad)
+            .textInputAutocapitalization(.never)
+            .foregroundStyle(repsValid ? Theme.textPrimary : Theme.destructive)
+            .entryChipStyle()
+            .overlay {
+                if !repsValid {
+                    RoundedRectangle(cornerRadius: Radius.chip)
+                        .stroke(Theme.destructive, lineWidth: 1)
+                }
+            }
+            .onChange(of: repsText) { _, newValue in commitReps(newValue) }
+    }
+
+    // MARK: - RPE field
+
+    // A compact optional column. Empty shows the "RPE" label (secondary) so the
+    // field is discoverable, not invisible; set shows the value (primary). Tapping
+    // opens a Menu of the allowed steps plus "None" to clear. RPE is optional
+    // everywhere, so empty is completely normal and never blocks anything.
+    private var rpeField: some View {
+        Menu {
+            Button {
+                rpe = nil
+            } label: {
+                if rpe == nil {
+                    Label("None", systemImage: "checkmark")
+                } else {
+                    Text("None")
+                }
+            }
+            ForEach(RPE.allowedValues, id: \.self) { value in
+                Button {
+                    rpe = value
+                } label: {
+                    if rpe == value {
+                        Label(RPE.format(value), systemImage: "checkmark")
+                    } else {
+                        Text(RPE.format(value))
+                    }
+                }
+            }
+        } label: {
+            Text(rpe.map { RPE.format($0) } ?? "RPE")
+                .font(Typography.chipValue)
+                .foregroundStyle(rpe == nil ? Theme.textSecondary : Theme.textPrimary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Spacing.compact)
+                .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.chip))
+        }
     }
 
     // MARK: - Trailing
@@ -126,8 +196,9 @@ struct SetRow: View {
         if let w = weight {
             weightText = PreviousText.formatWeight(w)
         }
-        if let r = reps {
-            repsText = String(r)
+        if let p = prescription {
+            repsText = RepRangeParser.format(p)
+            repsValid = true
         }
     }
 
@@ -143,20 +214,28 @@ struct SetRow: View {
     }
 
     private func commitReps(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        if trimmed.isEmpty {
-            reps = nil
-        } else if let value = Int(trimmed) {
-            reps = value
+        switch RepRangeParser.parse(text, allowRange: allowRange) {
+        case .unset:
+            repsValid = true
+            prescription = nil
+        case .valid(let range):
+            repsValid = true
+            // Setting a fixed target clears any existing range; setting a range
+            // clears any fixed target — enforced by RepRange.templateFields().
+            prescription = range
+        case .invalid:
+            // Keep the user's text locally (non-destructive) and flag it; do
+            // NOT write a wrong value to the prescription.
+            repsValid = false
         }
     }
 }
 
 // MARK: - SetRowColumnHeader
 
-/// The `Set | Previous | lbs | Reps | <trailing>` column header shared by both
-/// screens. Only the trailing glyph differs — `checkmark` for the workout, a
-/// lock for the template — so the column widths stay identical.
+/// The `Set | Previous | lbs | Reps | RPE | <trailing>` column header shared by
+/// both screens. Only the trailing glyph differs — `checkmark` for the workout,
+/// a lock for the template — so the column widths stay identical.
 struct SetRowColumnHeader: View {
     let trailingIcon: String
 
@@ -167,11 +246,13 @@ struct SetRowColumnHeader: View {
             Text("Previous")
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text("lbs")
-                .frame(width: 64, alignment: .center)
-            Text("Reps")
                 .frame(width: 56, alignment: .center)
+            Text("Reps")
+                .frame(width: 52, alignment: .center)
+            Text("RPE")
+                .frame(width: 44, alignment: .center)
             Image(systemName: trailingIcon)
-                .frame(width: 36, alignment: .center)
+                .frame(width: 32, alignment: .center)
         }
         .font(Typography.secondary)
         .foregroundStyle(Theme.textSecondary)
