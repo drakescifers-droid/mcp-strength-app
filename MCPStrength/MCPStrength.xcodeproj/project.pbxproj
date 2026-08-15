@@ -1,0 +1,548 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 110;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		485BED0E303006B700F5FAE1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 485BECF6303006B600F5FAE1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 485BECFD303006B600F5FAE1;
+			remoteInfo = MCPStrength;
+		};
+		485BED18303006B700F5FAE1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 485BECF6303006B600F5FAE1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 485BECFD303006B600F5FAE1;
+			remoteInfo = MCPStrength;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		485BECFE303006B600F5FAE1 /* MCPStrength.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MCPStrength.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		485BED0D303006B700F5FAE1 /* MCPStrengthTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MCPStrengthTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		485BED17303006B700F5FAE1 /* MCPStrengthUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MCPStrengthUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		485BED00303006B600F5FAE1 /* MCPStrength */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MCPStrength;
+			sourceTree = "<group>";
+		};
+		485BED10303006B700F5FAE1 /* MCPStrengthTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MCPStrengthTests;
+			sourceTree = "<group>";
+		};
+		485BED1A303006B700F5FAE1 /* MCPStrengthUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MCPStrengthUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		485BECFB303006B600F5FAE1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		485BED0A303006B700F5FAE1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		485BED14303006B700F5FAE1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		485BECF5303006B600F5FAE1 = {
+			isa = PBXGroup;
+			children = (
+				485BED00303006B600F5FAE1 /* MCPStrength */,
+				485BED10303006B700F5FAE1 /* MCPStrengthTests */,
+				485BED1A303006B700F5FAE1 /* MCPStrengthUITests */,
+				485BECFF303006B600F5FAE1 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		485BECFF303006B600F5FAE1 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				485BECFE303006B600F5FAE1 /* MCPStrength.app */,
+				485BED0D303006B700F5FAE1 /* MCPStrengthTests.xctest */,
+				485BED17303006B700F5FAE1 /* MCPStrengthUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		485BECFD303006B600F5FAE1 /* MCPStrength */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 485BED1F303006B700F5FAE1 /* Build configuration list for PBXNativeTarget "MCPStrength" */;
+			buildPhases = (
+				485BECFA303006B600F5FAE1 /* Sources */,
+				485BECFB303006B600F5FAE1 /* Frameworks */,
+				485BECFC303006B600F5FAE1 /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				485BED00303006B600F5FAE1 /* MCPStrength */,
+			);
+			name = MCPStrength;
+			productName = MCPStrength;
+			productReference = 485BECFE303006B600F5FAE1 /* MCPStrength.app */;
+			productType = "com.apple.product-type.application";
+		};
+		485BED0C303006B700F5FAE1 /* MCPStrengthTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 485BED22303006B700F5FAE1 /* Build configuration list for PBXNativeTarget "MCPStrengthTests" */;
+			buildPhases = (
+				485BED09303006B700F5FAE1 /* Sources */,
+				485BED0A303006B700F5FAE1 /* Frameworks */,
+				485BED0B303006B700F5FAE1 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				485BED0F303006B700F5FAE1 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				485BED10303006B700F5FAE1 /* MCPStrengthTests */,
+			);
+			name = MCPStrengthTests;
+			productName = MCPStrengthTests;
+			productReference = 485BED0D303006B700F5FAE1 /* MCPStrengthTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		485BED16303006B700F5FAE1 /* MCPStrengthUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 485BED25303006B700F5FAE1 /* Build configuration list for PBXNativeTarget "MCPStrengthUITests" */;
+			buildPhases = (
+				485BED13303006B700F5FAE1 /* Sources */,
+				485BED14303006B700F5FAE1 /* Frameworks */,
+				485BED15303006B700F5FAE1 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				485BED19303006B700F5FAE1 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				485BED1A303006B700F5FAE1 /* MCPStrengthUITests */,
+			);
+			name = MCPStrengthUITests;
+			productName = MCPStrengthUITests;
+			productReference = 485BED17303006B700F5FAE1 /* MCPStrengthUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		485BECF6303006B600F5FAE1 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					485BECFD303006B600F5FAE1 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					485BED0C303006B700F5FAE1 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 485BECFD303006B600F5FAE1;
+					};
+					485BED16303006B700F5FAE1 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 485BECFD303006B600F5FAE1;
+					};
+				};
+			};
+			buildConfigurationList = 485BECF9303006B600F5FAE1 /* Build configuration list for PBXProject "MCPStrength" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 485BECF5303006B600F5FAE1;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 485BECFF303006B600F5FAE1 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				485BECFD303006B600F5FAE1 /* MCPStrength */,
+				485BED0C303006B700F5FAE1 /* MCPStrengthTests */,
+				485BED16303006B700F5FAE1 /* MCPStrengthUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		485BECFC303006B600F5FAE1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		485BED0B303006B700F5FAE1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		485BED15303006B700F5FAE1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		485BECFA303006B600F5FAE1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		485BED09303006B700F5FAE1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		485BED13303006B700F5FAE1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		485BED0F303006B700F5FAE1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 485BECFD303006B600F5FAE1 /* MCPStrength */;
+			targetProxy = 485BED0E303006B700F5FAE1 /* PBXContainerItemProxy */;
+		};
+		485BED19303006B700F5FAE1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 485BECFD303006B600F5FAE1 /* MCPStrength */;
+			targetProxy = 485BED18303006B700F5FAE1 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		485BED1D303006B700F5FAE1 /* Debug configuration for PBXProject "MCPStrength" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		485BED1E303006B700F5FAE1 /* Release configuration for PBXProject "MCPStrength" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		485BED20303006B700F5FAE1 /* Debug configuration for PBXNativeTarget "MCPStrength" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "MCP Strength";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = us.aiagent4.MCPStrength;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		485BED21303006B700F5FAE1 /* Release configuration for PBXNativeTarget "MCPStrength" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "MCP Strength";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = us.aiagent4.MCPStrength;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		485BED23303006B700F5FAE1 /* Debug configuration for PBXNativeTarget "MCPStrengthTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = us.aiagent4.MCPStrengthTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MCPStrength.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MCPStrength";
+			};
+			name = Debug;
+		};
+		485BED24303006B700F5FAE1 /* Release configuration for PBXNativeTarget "MCPStrengthTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = us.aiagent4.MCPStrengthTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MCPStrength.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MCPStrength";
+			};
+			name = Release;
+		};
+		485BED26303006B700F5FAE1 /* Debug configuration for PBXNativeTarget "MCPStrengthUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = us.aiagent4.MCPStrengthUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = MCPStrength;
+			};
+			name = Debug;
+		};
+		485BED27303006B700F5FAE1 /* Release configuration for PBXNativeTarget "MCPStrengthUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = us.aiagent4.MCPStrengthUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = MCPStrength;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		485BECF9303006B600F5FAE1 /* Build configuration list for PBXProject "MCPStrength" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				485BED1D303006B700F5FAE1 /* Debug configuration for PBXProject "MCPStrength" */,
+				485BED1E303006B700F5FAE1 /* Release configuration for PBXProject "MCPStrength" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		485BED1F303006B700F5FAE1 /* Build configuration list for PBXNativeTarget "MCPStrength" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				485BED20303006B700F5FAE1 /* Debug configuration for PBXNativeTarget "MCPStrength" */,
+				485BED21303006B700F5FAE1 /* Release configuration for PBXNativeTarget "MCPStrength" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		485BED22303006B700F5FAE1 /* Build configuration list for PBXNativeTarget "MCPStrengthTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				485BED23303006B700F5FAE1 /* Debug configuration for PBXNativeTarget "MCPStrengthTests" */,
+				485BED24303006B700F5FAE1 /* Release configuration for PBXNativeTarget "MCPStrengthTests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		485BED25303006B700F5FAE1 /* Build configuration list for PBXNativeTarget "MCPStrengthUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				485BED26303006B700F5FAE1 /* Debug configuration for PBXNativeTarget "MCPStrengthUITests" */,
+				485BED27303006B700F5FAE1 /* Release configuration for PBXNativeTarget "MCPStrengthUITests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 485BECF6303006B600F5FAE1 /* Project object */;
+	validationLevel = 1;
+}
