@@ -5,9 +5,9 @@
 //  The HOME tab. Absorbs the old TemplatesScreen: a Quick Start action for an
 //  empty workout, plus the templates themselves rendered as a two-column grid
 //  of cards (grouped under folder headers when folders exist). Tapping a card
-//  opens the existing TemplateEditorScreen; an explicit Start affordance on
-//  each card starts a workout from that template without losing the reachability
-//  the old swipe-to-Start row provided.
+//  opens the template overview (Start Workout + Edit). The card menu still
+//  reaches the editor directly — Edit lives in both places, matching the
+//  reference.
 //
 //  Folder lifecycle (create, rename, delete, collapse, and filing a new
 //  template into a folder) lives here. Template cards carry a per-card menu
@@ -48,6 +48,15 @@ struct StartWorkoutTab: View {
     /// from a folder menu; `nil` on the section-header "+ Template" path.
     @State private var editorTarget: EditorTarget?
 
+    /// Presentation payload for TemplateOverviewSheet. Fresh UUID so identity
+    /// is the presentation, matching EditorTarget — not the template's own id.
+    private struct OverviewTarget: Identifiable {
+        let id = UUID()
+        let template: Template
+    }
+
+    @State private var overviewTarget: OverviewTarget?
+
     @State private var showingAddFolder = false
     @State private var newFolderName = ""
 
@@ -84,6 +93,9 @@ struct StartWorkoutTab: View {
             // the sheet can build against stale companion state (folder nil).
             .sheet(item: $editorTarget) { target in
                 TemplateEditorScreen(template: target.template, folder: target.folder)
+            }
+            .sheet(item: $overviewTarget) { target in
+                TemplateOverviewSheet(template: target.template, onStart: onStartTemplate)
             }
             .alert("Rename Folder", isPresented: Binding(
                 get: { renamingFolder != nil },
@@ -353,9 +365,8 @@ struct StartWorkoutTab: View {
                 TemplateCard(
                     template: template,
                     onTap: {
-                        editorTarget = EditorTarget(template: template, folder: nil)
+                        overviewTarget = OverviewTarget(template: template)
                     },
-                    onStart: { onStartTemplate(template) },
                     onEdit: {
                         editorTarget = EditorTarget(template: template, folder: nil)
                     },
@@ -376,14 +387,12 @@ struct StartWorkoutTab: View {
 /// One card in the two-column templates grid: the template name, the exercise
 /// names joined and truncated to a few lines in `textSecondary`, and — when
 /// `lastPerformedAt` is set — a clock icon with a relative last-performed
-/// string ("Yesterday", "4 days ago"). Tapping the card opens the editor; the
-/// trailing play button starts a workout from it; the trailing menu owns
-/// edit / rename / duplicate / delete. The card itself is dumb — mutations
-/// stay in StartWorkoutTab.
+/// string ("Yesterday", "4 days ago"). Tapping the card opens the overview;
+/// the trailing menu owns edit / rename / duplicate / delete. The card itself
+/// is dumb — mutations stay in StartWorkoutTab.
 private struct TemplateCard: View {
     let template: Template
     var onTap: () -> Void
-    var onStart: () -> Void
     var onEdit: () -> Void
     var onRename: () -> Void
     var onDuplicate: () -> Void
@@ -403,7 +412,6 @@ private struct TemplateCard: View {
                     Spacer(minLength: 0)
 
                     cardMenu
-                    startButton
                 }
 
                 Text(exerciseSummary)
@@ -416,7 +424,7 @@ private struct TemplateCard: View {
                     HStack(spacing: Spacing.compact / 2) {
                         Image(systemName: "clock")
                             .font(Typography.secondary)
-                        Text(relativeLastPerformed(from: lastPerformedAt))
+                        Text(RelativeDate.lastPerformed(from: lastPerformedAt))
                             .font(Typography.secondary)
                     }
                     .foregroundStyle(Theme.textSecondary)
@@ -447,17 +455,6 @@ private struct TemplateCard: View {
         .buttonStyle(.plain)
     }
 
-    private var startButton: some View {
-        Button(action: onStart) {
-            Image(systemName: "play.fill")
-                .font(Typography.body.weight(.semibold))
-                .foregroundStyle(Theme.accent)
-                .frame(width: 32, height: 32)
-                .background(Theme.accentFill, in: .circle)
-        }
-        .buttonStyle(.plain)
-    }
-
     /// The exercise names joined by commas. Falls back to a plain count when
     /// there are no named exercises yet.
     private var exerciseSummary: String {
@@ -468,25 +465,6 @@ private struct TemplateCard: View {
             return "\(sorted.count) \(countWord)"
         }
         return names.joined(separator: ", ")
-    }
-
-    /// "Yesterday", "4 days ago", etc. Coarse on purpose — the card shows a
-    /// hint, not a precise timestamp.
-    private func relativeLastPerformed(from date: Date) -> String {
-        let calendar = Calendar.current
-        let startOfToday = calendar.startOfDay(for: Date())
-        let startOfDay = calendar.startOfDay(for: date)
-        let dayDiff = calendar.dateComponents([.day], from: startOfDay, to: startOfToday).day ?? 0
-
-        switch dayDiff {
-        case 0:      return "Today"
-        case 1:      return "Yesterday"
-        case 2...6:  return "\(dayDiff) days ago"
-        case 7...13: return "Last week"
-        case 14...29: return "\(dayDiff / 7) weeks ago"
-        case 30...364: return "\(dayDiff / 30) months ago"
-        default:     return "\(dayDiff / 365) years ago"
-        }
     }
 }
 
