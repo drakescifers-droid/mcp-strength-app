@@ -1,0 +1,110 @@
+[
+  {
+    "id": "d4982888-f08b-4e32-892c-4a7c36658311",
+    "name": "Weight",
+    "group": "core",
+    "unit": "lb"
+  },
+  {
+    "id": "5725b6bb-91e7-4ce9-a68f-5f9584f43649",
+    "name": "Body Fat %",
+    "group": "core",
+    "unit": "%"
+  },
+  {
+    "id": "e701352b-95d1-4623-b293-e001dc0d70dc",
+    "name": "Caloric Intake",
+    "group": "core",
+    "unit": "kcal"
+  },
+  {
+    "id": "fc17fc4a-6e88-4176-9c90-c7d9c3d847fe",
+    "name": "Neck",
+    "group": "bodyPart",
+    "unit": "in"
+  },
+  {
+    "id": "6232ba5a-0236-498b-9a9b-d7da38b3a714",
+    "name": "Shoulders",
+    "group": "bodyPart",
+    "unit": "in"
+  },
+  {
+    "id": "41bb7a68-8487-4288-8673-c313bb440a84",
+    "name": "Chest",
+    "group": "bodyPart",
+    "unit": "in"
+  },
+  {
+    "id": "3b25f841-1bb0-477d-bd4d-8d157da1a0ea",
+    "name": "Left Bicep",
+    "group": "bodyPart",
+    "unit": "in"
+  },
+  {
+    "id": "f5de2228-8486-4818-bebb-90a75f589dc8",
+    "name": "Right Bicep",
+    "group": "bodyPart",
+    "unit": "in"
+  },
+  {
+    "id": "2e1f4c6e-1151-42b8-9d8c-6baa5d87a1d8",
+    "name": "Left Forearm",
+    "group": "bodyPart",
+    "unit": "in"
+  },
+  {
+    "id": "4a8c8735-88a4-438e-90ee-72fd9fe540b0",
+    "name": "Right Forearm",
+    "group": "bodyPart",
+    "unit": "in"
+  },
+  {
+    "id": "41d8d884-838a-402f-b9b9-69c8d2de964c",
+    "name": "Upper Abs",
+    "group": "bodyPart",
+    "unit": "in"
+  },
+  {
+    "id": "6cc45dde-f100-48a4-852b-7d85e9d722a4",
+    "name": "Waist",
+    "group": "bodyPart",
+    "unit": "in"
+  },
+  {
+    "id": "0b82e5cd-5f8e-4140-a46c-8f59559ec67c",
+    "name": "Lower Abs",
+    "group": "bodyPart",
+    "unit": "in"
+  },
+  {
+    "id": "292bc726-919d-4225-857e-c491422a3753",
+    "name": "Hips",
+    "group": "bodyPart",
+    "unit": "in"
+  },
+  {
+    "id": "9f991297-b3a4-4e1b-9d56-e586d78d3e95",
+    "name": "Left Thigh",
+    "group": "bodyPart",
+    "unit": "in"
+  },
+  {
+    "id": "e45093de-707e-4539-b0c6-50a5c799246a",
+    "name": "Right Thigh",
+    "group": "bodyPart",
+    "unit": "in"
+  },
+  {
+    "id": "6ad35d18-fcb1-46cd-85f1-05dafd8672fd",
+    "name": "Left Calf",
+    "group": "bodyPart",
+    "unit": "in"
+  },
+  {
+    "id": "c3761154-115c-47cd-82d8-3bceed3063a7",
+    "name": "Right Calf",
+    "group": "bodyPart",
+    "unit": "in"
+  }
+]
