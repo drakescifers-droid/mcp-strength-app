@@ -38,6 +38,16 @@ struct ActiveWorkoutScreen: View {
         let kind: Kind
     }
 
+    /// Which set's own rest is being edited, opened by tapping its divider.
+    /// Holds the SET rather than an index for the same reason `ActiveOption`
+    /// holds the exercise: this list reorders mid-session.
+    @State private var editingSetRest: SetRestEdit?
+
+    struct SetRestEdit: Identifiable {
+        let id = UUID()
+        let set: WorkoutSet
+    }
+
     @Environment(\.modelContext) private var context
 
     let workout: Workout
@@ -97,6 +107,9 @@ struct ActiveWorkoutScreen: View {
                             },
                             onOption: { option in
                                 handleOption(option, for: workoutExercise)
+                            },
+                            onEditRest: { set in
+                                editingSetRest = SetRestEdit(set: set)
                             }
                         )
                         .dropDestination(for: String.self) { items, _ in
@@ -125,6 +138,12 @@ struct ActiveWorkoutScreen: View {
         }
         .sheet(item: $activeOption) { option in
             optionSheet(for: option)
+        }
+        .sheet(item: $editingSetRest) { edit in
+            RestTimerSheet(scope: .oneSet, current: edit.set.restSeconds) {
+                edit.set.restSeconds = $0
+                edit.set.markEdited()
+            }
         }
         .sheet(isPresented: $editingWorkoutNote) {
             ExerciseNoteSheet(
@@ -381,7 +400,10 @@ struct ActiveWorkoutScreen: View {
                 exercise.markEdited()
             }
         case .rest:
-            RestTimerSheet(exerciseName: name, current: exercise.defaultRestSeconds) {
+            RestTimerSheet(
+                scope: .newSets(exerciseName: name),
+                current: exercise.defaultRestSeconds
+            ) {
                 exercise.defaultRestSeconds = $0
                 exercise.markEdited()
             }
@@ -490,6 +512,8 @@ private struct ExerciseBlock: View {
     /// The menu selection, handled by the screen — this block owns no
     /// behaviour of its own.
     var onOption: (ExerciseOption) -> Void = { _ in }
+    /// A rest divider was tapped. Handled by the screen for the same reason.
+    var onEditRest: (WorkoutSet) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.comfortable) {
@@ -619,7 +643,7 @@ private struct ExerciseBlock: View {
                 onTap: onOpenRestControls
             )
         } else {
-            RestDivider(restSeconds: set.restSeconds)
+            RestDivider(restSeconds: set.restSeconds) { onEditRest(set) }
         }
     }
 

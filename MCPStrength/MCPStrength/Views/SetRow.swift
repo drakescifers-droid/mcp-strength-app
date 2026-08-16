@@ -297,10 +297,38 @@ struct SetRowColumnHeader: View {
 /// `m:ss`, another hairline. The workout screen replaces this with a progress
 /// bar while a rest is running; the template screen always uses this static
 /// form.
+///
+/// Tapping it edits THIS set's `restSeconds`. That is a different value from
+/// the exercise's `defaultRestSeconds`, which the options menu edits and which
+/// only new sets inherit — changing one has never changed the other, so the
+/// number shown here needs its own way in.
 struct RestDivider: View {
     let restSeconds: Int
 
+    /// Optional so the divider stays usable as pure display. When nil it has no
+    /// tap target at all, rather than a dead one.
+    var onTap: (() -> Void)?
+
     var body: some View {
+        if let onTap {
+            Button(action: onTap) { divider }
+                .buttonStyle(.plain)
+                // A hairline is far below the 44pt minimum target, and the row
+                // cannot simply be made taller without changing the spacing
+                // between every pair of sets. Pad out, claim that area as the
+                // hit shape, then remove the padding again from layout: the
+                // divider looks identical and is comfortably tappable.
+                .padding(.vertical, Spacing.comfortable)
+                .contentShape(Rectangle())
+                .padding(.vertical, -Spacing.comfortable)
+                .accessibilityLabel("Rest \(formatMinutesSeconds(restSeconds))")
+                .accessibilityHint("Edit this set's rest")
+        } else {
+            divider
+        }
+    }
+
+    private var divider: some View {
         HStack(spacing: Spacing.compact) {
             Rectangle()
                 .fill(Theme.fieldFill)

@@ -91,14 +91,33 @@ struct ExerciseNoteSheet: View {
 
 // MARK: - Rest timer editor
 
-/// Sets the rest an exercise's NEW sets inherit.
+/// Picks a rest duration, for either of the two things rest can mean.
 ///
 /// Deliberately a list of common values rather than a free-text field. Rest is
 /// chosen from a handful of habits — 60, 90, two minutes — and a keyboard for a
 /// number you pick from six options is friction mid-session, which is precisely
 /// when this gets used.
 struct RestTimerSheet: View {
-    let exerciseName: String
+    /// WHICH rest is being set. The two are different values on different rows
+    /// and the sheet must say which one it is about: `defaultRestSeconds` is
+    /// what new sets inherit, `restSeconds` is one set's own rest. The menu
+    /// edits the first, tapping a divider edits the second, and telling a user
+    /// "new sets will use this" while editing an existing set is simply false.
+    enum Scope {
+        case newSets(exerciseName: String)
+        case oneSet
+
+        var explanation: String {
+            switch self {
+            case .newSets(let name):
+                "New sets in \(name) will use this."
+            case .oneSet:
+                "Sets the rest after this set. Other sets keep theirs."
+            }
+        }
+    }
+
+    let scope: Scope
     let current: Int
     let onSelect: (Int) -> Void
 
@@ -151,7 +170,7 @@ struct RestTimerSheet: View {
                 }
             }
             .safeAreaInset(edge: .top) {
-                Text("New sets in \(exerciseName) will use this.")
+                Text(scope.explanation)
                     .font(Typography.secondary)
                     .foregroundStyle(Theme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -173,6 +192,14 @@ struct RestTimerSheet: View {
     )
 }
 
-#Preview("Rest") {
-    RestTimerSheet(exerciseName: "Bench Press (Barbell)", current: 90, onSelect: { _ in })
+#Preview("Rest — new sets") {
+    RestTimerSheet(
+        scope: .newSets(exerciseName: "Bench Press (Barbell)"),
+        current: 90,
+        onSelect: { _ in }
+    )
+}
+
+#Preview("Rest — one set") {
+    RestTimerSheet(scope: .oneSet, current: 120, onSelect: { _ in })
 }

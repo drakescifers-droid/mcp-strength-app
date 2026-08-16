@@ -90,7 +90,10 @@ struct TemplateEditorScreen: View {
     @State private var activeOption: ActiveOption?
 
     struct ActiveOption: Identifiable {
-        enum Kind { case note, stickyNote, rest, replace }
+        /// `rest` is the exercise's default for NEW sets, from the menu.
+        /// `setRest` is one existing set's own rest, from tapping its divider.
+        /// Two different values on two different rows — see `RestDivider`.
+        enum Kind { case note, stickyNote, rest, setRest(Int), replace }
         let id = UUID()
         let index: Int
         let kind: Kind
@@ -183,9 +186,17 @@ struct TemplateEditorScreen: View {
 
             case .rest:
                 RestTimerSheet(
-                    exerciseName: draft.exercise.name,
+                    scope: .newSets(exerciseName: draft.exercise.name),
                     current: draft.defaultRestSeconds
                 ) { exercises[option.index].defaultRestSeconds = $0 }
+
+            case .setRest(let setIndex):
+                if draft.sets.indices.contains(setIndex) {
+                    RestTimerSheet(
+                        scope: .oneSet,
+                        current: draft.sets[setIndex].restSeconds
+                    ) { exercises[option.index].sets[setIndex].restSeconds = $0 }
+                }
 
             case .replace:
                 // Swaps the movement and KEEPS the sets. Replacing an exercise
@@ -306,7 +317,12 @@ struct TemplateEditorScreen: View {
                     )
 
                     if setIndex < draft.sets.count - 1 {
-                        RestDivider(restSeconds: set.restSeconds)
+                        RestDivider(restSeconds: set.restSeconds) {
+                            activeOption = ActiveOption(
+                                index: index,
+                                kind: .setRest(setIndex)
+                            )
+                        }
                     }
                 }
             }

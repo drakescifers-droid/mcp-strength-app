@@ -95,17 +95,30 @@ right.**
 ### Traps that will bite the transport specifically
 
 - **Pull on `server_updated_at` with a five-second overlap window, never on `updated_at`** (`05`).
-- **`markEdited` is called on the active-workout path ONLY.** Nine call sites, all in
-  `ActiveWorkoutScreen` and `WorkoutFinishing`. Every other edit site sets no flag: renaming a
-  folder or a template (`StartWorkoutTab.swift:299`, `:309`), reordering templates or moving one
-  between folders (`:437`–`:442`), and the template name on save (`TemplateEditorScreen.swift:473`).
-  Creating and deleting are already covered — `needsSync` defaults to `true` on every `@Model` and
+- **`markEdited` covers EXERCISE-level edits on the active-workout path, and nothing else.** The
+  call sites are `ActiveWorkoutScreen`'s option handlers plus the workout at finish. Two whole
+  categories are missing:
+  - **Every set-level mutation, on the screen that already looks covered.** Weight, reps, RPE, set
+    type and the completion tick all write straight through their bindings
+    (`ActiveWorkoutScreen.swift:540`–`562`, `toggleComplete` at `:631`). Entering a weight and
+    ticking a set are the two most common actions in the entire app, and neither marks its row.
+  - **Everything outside that screen:** renaming a folder or a template (`StartWorkoutTab.swift:299`,
+    `:309`), reordering templates or moving one between folders (`:437`–`:442`), and the template
+    name on save (`TemplateEditorScreen.swift:473`).
+
+  Creating and deleting ARE covered — `needsSync` defaults to `true` on every `@Model` and
   `markDeleted` sets it — so the hole is **edits to rows that already exist**, and it is harmless
-  *only* because nothing clears the flag yet. The moment the engine calls `markSynced` after a
-  successful push, those edits stop syncing — silently, with the UI reporting everything is backed
-  up. **This is the nastiest scheduled failure in the codebase. Close it in the same change that
-  adds the transport, not after it** — shipping the transport first writes the bug and its fix into
-  two different sessions, with a window in between where the app lies about your data being safe.
+  today *only* because nothing clears the flag and `PushFilter` blocks unfinished workouts, so the
+  first push after Finish carries everything anyway. The exposure opens the moment a workout is
+  edited **after** it has been pushed once — correcting a weight in a finished session — and once
+  the engine calls `markSynced`, that correction never leaves the phone. Silently, with the UI
+  reporting everything is backed up. **This is the nastiest scheduled failure in the codebase.
+  Close it in the same change that adds the transport, not after it** — shipping the transport
+  first writes the bug and its fix into two different sessions, with a window in between where the
+  app lies about your data being safe.
+
+  The set-rest editor added alongside this note is the pattern to copy: it marks the set dirty at
+  the point of the write (`ActiveWorkoutScreen.swift`, the `editingSetRest` sheet).
 - **`TemplateEditorScreen.save()` replaces a template's whole subtree on every save**, so each edit
   would tell the server the contents were deleted and recreated with fresh ids. Fix by diffing
   before the engine ships.
@@ -150,6 +163,11 @@ ringer `docs/MODEL-NOTES.md`.
 ### Not verified
 
 - The per-exercise menu, sticky notes and truncation limits have not been used on a real device.
+- **The tappable rest divider has not been used on a real device either.** A hairline is far under
+  the 44pt minimum target, so the hit area is expanded and then negated out of layout
+  (`RestDivider`) — the divider should look unchanged and be comfortably tappable. Both halves of
+  that are worth confirming with a thumb, and the template editor and live workout screen are still
+  the two screens nothing has ever visually verified.
 - Creating an account, the confirmation email, and password reset — **email confirmation is
   currently DISABLED on the project** because the confirmation link pointed at `localhost:3000`.
   Must be re-enabled before launch, together with deep links.
@@ -189,7 +207,14 @@ These are not oversights. Each was cut with a reason, and the reason is the poin
 
 Small, none blocking, roughly in the order I would do them.
 
-_None outstanding._ The list has been empty before; things land on it as they are noticed.
+- **Create Superset sets the data and draws nothing.** Both screens write `supersetGroupID`
+  correctly (and the workout screen marks the rows dirty), but no view reads it except the menu
+  label, which flips to "Leave Superset". So the user taps Create Superset and sees one word change
+  somewhere they are not looking. Note that **supersets are in the Deliberately deferred table
+  below** — the action shipped anyway, which is how the two halves came apart. It does NOT heal
+  itself when the transport lands: the grouping will travel to the server, but nothing on either
+  screen will draw it. Resolve it by designing the grouping and building it, or by removing the
+  menu item until then — the same choice Archive is waiting on, and for the same reason.
 
 > **Archive and Share are deliberately absent from the template menu.** The reference has both.
 > Archive has no schema *and no designed behaviour* — does it hide the row, where do you
