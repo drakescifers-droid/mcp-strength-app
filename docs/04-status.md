@@ -36,50 +36,118 @@ and a five-tab shell.
 true today — with the standing caveat that it should **not** hold real training data until Phase 2
 provides sync and backup, because a local-only store has no recovery story.
 
-**Phase 2 — in progress. The database is live and the app can sign in. Nothing syncs.**
+**Phase 2 — in progress. Everything except the transport. Not one row has ever travelled.**
 
-Landed:
+> **START HERE IN A NEW SESSION.** The one-line state: the database is live, the app requires
+> sign-in, deletes are soft, both directions of row mapping are written and tested, and the
+> per-exercise menu works — but **nothing has ever been sent to or received from the server.**
+> The remaining work in this phase is the network layer and the loop that drives it.
+
+### Landed
 
 - **The schema, on a real project.** Twelve tables, 18 RLS policies, 12 sync triggers, the seeded
   library. Applied to `mcp-strength` (`knrmembtnmgddzyyvyvq`) and verified by dumping the remote
-  schema back and reading it, not by trusting `db push`. `05-database.md` is the decisions record;
+  schema back, not by trusting `db push`. `05-database.md` is the decisions record;
   `./supabase/tests/run.sh` exercises it against a throwaway container.
-- **Sign-in, required up front.** Email and password, via supabase-swift — the first external
-  dependency this project has had. `AuthGate` replaces `ContentView` as the app root.
-- **The sync design** (`06-sync.md`) and **the sync columns** — `updatedAt` / `deletedAt` /
-  `needsSync` on all eleven `@Model`s, with the migration verified against a real previous-build
-  store rather than assumed.
+- **Sign-in, required up front.** Email/password via supabase-swift — the project's first external
+  dependency. `AuthGate` replaces `ContentView` as the app root.
+- **The sync design** (`06-sync.md`) and the sync columns on all eleven `@Model`s.
 - **Soft deletes, everywhere.** 5 delete sites, 10 `@Query` filters, ~20 relationship reads via
-  `live…` accessors. Caught three bugs that were not delete buttons: volume totals counted deleted
-  sets, the Previous column answered from deleted history, and starting from a template copied
-  deleted exercises back in.
-- **The sync engine's decisions and its visible state** — order, cursor, conflicts, `PushFilter`,
-  and the per-account `SyncStatus`. The Profile tab now says "Not backed up yet", truthfully.
+  `live…` accessors.
+- **The engine's decisions and its visible state** — order, cursor, conflicts, `PushFilter`, and
+  the per-account `SyncStatus`. The Profile tab says "Not backed up yet", truthfully.
+- **Both mapping directions.** `SyncRowMapper` (model → row) and `SyncRowApply` (row → model),
+  the latter built by a Ringer worker and reviewed here.
+- **Finishing discards unticked sets**, and **unfinished workouts are ineligible to push** — see
+  the decisions below.
+- **The per-exercise options menu**, one shared component with two callers, six of eight items.
+- **UI preview mode** — see below. This is the single most useful thing to know about.
 
-**Nothing syncs yet, and that gap is the whole remaining phase.** The app knows who you are and
-still writes only to SwiftData; not one row has ever travelled. The standing caveat below holds in
-full — there is still no recovery story.
+### THE LOOP THAT WAS MISSING FOR A DAY: seeing the app
 
-What lands next is the part `02-architecture.md` flags as easy to get wrong: the sync engine, and
-the **visible sync state** designed alongside it rather than retrofitted. Five things feed into it:
+```
+xcrun simctl launch <device> us.aiagent4.MCPStrength \
+  -uiPreview 1 -uiPreviewFixtures 1 -uiPreviewTab history|profile|start|exercises|measure
+```
 
-- Pull on `server_updated_at` with a five-second overlap window, never on `updated_at` (`05`).
-- Settle canonical units *before* there is real history — converting afterwards is a migration
-  against numbers a user typed (`05`).
-- **The transport itself is all that is left of the engine** — the code that actually moves rows
-  over the network. Order, cursor, conflict resolution, push filtering and the state it reports are
-  written and tested; nothing calls them.
-- **`TemplateEditorScreen.save()` replaces a template's whole subtree on every save**, so under
-  sync each edit tells the server the contents were deleted and recreated with fresh ids. Correct
-  but wasteful, and it makes a template's per-row history meaningless. **Fix before the engine
-  ships**: diff instead — update in place, tombstone only what was removed.
-- **Local edits do not call `markEdited` yet.** Harmless today because `needsSync` defaults to true
-  and nothing clears it, so everything is dirty anyway. The moment the engine starts clearing flags
-  after a successful push, every mutation site needs to set it or edits stop syncing silently.
-- **Rows created before sign-in have no owner.** Sign-in is required up front so new installs cannot
-  produce any, but the local store on THIS machine predates the gate.
-- **The seeded library now exists in two places** — local SwiftData rows and global Postgres rows
-  sharing the same baked UUIDs. Sync must not treat the local copies as user data to push.
+Sign-in blocks every screen, so screens were built blind for a day. `Auth/UIPreviewMode.swift`
+skips the GATE (not authentication — there is no session, RLS would still reject everything)
+behind two independent gates: `#if DEBUG` so it cannot exist in a Release build, and an explicit
+launch argument so it is off even in Debug. `-uiPreviewTab` exists because **the simulator MCP's
+tap action crash-loops** — do not build a workflow on coordinate taps.
+
+It found a real bug in its first minute: bodyweight exercises were silently dropped from history
+cards, because "best set" required both weight and reps. Three sets of pull-ups logged, not
+mentioned in the summary. That bug survived ~295 tests. **Use this before believing any UI is
+right.**
+
+### What is left, in order
+
+1. **THE TRANSPORT.** The network calls and the run loop. Everything around it is written and
+   tested; nothing calls it. Best remaining Ringer candidate — non-visual, well-specified,
+   executable check.
+2. **A settings model**, which unblocks the two missing menu items. Decisions already made: the
+   warm-up calculator is a **single global auto-generated config the user can then edit**,
+   generating **3 sets at percentages**, rounded to the **nearest 5 lb**. `Preferences` needs a
+   model for `exercise_preferences`, which exists as a table with no SwiftData model.
+3. **Canonical units**, before there is real history (`05`).
+
+### Traps that will bite the transport specifically
+
+- **Pull on `server_updated_at` with a five-second overlap window, never on `updated_at`** (`05`).
+- **Nothing calls `markEdited` at mutation sites yet.** Harmless *only* because `needsSync`
+  defaults to true and nothing clears it. The moment the engine clears flags after a successful
+  push, every mutation site that does not set it stops syncing — silently, with the UI reporting
+  everything is backed up. **This is the nastiest scheduled failure in the codebase.**
+- **`TemplateEditorScreen.save()` replaces a template's whole subtree on every save**, so each edit
+  would tell the server the contents were deleted and recreated with fresh ids. Fix by diffing
+  before the engine ships.
+- **Rows created before sign-in have no owner.** New installs cannot produce any; the store on this
+  machine predates the gate.
+- **The seeded library exists twice** — local rows and global Postgres rows sharing baked UUIDs.
+  `PushFilter` already excludes them; do not undo that.
+- **Do not run `xcodebuild` while a Ringer check is running.** The compile check uses ~36s of a
+  hard-coded 60s budget.
+
+### Decisions made this session, with their reasoning
+
+- **Finishing a workout discards unticked sets** and removes exercises left with nothing. A workout
+  records what you DID. It is a REAL delete, not a tombstone — tombstoning to avoid storing
+  unnecessary data stores the unnecessary data.
+- **Unfinished workouts, and everything under them, are ineligible to push.** This is what makes
+  that hard delete safe, and it is enforced by `PushFilter` rather than by scheduling sync
+  carefully. A rule that cannot be violated beats one you have to remember. Live session mirroring
+  to a Watch is a different transport (Bluetooth) and does not belong on the Postgres path.
+- **`Workout.note` and `Workout.summary` are different fields.** `note` is instructions going IN
+  (from the plan or the MCP server, and now copied from the template at start); `summary` is the
+  user's feedback coming OUT. Collapsing them would leave an AI unable to tell its own instruction
+  from the user's report of how it went — which is what distinguishes a bad night from a downward
+  trend.
+- **Notes are a two-way coaching channel**, not metadata. Recorded as an explicit MCP contract
+  requirement in `03-mcp-tools.md`: the read tools must RETURN them.
+- **Note display truncates** at 200 characters for a session note, 100 for an exercise note, at a
+  word boundary, tap to expand. Short notes are not tappable at all.
+- **Replace Exercise keeps the sets** ("different machine", not "start over"). **Create Superset
+  pairs with the exercise above** — round-robin in list order needs no second selection UI.
+
+### Working with Ringer on this project
+
+The routing rule is about COST, not capability: Ringer offloads grunt work to cheaper models under
+supervision. Mechanical, checkable work (batches of similar edits, replicating an existing pattern)
+goes to a worker; **visual work does not** — a check cannot assert whether something looks right.
+Run area: `~/ringer/run-areas/mcpstrength-rowapply/` is the worked example, with a `verify_compile.sh`
+that now knows about SPM dependencies. **Ringer scores the CHECK's exit code**, so an
+orchestrator-side check bug is recorded as a model failure; one such misattribution is annotated in
+ringer `docs/MODEL-NOTES.md`.
+
+### Not verified
+
+- The per-exercise menu, sticky notes and truncation limits have not been used on a real device.
+- Creating an account, the confirmation email, and password reset — **email confirmation is
+  currently DISABLED on the project** because the confirmation link pointed at `localhost:3000`.
+  Must be re-enabled before launch, together with deep links.
+
+**Phases 3–4 — not started.** The real multi-user MCP server, then product.
 
 > **When Apple/Google/Facebook sign-in is added, LINK the identity to the existing account.** Drake
 > intends to offer all three, which makes Sign in with Apple mandatory rather than optional (Apple
