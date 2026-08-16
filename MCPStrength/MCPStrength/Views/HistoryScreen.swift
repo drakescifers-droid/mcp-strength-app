@@ -14,7 +14,8 @@ import SwiftData
 // — they have not been performed yet.
 
 struct HistoryScreen: View {
-    @Query(sort: [SortDescriptor(\Workout.completedAt, order: .reverse)])
+    @Query(filter: #Predicate<Workout> { $0.deletedAt == nil },
+           sort: [SortDescriptor(\Workout.completedAt, order: .reverse)])
     private var allWorkouts: [Workout]
 
     private var workouts: [Workout] {
@@ -118,7 +119,7 @@ private struct WorkoutHistoryCard: View {
     let workout: Workout
 
     private var sortedExercises: [WorkoutExercise] {
-        workout.exercises.sorted { $0.order < $1.order }
+        workout.liveExercises
     }
 
     var body: some View {
@@ -227,7 +228,7 @@ private struct WorkoutHistoryCard: View {
 
     private func tableRow(for workoutExercise: WorkoutExercise, best: WorkoutStats.BestSet) -> some View {
         let exerciseName = workoutExercise.exercise?.name ?? "Unknown Exercise"
-        let setCount = workoutExercise.sets.count
+        let setCount = workoutExercise.liveSets.count
         let bestText = PreviousText.format(.init(weight: best.weight, reps: best.reps))
 
         return HStack {

@@ -18,7 +18,9 @@ import SwiftData
 ///   because the filter already happened. With empty search text the filtered list is shown
 ///   sorted alphabetically by name.
 struct ExercisesScreen: View {
-    @Query(sort: \Exercise.name) private var exercises: [Exercise]
+    @Query(filter: #Predicate<Exercise> { $0.deletedAt == nil },
+           sort: \Exercise.name)
+    private var exercises: [Exercise]
 
     @State private var searchText = ""
     @State private var bodyPartFilter: BodyPart?

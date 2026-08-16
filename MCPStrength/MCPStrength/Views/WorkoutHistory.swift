@@ -40,7 +40,8 @@ enum WorkoutHistory {
     ///
     /// Returns `nil` when there is no qualifying history or no set at that
     /// position. The in-progress workout is excluded even if it happens to be
-    /// passed in.
+    /// passed in, and so is anything tombstoned — a deleted exercise must not
+    /// come back as the weight you are told you lifted last time.
     static func previousSet(
         for exercise: Exercise,
         at position: Int,
@@ -51,16 +52,16 @@ enum WorkoutHistory {
             .filter { $0.completedAt != nil }
             .filter { $0.id != inProgress?.id }
             .filter { workout in
-                workout.exercises.contains { $0.exercise?.id == exercise.id }
+                workout.liveExercises.contains { $0.exercise?.id == exercise.id }
             }
             .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
 
         guard let mostRecent = candidates.first,
-              let workoutExercise = mostRecent.exercises
+              let workoutExercise = mostRecent.liveExercises
                 .first(where: { $0.exercise?.id == exercise.id })
         else { return nil }
 
-        let sortedSets = workoutExercise.sets.sorted { $0.order < $1.order }
+        let sortedSets = workoutExercise.liveSets
         guard position >= 0, position < sortedSets.count else { return nil }
         let set = sortedSets[position]
         return PreviousSet(weight: set.weight, reps: set.reps, setType: set.setType)

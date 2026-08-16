@@ -23,7 +23,8 @@ import Charts
 struct ProfileTab: View {
     @Environment(AuthController.self) private var auth
 
-    @Query(sort: [SortDescriptor(\Workout.startedAt, order: .reverse)])
+    @Query(filter: #Predicate<Workout> { $0.deletedAt == nil },
+           sort: [SortDescriptor(\Workout.startedAt, order: .reverse)])
     private var allWorkouts: [Workout]
 
     @State private var confirmingSignOut = false

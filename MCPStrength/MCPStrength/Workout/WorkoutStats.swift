@@ -26,7 +26,7 @@ enum WorkoutStats {
     /// weight or no reps are ignored. Returns `nil` when no qualifying set
     /// exists.
     static func bestSet(for workoutExercise: WorkoutExercise) -> BestSet? {
-        let candidates = workoutExercise.sets
+        let candidates = workoutExercise.liveSets
             .filter(\.isCompleted)
             .compactMap { set -> (weight: Double, reps: Int, volume: Double)? in
                 guard let weight = set.weight, let reps = set.reps else { return nil }
@@ -43,13 +43,14 @@ enum WorkoutStats {
 
     // MARK: - Total volume
 
-    /// Sum of `weight × reps` over `workout`'s COMPLETED sets only. An
-    /// unchecked set was not performed and does not count. Sets missing weight
+    /// Sum of `weight × reps` over `workout`'s COMPLETED, LIVE sets only. An
+    /// unchecked set was not performed and does not count; nor does a deleted
+    /// one, which would otherwise keep inflating a total after removal. Sets missing weight
     /// or reps are skipped. Returns `0` for a workout with no completed sets
     /// — never nil, never a crash.
     static func totalVolume(for workout: Workout) -> Double {
-        workout.exercises
-            .flatMap(\.sets)
+        workout.liveExercises
+            .flatMap(\.liveSets)
             .filter(\.isCompleted)
             .compactMap { set -> Double? in
                 guard let weight = set.weight, let reps = set.reps else { return nil }

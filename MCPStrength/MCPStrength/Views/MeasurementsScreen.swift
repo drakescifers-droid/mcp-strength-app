@@ -33,8 +33,10 @@ private extension MeasurementGroup {
 
 struct MeasurementsScreen: View {
     @Environment(\.modelContext) private var context
-    @Query private var types: [MeasurementType]
-    @Query private var entries: [MeasurementEntry]
+    @Query(filter: #Predicate<MeasurementType> { $0.deletedAt == nil })
+    private var types: [MeasurementType]
+    @Query(filter: #Predicate<MeasurementEntry> { $0.deletedAt == nil })
+    private var entries: [MeasurementEntry]
 
     @State private var recordingType: MeasurementType?
 

@@ -41,7 +41,7 @@ enum TemplateStarter {
         let workout = Workout(name: template.name, startedAt: date, template: template)
         context.insert(workout)
 
-        for templateExercise in template.exercises.sorted(by: { $0.order < $1.order }) {
+        for templateExercise in template.liveExercises {
             let workoutExercise = WorkoutExercise(
                 order: templateExercise.order,
                 workout: workout,
@@ -49,7 +49,7 @@ enum TemplateStarter {
             )
             context.insert(workoutExercise)
 
-            for templateSet in templateExercise.sets.sorted(by: { $0.order < $1.order }) {
+            for templateSet in templateExercise.liveSets {
                 // Fixed reps wins; otherwise fall back to the bottom of a range.
                 let prefillReps = templateSet.reps ?? templateSet.repRangeStart
                 let workoutSet = WorkoutSet(

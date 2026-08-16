@@ -24,8 +24,12 @@ import SwiftData
 struct StartWorkoutTab: View {
     @Environment(\.modelContext) private var context
 
-    @Query(sort: \TemplateFolder.order) private var folders: [TemplateFolder]
-    @Query(sort: \Template.order) private var templates: [Template]
+    @Query(filter: #Predicate<TemplateFolder> { $0.deletedAt == nil },
+           sort: \TemplateFolder.order)
+    private var folders: [TemplateFolder]
+    @Query(filter: #Predicate<Template> { $0.deletedAt == nil },
+           sort: \Template.order)
+    private var templates: [Template]
 
     /// Start a quick (no-template) workout. ContentView owns the active-workout
     /// swap, so it handles the insert and the root transition.
@@ -183,7 +187,7 @@ struct StartWorkoutTab: View {
                 // old `if !folderTemplates.isEmpty` guard made Save look
                 // like a no-op.
                 if !folder.isCollapsed {
-                    templateGrid(folder.templates.sorted { $0.order < $1.order })
+                    templateGrid(folder.liveTemplates)
                 }
             }
             // Templates with no folder (when folders exist) get a trailing
@@ -231,7 +235,7 @@ struct StartWorkoutTab: View {
             Image(systemName: "folder")
                 .font(Typography.secondary)
                 .foregroundStyle(Theme.textSecondary)
-            Text("\(folder.name) (\(folder.templates.count))")
+            Text("\(folder.name) (\(folder.liveTemplates.count))")
                 .font(Typography.secondary.weight(.semibold))
                 .foregroundStyle(Theme.textSecondary)
             Spacer(minLength: 0)
@@ -308,10 +312,12 @@ struct StartWorkoutTab: View {
 
     private func deletePendingTemplate() {
         guard let template = templatePendingDelete else { return }
-        // deleteRule: .cascade on exercises/sets, .nullify on workouts.
-        // context.delete(template) is sufficient. Do not loop over
-        // template.workouts — that would destroy training history.
-        context.delete(template)
+        // Tombstone, never context.delete: a device that was offline when
+        // this happened has to learn about it, and a removed row cannot tell
+        // it anything. SoftDelete.template walks the .cascade rule by hand and
+        // deliberately leaves template.workouts alone — deleting a template
+        // must never delete the training performed from it.
+        SoftDelete.template(template)
         templatePendingDelete = nil
     }
 
@@ -330,7 +336,7 @@ struct StartWorkoutTab: View {
         )
         context.insert(copy)
 
-        for sourceExercise in template.exercises.sorted(by: { $0.order < $1.order }) {
+        for sourceExercise in template.liveExercises {
             let copiedExercise = TemplateExercise(
                 order: sourceExercise.order,
                 supersetGroupID: sourceExercise.supersetGroupID,
@@ -342,7 +348,7 @@ struct StartWorkoutTab: View {
             )
             context.insert(copiedExercise)
 
-            for sourceSet in sourceExercise.sets.sorted(by: { $0.order < $1.order }) {
+            for sourceSet in sourceExercise.liveSets {
                 context.insert(TemplateSet(
                     order: sourceSet.order,
                     setType: sourceSet.setType,
@@ -360,9 +366,10 @@ struct StartWorkoutTab: View {
 
     private func deletePendingFolder() {
         guard let folder = folderPendingDelete else { return }
-        // deleteRule: .nullify — context.delete(folder) leaves templates
-        // alive and unfiled. Do not loop over folder.templates.
-        context.delete(folder)
+        // .nullify on templates is enacted by doing nothing: they stay
+        // alive and read as unfiled. SoftDelete.folder cascades only to the
+        // folder's program days.
+        SoftDelete.folder(folder)
         folderPendingDelete = nil
     }
 
@@ -513,7 +520,7 @@ private struct TemplateCard: View {
     /// The exercise names joined by commas. Falls back to a plain count when
     /// there are no named exercises yet.
     private var exerciseSummary: String {
-        let sorted = template.exercises.sorted { $0.order < $1.order }
+        let sorted = template.liveExercises
         let names = sorted.compactMap { $0.exercise?.name }
         let countWord = sorted.count == 1 ? "exercise" : "exercises"
         if names.isEmpty {

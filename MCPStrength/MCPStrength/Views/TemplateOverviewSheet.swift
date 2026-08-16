@@ -112,14 +112,14 @@ struct TemplateOverviewSheet: View {
     }
 
     private var orderedExercises: [TemplateExercise] {
-        template.exercises
+        template.liveExercises
             .sorted { $0.order < $1.order }
             .filter { $0.exercise != nil }
     }
 
     private func exerciseRow(_ item: TemplateExercise, exercise: Exercise) -> some View {
         VStack(alignment: .leading, spacing: Spacing.compact / 2) {
-            Text("\(item.sets.count) × \(exercise.name)")
+            Text("\(item.liveSets.count) × \(exercise.name)")
                 .font(Typography.body.weight(.semibold))
                 .foregroundStyle(Theme.textPrimary)
             Text(exercise.bodyPart.displayName)

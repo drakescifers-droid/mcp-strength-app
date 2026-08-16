@@ -27,7 +27,8 @@ struct ActiveWorkoutScreen: View {
     // All history, for the "Previous" column. Reverse-chronological sort makes
     // WorkoutHistory.previousSet's "most recent" pick cheap, and is harmless
     // when there is no history yet.
-    @Query(sort: [SortDescriptor(\Workout.startedAt, order: .reverse)])
+    @Query(filter: #Predicate<Workout> { $0.deletedAt == nil },
+           sort: [SortDescriptor(\Workout.startedAt, order: .reverse)])
     private var allWorkouts: [Workout]
 
     @State private var now = Date()
@@ -211,7 +212,7 @@ struct ActiveWorkoutScreen: View {
     // MARK: - Derived
 
     private var sortedExercises: [WorkoutExercise] {
-        workout.exercises.sorted { $0.order < $1.order }
+        workout.liveExercises
     }
 
     private var isReordering: Bool { draggingExerciseID != nil }
@@ -223,7 +224,7 @@ struct ActiveWorkoutScreen: View {
     // MARK: - Mutations
 
     private func addExercise(_ exercise: Exercise) {
-        let nextOrder = (workout.exercises.map(\.order).max() ?? -1) + 1
+        let nextOrder = (workout.liveExercises.map(\.order).max() ?? -1) + 1
         let workoutExercise = WorkoutExercise(order: nextOrder)
         workoutExercise.workout = workout
         workoutExercise.exercise = exercise
@@ -242,7 +243,13 @@ struct ActiveWorkoutScreen: View {
     }
 
     private func cancel() {
-        context.delete(workout)
+        // Tombstoned rather than removed, even though a cancelled workout
+        // "never happened". docs/06-sync.md allows a hard delete for a row that
+        // has never been pushed, but nothing yet records whether a row HAS been
+        // pushed — and guessing wrong deletes a workout the server has already
+        // accepted, leaving it alive on every other device with nothing to
+        // remove it. Uniformly soft until that signal exists.
+        SoftDelete.workout(workout)
         onCancel()
     }
 
@@ -269,7 +276,7 @@ struct ActiveWorkoutScreen: View {
         guard let index = dest.firstIndex(of: target.id) else { return false }
 
         let result = ListOrdering.move(id, from: ids, to: ids, at: index)
-        let byID = Dictionary(uniqueKeysWithValues: workout.exercises.map { ($0.id, $0) })
+        let byID = Dictionary(uniqueKeysWithValues: workout.liveExercises.map { ($0.id, $0) })
         for (i, eid) in result.destination.enumerated() {
             byID[eid]?.order = i
         }
@@ -367,7 +374,7 @@ private struct ExerciseBlock: View {
     }
 
     private var sortedSets: [WorkoutSet] {
-        workoutExercise.sets.sorted { $0.order < $1.order }
+        workoutExercise.liveSets
     }
 
     // Working-set numbers parallel to `sortedSets`: only `.normal` sets consume
@@ -435,7 +442,7 @@ private struct ExerciseBlock: View {
     }
 
     private func addSet() {
-        let nextOrder = (workoutExercise.sets.map(\.order).max() ?? -1) + 1
+        let nextOrder = (workoutExercise.liveSets.map(\.order).max() ?? -1) + 1
         let newSet = WorkoutSet(order: nextOrder, restSeconds: defaultRestSeconds)
         newSet.workoutExercise = workoutExercise
         // context is shared via the environment; insert through the exercise's

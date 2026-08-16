@@ -15,7 +15,7 @@ struct WorkoutDetailScreen: View {
     let workout: Workout
 
     private var sortedExercises: [WorkoutExercise] {
-        workout.exercises.sorted { $0.order < $1.order }
+        workout.liveExercises
     }
 
     var body: some View {
@@ -107,7 +107,7 @@ private struct ExerciseDetailBlock: View {
     let workoutExercise: WorkoutExercise
 
     private var sortedSets: [WorkoutSet] {
-        workoutExercise.sets.sorted { $0.order < $1.order }
+        workoutExercise.liveSets
     }
 
     // Working-set numbers parallel to `sortedSets`: this screen is read-only

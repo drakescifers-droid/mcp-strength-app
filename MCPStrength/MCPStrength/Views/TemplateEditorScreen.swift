@@ -66,7 +66,8 @@ struct TemplateEditorScreen: View {
 
     /// All history, for the "Previous" column — reused exactly as on the
     /// workout screen (see Views/WorkoutHistory.swift).
-    @Query(sort: [SortDescriptor(\Workout.startedAt, order: .reverse)])
+    @Query(filter: #Predicate<Workout> { $0.deletedAt == nil },
+           sort: [SortDescriptor(\Workout.startedAt, order: .reverse)])
     private var allWorkouts: [Workout]
 
     @State private var name: String = ""
@@ -264,7 +265,7 @@ struct TemplateEditorScreen: View {
         guard exercises.isEmpty, name.isEmpty else { return }
         if let template {
             name = template.name
-            exercises = template.exercises
+            exercises = template.liveExercises
                 .sorted(by: { $0.order < $1.order })
                 .map { tx in
                     DraftExercise(
@@ -276,7 +277,7 @@ struct TemplateEditorScreen: View {
                             focusMetric: .totalVolume
                         ),
                         defaultRestSeconds: tx.defaultRestSeconds,
-                        sets: tx.sets
+                        sets: tx.liveSets
                             .sorted(by: { $0.order < $1.order })
                             .map { ts in
                                 DraftSet(
@@ -342,9 +343,15 @@ struct TemplateEditorScreen: View {
         if let template {
             target = template
             target.name = name
-            // Remove old exercises (their sets cascade-delete).
-            for old in target.exercises {
-                context.delete(old)
+            // Tombstone the old exercises and their sets. NOTE: this
+            // replace-everything strategy is cheap locally and expensive once
+            // this syncs — every save tombstones the whole subtree and inserts
+            // a new one with fresh ids, so the server sees a template's
+            // contents deleted and recreated on each edit. Diffing instead
+            // (update in place, tombstone only what was removed) is recorded in
+            // docs/04-status.md as required before the sync engine ships.
+            for old in target.liveExercises {
+                SoftDelete.templateExercise(old)
             }
         } else {
             // Per-folder position: a new template lands at the end of ITS

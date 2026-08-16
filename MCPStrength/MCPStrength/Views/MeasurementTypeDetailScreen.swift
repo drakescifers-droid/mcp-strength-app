@@ -16,7 +16,8 @@ struct MeasurementTypeDetailScreen: View {
 
     let type: MeasurementType
 
-    @Query private var allEntries: [MeasurementEntry]
+    @Query(filter: #Predicate<MeasurementEntry> { $0.deletedAt == nil })
+    private var allEntries: [MeasurementEntry]
 
     private var entries: [MeasurementEntry] {
         allEntries
@@ -79,7 +80,7 @@ struct MeasurementTypeDetailScreen: View {
     }
 
     private func delete(_ entry: MeasurementEntry) {
-        context.delete(entry)
+        SoftDelete.measurementEntry(entry)
         try? context.save()
     }
 
