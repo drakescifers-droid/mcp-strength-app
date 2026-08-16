@@ -50,9 +50,15 @@ project yet.**
 ### Landed
 
 - **The schema, on a real project.** Twelve tables, 18 RLS policies, 12 sync triggers, the seeded
-  library. Applied to `mcp-strength` (`knrmembtnmgddzyyvyvq`) and verified by dumping the remote
-  schema back, not by trusting `db push`. `05-database.md` is the decisions record;
-  `./supabase/tests/run.sh` exercises it against a throwaway container.
+  library, and now the last-write-wins guard (12 more triggers). **All 7 migrations applied and
+  verified remote == local by dumping the schema back**, not by trusting `db push`.
+  `05-database.md` is the decisions record; `./supabase/tests/run.sh` exercises it against a
+  throwaway container.
+  > **Two migrations had silently never been pushed**, and one of them was `workouts.summary` — a
+  > column `SyncWorkoutRow` sends on every workout, so the first real push would have failed on an
+  > unknown column. A note elsewhere claimed it was live. **Run `supabase migration list` before
+  > trusting any statement about the remote schema, including one in this file.** "Applied"
+  > written down is not the same as applied.
 - **Sign-in, required up front.** Email/password via supabase-swift — the project's first external
   dependency. `AuthGate` replaces `ContentView` as the app root.
 - **The sync design** (`06-sync.md`) and the sync columns on all eleven `@Model`s.
