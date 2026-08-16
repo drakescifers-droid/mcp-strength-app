@@ -62,7 +62,7 @@ struct ProfileTab: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Your workouts stay on this phone.")
+                Text(sync.state.signOutMessage)
             }
         }
     }

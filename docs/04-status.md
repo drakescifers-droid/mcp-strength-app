@@ -190,12 +190,22 @@ ringer `docs/MODEL-NOTES.md`.
   engine against a fake, the schema and the LWW guard against a throwaway Postgres — and the two
   suites are green. But a fake accepts what Postgres might reject, so nothing here is evidence that
   a row actually travels. This is the top of the "what is left" list for a reason.
-- **The second-account refusal has never been exercised.** `06-sync.md` leaves signing out with
-  unpushed changes as an OPEN QUESTION, so the engine takes the only safe reading available without
-  an answer: it records which account this device claimed for, and if a DIFFERENT account signs in
-  it refuses to push and reports the failure rather than guessing. A device that will not sync is a
-  far better failure than one that quietly hands one person's training history to another — but it
-  IS a refusal, and the real rule still needs deciding before anyone but Drake uses the app.
+- **The second-account refusal has never been exercised, and DELIBERATELY STAYS AS IT IS.** The
+  engine records which account claimed this device, and if a DIFFERENT one signs in it refuses to
+  push and reports it. That guard is load-bearing — local rows carry no owner (ownership is stamped
+  at push time), so without it a second person signing in would upload the first person's entire
+  history into their account.
+  > **Reviewed 2026-08-16 and left alone, because the state is nearly unreachable.** Sign-in is
+  > required before any row exists, so only this dev machine has owner-less rows. A mistyped signup
+  > email cannot produce it either: no confirmation mail arrives, so that account never signs in at
+  > all. What remains is Drake with a test account, which self-heals by signing back in. The
+  > message being a dead end is therefore not worth fixing yet.
+  >
+  > **REVISIT THIS WHEN SIGN IN WITH APPLE/GOOGLE LANDS.** Social sign-in has no email
+  > verification step, so a user who already has an email account and then taps "Sign in with
+  > Apple" is signed in INSTANTLY as a second account on the same phone — the one path that makes
+  > this state genuinely reachable. It is the same fix as the identity-linking note below, not a
+  > separate one.
 - The per-exercise menu, sticky notes and truncation limits have not been used on a real device.
 - **The tappable rest divider has not been used on a real device either.** A hairline is far under
   the 44pt minimum target, so the hit area is expanded and then negated out of layout

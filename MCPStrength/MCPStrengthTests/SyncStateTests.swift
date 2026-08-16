@@ -107,6 +107,50 @@ struct SyncStateTests {
         #expect(SyncState.relative(now.addingTimeInterval(180), from: now) == "just now")
     }
 
+    // MARK: - Signing out
+
+    @Test func signingOutAlwaysPromisesTheDataStaysOnThePhone() {
+        // Sign-out never touches the local store. Whatever else the message
+        // says, it must not leave room for the reading that signing out
+        // discards anything — that is the user's first fear, and it is wrong.
+        let states: [SyncState] = [
+            .never, .syncing, .upToDate(at: now.addingTimeInterval(-120)),
+            .pending(count: 2), .failed(count: 1, reason: "No connection."),
+        ]
+        for state in states {
+            #expect(state.signOutMessage.lowercased().contains("this phone"),
+                    "\(state) does not say the workouts stay on the phone")
+        }
+    }
+
+    @Test func signingOutWithNothingEverBackedUpSaysSo() {
+        // The highest-stakes branch. Sign-out is exactly the moment somebody
+        // would want to know the server has never seen any of it, and the
+        // flat "your workouts stay on this phone" reads as reassurance.
+        #expect(SyncState.never.signOutMessage.contains("None of your workouts"))
+    }
+
+    @Test func signingOutWithWorkWaitingSaysHowMuch() {
+        #expect(SyncState.pending(count: 3).signOutMessage.contains("3 changes have not been"))
+        #expect(SyncState.failed(count: 4, reason: "No connection.")
+            .signOutMessage.contains("4 changes have not been"))
+    }
+
+    @Test func signOutCountIsSingularForOne() {
+        let message = SyncState.pending(count: 1).signOutMessage
+        #expect(message.contains("1 change has not been"))
+        #expect(!message.contains("changes"))
+    }
+
+    @Test func signingOutWhenEverythingIsUpSaysNothingAlarming() {
+        // Nothing is waiting, so there is no count to state and inventing one
+        // ("0 changes have not been backed up") is the fabricated zero this
+        // file exists to prevent.
+        for state in [SyncState.upToDate(at: now), .syncing] {
+            #expect(state.signOutMessage == "Your workouts stay on this phone.")
+        }
+    }
+
     // MARK: - Every branch says something
 
     @Test func noStateIsSilentOrLeaksInternals() {
@@ -118,10 +162,13 @@ struct SyncStateTests {
             #expect(!state.title.isEmpty, "\(state) has no title")
             let detail = state.detail(now: now)
             #expect(!detail.isEmpty, "\(state) has no detail")
+            #expect(!state.signOutMessage.isEmpty, "\(state) has no sign-out message")
             // Nothing a user reads should contain developer vocabulary.
             for leak in ["nil", "Optional", "Error(", "http", "postgrest"] {
                 #expect(!detail.lowercased().contains(leak.lowercased()),
                         "\(state) leaked \(leak)")
+                #expect(!state.signOutMessage.lowercased().contains(leak.lowercased()),
+                        "\(state) sign-out message leaked \(leak)")
             }
         }
     }

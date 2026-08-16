@@ -86,6 +86,38 @@ extension SyncState {
         }
     }
 
+    /// What the sign-out confirmation says underneath "Sign out?".
+    ///
+    /// Signing out never touches the local store, so the old flat wording —
+    /// "Your workouts stay on this phone." — was always TRUE. It was still the
+    /// wrong thing to say, and for the reason this whole file exists: it is a
+    /// reassurance that quietly omits whether anything is still waiting to go
+    /// up. "Your workouts are safe here" reads as "and also safe there". That
+    /// is rule 1 at the top of this file, one screen further along.
+    ///
+    /// So the count is stated when there is one, and `.never` gets its own
+    /// branch because it is the highest-stakes case in the app: nothing has
+    /// ever reached the server, and sign-out is exactly the moment somebody
+    /// would want to know that.
+    ///
+    /// Lives here rather than in ProfileTab so all the user-facing sync copy is
+    /// in one file and can be tested — a computed property inside a View
+    /// cannot be. It reads the same state the account card above the button
+    /// reads, deliberately: a second source of truth that disagreed with the
+    /// card would be worse than the omission this replaced.
+    var signOutMessage: String {
+        let tail = "They will stay on this phone."
+        switch self {
+        case .never:
+            return "None of your workouts have been backed up yet. \(tail)"
+        case .pending(let n), .failed(let n, _):
+            let changes = n == 1 ? "1 change has" : "\(n) changes have"
+            return "\(changes) not been backed up yet. \(tail)"
+        case .syncing, .upToDate:
+            return "Your workouts stay on this phone."
+        }
+    }
+
     /// How many local changes are waiting, if that is a meaningful question.
     ///
     /// `nil` rather than `0` for the states where the count is unknown. A
