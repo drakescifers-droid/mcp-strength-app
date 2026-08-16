@@ -6,6 +6,10 @@
 	objectVersion = 110;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		5A0000000000000000000001 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 5A0000000000000000000003 /* Supabase */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		485BED0E303006B700F5FAE1 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -51,6 +55,7 @@
 		485BECFB303006B600F5FAE1 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				5A0000000000000000000001 /* Supabase in Frameworks */,
 			);
 		};
 		485BED0A303006B700F5FAE1 /* Frameworks */ = {
@@ -103,6 +108,9 @@
 				485BED00303006B600F5FAE1 /* MCPStrength */,
 			);
 			name = MCPStrength;
+			packageProductDependencies = (
+				5A0000000000000000000003 /* Supabase */,
+			);
 			productName = MCPStrength;
 			productReference = 485BECFE303006B600F5FAE1 /* MCPStrength.app */;
 			productType = "com.apple.product-type.application";
@@ -181,6 +189,9 @@
 			);
 			mainGroup = 485BECF5303006B600F5FAE1;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5A0000000000000000000002 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 485BECFF303006B600F5FAE1 /* Products */;
 			projectDirPath = "";
@@ -542,6 +553,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5A0000000000000000000002 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.55.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5A0000000000000000000003 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A0000000000000000000002 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 485BECF6303006B600F5FAE1 /* Project object */;
 	validationLevel = 1;

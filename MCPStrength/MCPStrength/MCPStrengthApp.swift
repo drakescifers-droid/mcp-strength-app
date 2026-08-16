@@ -64,15 +64,32 @@ struct MCPStrengthApp: App {
         }
     }()
 
+    /// Owns "who is signed in". Created here rather than inside a view so it
+    /// survives every view rebuild — a controller recreated by SwiftUI would
+    /// restart its session observation and drop back to `.loading` mid-use.
+    @State private var auth = AuthController()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            // AuthGate, not ContentView: the app proper is unreachable until a
+            // session exists. Every row the backend accepts must be stamped
+            // with an owner, so there is nothing to sync before the app knows
+            // who you are. THE LOCAL STORE IS UNAFFECTED — SwiftData and the
+            // seed importers above run regardless of sign-in state, so the
+            // library is ready the moment the gate opens.
+            AuthGate()
+                .environment(auth)
                 // The design tokens are a dark-only palette, sampled from the dark reference
                 // app (see Design/Theme.swift). System-provided chrome — navigation titles,
                 // pickers, keyboards — takes its colours from the environment colour scheme,
                 // NOT from our tokens, so without this the title renders black on #293136.
                 // Remove this only when a light palette actually exists.
                 .preferredColorScheme(.dark)
+                .task {
+                    // Idempotent — guarded inside, so the re-run SwiftUI may
+                    // perform on reattach cannot start a second observer.
+                    auth.start()
+                }
         }
         .modelContainer(sharedModelContainer)
     }
