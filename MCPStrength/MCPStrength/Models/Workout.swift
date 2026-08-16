@@ -84,6 +84,24 @@ final class WorkoutExercise {
     var supersetGroupID: UUID?
     var note: String?
 
+    // MARK: Parity with TemplateExercise
+    //
+    // The per-exercise menu is the SAME in a template and in a live workout, so
+    // the two models have to be able to hold the same answers. These two were
+    // on TemplateExercise only, which would have meant greying out "Add Sticky
+    // Note" and "Update Rest Timers" mid-workout — the identical menu failing
+    // to be identical.
+    //
+    // Added now, deliberately, while the store holds nothing worth keeping and
+    // nothing has ever synced. The same change once history is on the server is
+    // a migration against data the user cares about. Declaration-level defaults
+    // for the usual reason (docs/04-status.md § lessons).
+
+    /// A note that stays pinned while logging, rather than tucked away.
+    var stickyNote: String?
+    /// Rest that new sets inherit. Per-set `restSeconds` still overrides it.
+    var defaultRestSeconds: Int = 90
+
     var workout: Workout?
     var exercise: Exercise?
 
@@ -95,6 +113,8 @@ final class WorkoutExercise {
         order: Int,
         supersetGroupID: UUID? = nil,
         note: String? = nil,
+        stickyNote: String? = nil,
+        defaultRestSeconds: Int = 90,
         workout: Workout? = nil,
         exercise: Exercise? = nil
     ) {
@@ -102,6 +122,8 @@ final class WorkoutExercise {
         self.order = order
         self.supersetGroupID = supersetGroupID
         self.note = note
+        self.stickyNote = stickyNote
+        self.defaultRestSeconds = defaultRestSeconds
         self.workout = workout
         self.exercise = exercise
     }

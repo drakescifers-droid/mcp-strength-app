@@ -250,6 +250,8 @@ struct SyncWorkoutExerciseRow: Codable, Sendable, Equatable {
     let sortOrder: Int
     let supersetGroupID: UUID?
     let note: String?
+    let stickyNote: String?
+    let defaultRestSeconds: Int
     let updatedAt: Date
     let deletedAt: Date?
     var serverUpdatedAt: Date?
@@ -261,6 +263,8 @@ struct SyncWorkoutExerciseRow: Codable, Sendable, Equatable {
         case exerciseID = "exercise_id"
         case sortOrder = "sort_order"
         case supersetGroupID = "superset_group_id"
+        case stickyNote = "sticky_note"
+        case defaultRestSeconds = "default_rest_seconds"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
         case serverUpdatedAt = "server_updated_at"
@@ -489,6 +493,8 @@ enum SyncRowMapper {
             sortOrder: exercise.order,
             supersetGroupID: exercise.supersetGroupID,
             note: exercise.note,
+            stickyNote: exercise.stickyNote,
+            defaultRestSeconds: exercise.defaultRestSeconds,
             updatedAt: exercise.updatedAt,
             deletedAt: exercise.deletedAt
         )

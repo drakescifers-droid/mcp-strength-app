@@ -33,7 +33,7 @@ import re
 import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-MIGRATION = REPO / "supabase/migrations/20260815120000_schema.sql"
+MIGRATIONS_DIR = REPO / "supabase/migrations"
 ROWS = REPO / "MCPStrength/MCPStrength/Sync/SyncRows.swift"
 
 # Swift struct -> Postgres table. Stated explicitly rather than derived from the
@@ -65,7 +65,17 @@ NO_ROW_STRUCT = {
 
 
 def schema_columns() -> dict[str, set[str]]:
-    sql = MIGRATION.read_text()
+    """The schema as of EVERY migration, applied in filename order.
+
+    Reading only the first migration was a real bug: a column added by a later
+    `alter table ... add column` looked, to this script, like a key with no
+    column behind it. The schema is the sum of its migrations, and a checker
+    that models only the first one reports drift that does not exist — which is
+    worse than not checking, because it trains you to ignore it.
+    """
+    sql = "\n".join(
+        f.read_text() for f in sorted(MIGRATIONS_DIR.glob("*.sql"))
+    )
     tables: dict[str, set[str]] = {}
     for match in re.finditer(r"create table public\.(\w+) \((.*?)\n\);", sql, re.S):
         table, body = match.group(1), match.group(2)
@@ -78,6 +88,19 @@ def schema_columns() -> dict[str, set[str]]:
             if found and found.group(1) not in {"check", "constraint"}:
                 cols.add(found.group(1))
         tables[table] = cols
+
+    # Later migrations. Handles both the single-column form and the
+    # comma-separated `add column a ..., add column b ...` form.
+    for match in re.finditer(
+        r"alter table public\.(\w+)\s+(.*?);", sql, re.S | re.I
+    ):
+        table, body = match.group(1), match.group(2)
+        if table not in tables:
+            continue
+        for added in re.finditer(r"add column\s+([a-z_]+)\s", body, re.I):
+            tables[table].add(added.group(1))
+        for dropped in re.finditer(r"drop column\s+([a-z_]+)", body, re.I):
+            tables[table].discard(dropped.group(1))
     return tables
 
 

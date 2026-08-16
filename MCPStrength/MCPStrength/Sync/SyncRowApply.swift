@@ -160,6 +160,8 @@ enum SyncRowApply {
         workoutExercise.order = row.sortOrder
         workoutExercise.supersetGroupID = row.supersetGroupID
         workoutExercise.note = row.note
+        workoutExercise.stickyNote = row.stickyNote
+        workoutExercise.defaultRestSeconds = row.defaultRestSeconds
         workoutExercise.workout = workout
         workoutExercise.exercise = exercise
         settle(workoutExercise, from: row.updatedAt, deletedAt: row.deletedAt)
