@@ -46,6 +46,9 @@ Landed:
   `./supabase/tests/run.sh` exercises it against a throwaway container.
 - **Sign-in, required up front.** Email and password, via supabase-swift — the first external
   dependency this project has had. `AuthGate` replaces `ContentView` as the app root.
+- **The sync design** (`06-sync.md`) and **the sync columns** — `updatedAt` / `deletedAt` /
+  `needsSync` on all eleven `@Model`s, with the migration verified against a real previous-build
+  store rather than assumed. Bookkeeping only; nothing pushes.
 
 **Nothing syncs yet, and that gap is the whole remaining phase.** The app knows who you are and
 still writes only to SwiftData; not one row has ever travelled. The standing caveat below holds in
@@ -57,9 +60,10 @@ the **visible sync state** designed alongside it rather than retrofitted. Five t
 - Pull on `server_updated_at` with a five-second overlap window, never on `updated_at` (`05`).
 - Settle canonical units *before* there is real history — converting afterwards is a migration
   against numbers a user typed (`05`).
-- **Deletes have to become soft across the whole app.** SwiftData deletes are hard today; tombstones
-  are what let an offline device learn about a delete. This touches every screen that deletes and
-  every query that lists, and it is the largest single piece of work left in the phase.
+- **Deletes have to become soft across the whole app** — the next chunk, and the largest single
+  piece left. The columns and `markDeleted` exist; no delete site or query uses them yet, so every
+  screen that deletes and every query that lists still has to change. A missed filter shows a
+  workout the user deleted last week.
 - **Rows created before sign-in have no owner.** Sign-in is required up front so new installs cannot
   produce any, but the local store on THIS machine predates the gate.
 - **The seeded library now exists in two places** — local SwiftData rows and global Postgres rows
@@ -157,6 +161,14 @@ _None outstanding._ The list has been empty before; things land on it as they ar
   old store to migrate. Only launching the app against a previous build's store exposes it, which
   is what the two UI tests are actually for. Cheap now; a broken-on-update app once Phase 2 gives
   real users real history.
+  - **How to actually verify one — the canary.** Back up the simulator's store, confirm with
+    `PRAGMA table_info` that it lacks the new columns, then plant a value re-seeding is
+    contractually required to preserve (a `notes` on a seeded exercise). Install the new build
+    over it and launch. **Row counts prove nothing**: a fresh store also ends up with 25 exercises
+    carrying the same seeded UUIDs, so only the canary distinguishes "migrated the old store" from
+    "silently started over". Watch for `simctl install` relocating the data container — the first
+    attempt at this was inconclusive because the store being inspected was not provably the old
+    one. The sync-column commit (`d49d75e`) is the worked example.
 - **Look at the running app.** Three bugs passed a green test suite and were caught only by
   launching it: a seed importer that nothing ever called, a navigation title rendering black on a
   dark background (system chrome does not read our tokens), and `totalVolume` that nothing computed
