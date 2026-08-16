@@ -73,6 +73,15 @@ struct MCPStrengthApp: App {
     /// as `auth`: it holds a per-user cursor that must survive view rebuilds.
     @State private var sync = SyncStatus()
 
+    /// The run loop. Optional only because it needs the container's main
+    /// context, which a property initializer cannot see; created once in
+    /// `.task` below. A third trigger — sync right after Finish — belongs
+    /// at the finish site in ActiveWorkoutScreen, which another worker
+    /// owns this round.
+    @State private var engine: SyncEngine?
+
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some Scene {
         WindowGroup {
             // AuthGate, not ContentView: the app proper is unreachable until a
@@ -84,6 +93,7 @@ struct MCPStrengthApp: App {
             AuthGate()
                 .environment(auth)
                 .environment(sync)
+                .optionalEnvironment(engine)
                 // The design tokens are a dark-only palette, sampled from the dark reference
                 // app (see Design/Theme.swift). System-provided chrome — navigation titles,
                 // pickers, keyboards — takes its colours from the environment colour scheme,
@@ -108,16 +118,60 @@ struct MCPStrengthApp: App {
                         #endif
                     }
                 }
+                .task {
+                    if engine == nil {
+                        engine = SyncEngine(
+                            context: sharedModelContainer.mainContext,
+                            transport: SupabaseSyncClient(),
+                            status: sync
+                        )
+                    }
+                    // Launch trigger. Preview has no session; RLS would
+                    // reject everything, so we do not run there.
+                    triggerSyncIfSignedIn()
+                }
                 .onChange(of: auth.state) { _, state in
                     // The sync cursor is per-account: pointing it at the signed
                     // -in user is what stops one person resuming from another
                     // person's position and skipping everything before it.
                     switch state {
-                    case .signedIn(let userID, _): sync.adopt(userID: userID)
-                    default:                       sync.clearSession()
+                    case .signedIn(let userID, _):
+                        sync.adopt(userID: userID)
+                        triggerSyncIfSignedIn()
+                    default:
+                        sync.clearSession()
+                    }
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    // Foreground trigger. `.onChange` does not fire for the
+                    // initial `.active`, which is why launch has its own .task.
+                    if phase == .active {
+                        triggerSyncIfSignedIn()
                     }
                 }
         }
         .modelContainer(sharedModelContainer)
+    }
+
+    /// Pull on launch and on foreground, only when there is a session.
+    /// The engine itself no-ops if a run is already in flight.
+    private func triggerSyncIfSignedIn() {
+        guard !UIPreviewMode.isEnabled else { return }
+        guard let engine else { return }
+        guard case .signedIn(let userID, _) = auth.state else { return }
+        Task { await engine.run(as: userID) }
+    }
+}
+
+private extension View {
+    /// `.environment` does not take an optional; a missing engine on the
+    /// first frame (before `.task` creates it) must not hide AuthGate.
+    @ViewBuilder
+    func optionalEnvironment(_ engine: SyncEngine?) -> some View {
+        if let engine {
+            self.environment(engine)
+        } else {
+            self
+        }
     }
 }
