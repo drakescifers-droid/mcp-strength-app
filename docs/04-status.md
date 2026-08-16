@@ -48,7 +48,13 @@ Landed:
   dependency this project has had. `AuthGate` replaces `ContentView` as the app root.
 - **The sync design** (`06-sync.md`) and **the sync columns** — `updatedAt` / `deletedAt` /
   `needsSync` on all eleven `@Model`s, with the migration verified against a real previous-build
-  store rather than assumed. Bookkeeping only; nothing pushes.
+  store rather than assumed.
+- **Soft deletes, everywhere.** 5 delete sites, 10 `@Query` filters, ~20 relationship reads via
+  `live…` accessors. Caught three bugs that were not delete buttons: volume totals counted deleted
+  sets, the Previous column answered from deleted history, and starting from a template copied
+  deleted exercises back in.
+- **The sync engine's decisions and its visible state** — order, cursor, conflicts, `PushFilter`,
+  and the per-account `SyncStatus`. The Profile tab now says "Not backed up yet", truthfully.
 
 **Nothing syncs yet, and that gap is the whole remaining phase.** The app knows who you are and
 still writes only to SwiftData; not one row has ever travelled. The standing caveat below holds in
@@ -60,10 +66,16 @@ the **visible sync state** designed alongside it rather than retrofitted. Five t
 - Pull on `server_updated_at` with a five-second overlap window, never on `updated_at` (`05`).
 - Settle canonical units *before* there is real history — converting afterwards is a migration
   against numbers a user typed (`05`).
-- **Deletes have to become soft across the whole app** — the next chunk, and the largest single
-  piece left. The columns and `markDeleted` exist; no delete site or query uses them yet, so every
-  screen that deletes and every query that lists still has to change. A missed filter shows a
-  workout the user deleted last week.
+- **The transport itself is all that is left of the engine** — the code that actually moves rows
+  over the network. Order, cursor, conflict resolution, push filtering and the state it reports are
+  written and tested; nothing calls them.
+- **`TemplateEditorScreen.save()` replaces a template's whole subtree on every save**, so under
+  sync each edit tells the server the contents were deleted and recreated with fresh ids. Correct
+  but wasteful, and it makes a template's per-row history meaningless. **Fix before the engine
+  ships**: diff instead — update in place, tombstone only what was removed.
+- **Local edits do not call `markEdited` yet.** Harmless today because `needsSync` defaults to true
+  and nothing clears it, so everything is dirty anyway. The moment the engine starts clearing flags
+  after a successful push, every mutation site needs to set it or edits stop syncing silently.
 - **Rows created before sign-in have no owner.** Sign-in is required up front so new installs cannot
   produce any, but the local store on THIS machine predates the gate.
 - **The seeded library now exists in two places** — local SwiftData rows and global Postgres rows
