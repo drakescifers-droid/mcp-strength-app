@@ -28,10 +28,10 @@ struct DraftExercise: Identifiable {
     var exercise: Exercise
     var defaultRestSeconds: Int
     /// Carried through so Save does not lose it — same reason as DraftSet's
-    /// repRange/rpe below. Save REPLACES a template's exercises, so anything
-    /// the draft does not hold is erased on every edit. Before the options
-    /// menu these three had no UI and no way to be set, which made the loss
-    /// invisible; the menu makes it immediate.
+    /// repRange/rpe below. Save copies these onto the surviving row, so
+    /// anything the draft does not hold would be wiped on a field write.
+    /// Before the options menu these three had no UI and no way to be set,
+    /// which made the loss invisible; the menu makes it immediate.
     var note: String?
     var stickyNote: String?
     var supersetGroupID: UUID?
@@ -410,7 +410,7 @@ struct TemplateEditorScreen: View {
                 .sorted(by: { $0.order < $1.order })
                 .map { tx in
                     DraftExercise(
-                        id: UUID(),
+                        id: tx.id,
                         exercise: tx.exercise ?? Exercise(
                             name: "Unknown Exercise",
                             bodyPart: .other,
@@ -425,7 +425,7 @@ struct TemplateEditorScreen: View {
                             .sorted(by: { $0.order < $1.order })
                             .map { ts in
                                 DraftSet(
-                                    id: UUID(),
+                                    id: ts.id,
                                     order: ts.order,
                                     setType: ts.setType,
                                     weight: ts.weight,
@@ -478,24 +478,26 @@ struct TemplateEditorScreen: View {
 
     // MARK: - Save
 
-    // Persist the drafts. For a new template, create it; for an existing one,
-    // update the name and replace its exercises/sets with the drafts (the old
-    // exercises cascade-delete their sets). repRange/rpe are carried through so
-    // existing prescriptions survive an edit round-trip.
+    // Persist the drafts. Identity is the join key: a draft hydrated from an
+    // existing row carries that row's id (see loadDraft), and a draft the user
+    // just added carries a freshly minted one. TemplateSaveDiff classifies
+    // each id as KEPT (update in place), ADDED (insert), or REMOVED
+    // (tombstone). Saving a template the user did not change therefore
+    // produces no insertions and no tombstones — the property the old
+    // replace-everything write could never have. A new template has no
+    // existing rows, so the same plan is all-ADDED.
     private func save() {
         let target: Template
+        let existingPairs: [(id: UUID, setIDs: [UUID])]
+
         if let template {
             target = template
-            target.name = name
-            // Tombstone the old exercises and their sets. NOTE: this
-            // replace-everything strategy is cheap locally and expensive once
-            // this syncs — every save tombstones the whole subtree and inserts
-            // a new one with fresh ids, so the server sees a template's
-            // contents deleted and recreated on each edit. Diffing instead
-            // (update in place, tombstone only what was removed) is recorded in
-            // docs/04-status.md as required before the sync engine ships.
-            for old in target.liveExercises {
-                SoftDelete.templateExercise(old)
+            if target.name != name {
+                target.name = name
+                target.markEdited()
+            }
+            existingPairs = target.liveExercises.map { tx in
+                (id: tx.id, setIDs: tx.liveSets.map(\.id))
             }
         } else {
             // Per-folder position: a new template lands at the end of ITS
@@ -504,37 +506,159 @@ struct TemplateEditorScreen: View {
             let nextOrder = existing.filter { $0.folder?.id == folder?.id }.count
             target = Template(name: name, order: nextOrder, folder: folder)
             context.insert(target)
+            existingPairs = []
         }
 
-        for (exerciseOrder, draftExercise) in exercises.enumerated() {
-            let tx = TemplateExercise(
-                order: exerciseOrder,
-                supersetGroupID: draftExercise.supersetGroupID,
-                note: draftExercise.note,
-                stickyNote: draftExercise.stickyNote,
-                defaultRestSeconds: draftExercise.defaultRestSeconds,
-                template: target,
-                exercise: draftExercise.exercise
-            )
-            context.insert(tx)
+        let draftPairs = exercises.map { draft in
+            (id: draft.id, setIDs: draft.sets.map(\.id))
+        }
+        applySavePlan(
+            TemplateSaveDiff.plan(drafts: draftPairs, existing: existingPairs),
+            to: target
+        )
 
-            for (setOrder, draftSet) in draftExercise.sets.enumerated() {
-                let ts = TemplateSet(
-                    order: setOrder,
-                    setType: draftSet.setType,
-                    weight: draftSet.weight,
-                    reps: draftSet.reps,
-                    repRangeStart: draftSet.repRangeStart,
-                    repRangeEnd: draftSet.repRangeEnd,
-                    rpe: draftSet.rpe,
-                    restSeconds: draftSet.restSeconds,
-                    templateExercise: tx
-                )
-                context.insert(ts)
+        dismiss()
+    }
+
+    /// Writes one TemplateSaveDiff plan onto `target`. Kept rows are updated
+    /// in place and marked only when a field (including order) actually
+    /// changed — over-marking is a redundant upsert, under-marking loses
+    /// the edit. Added rows are inserted with the draft's already-minted
+    /// id so a later load hydrates the same identity. Removed exercises go
+    /// through SoftDelete.templateExercise (CASCADE to sets); removed sets
+    /// on a surviving exercise are markDeleted themselves. Never
+    /// context.delete: a real delete cannot reach a device that was offline
+    /// when it happened, so the row comes back on the next pull.
+    private func applySavePlan(_ plan: TemplateSaveDiff.Plan, to target: Template) {
+        let existingByID = Dictionary(uniqueKeysWithValues: target.liveExercises.map { ($0.id, $0) })
+        let draftByID = Dictionary(uniqueKeysWithValues: exercises.map { ($0.id, $0) })
+
+        for id in plan.exercises.removed {
+            if let tx = existingByID[id] {
+                SoftDelete.templateExercise(tx)
             }
         }
 
-        dismiss()
+        for item in plan.exercises.kept {
+            guard let tx = existingByID[item.id], let draft = draftByID[item.id] else { continue }
+            applyKeptExercise(draft, to: tx, newOrder: item.newOrder)
+            applySetPlan(
+                plan.setsByKeptExercise[item.id] ?? .empty,
+                draft: draft,
+                exercise: tx
+            )
+        }
+
+        for item in plan.exercises.added {
+            guard let draft = draftByID[item.id] else { continue }
+            insertExercise(draft, order: item.newOrder, into: target)
+        }
+    }
+
+    private func applyKeptExercise(_ draft: DraftExercise, to tx: TemplateExercise, newOrder: Int) {
+        // Replace Exercise keeps the draft's id and only swaps the movement,
+        // so the TemplateExercise row is KEPT and this comparison is what
+        // actually writes the new Exercise onto it.
+        let exerciseChanged = tx.exercise?.id != draft.exercise.id
+        let changed =
+            tx.order != newOrder
+            || tx.supersetGroupID != draft.supersetGroupID
+            || tx.note != draft.note
+            || tx.stickyNote != draft.stickyNote
+            || tx.defaultRestSeconds != draft.defaultRestSeconds
+            || exerciseChanged
+
+        tx.order = newOrder
+        tx.supersetGroupID = draft.supersetGroupID
+        tx.note = draft.note
+        tx.stickyNote = draft.stickyNote
+        tx.defaultRestSeconds = draft.defaultRestSeconds
+        if exerciseChanged {
+            tx.exercise = draft.exercise
+        }
+        if changed {
+            tx.markEdited()
+        }
+    }
+
+    private func applySetPlan(
+        _ plan: TemplateSaveDiff.Level,
+        draft: DraftExercise,
+        exercise tx: TemplateExercise
+    ) {
+        let existingByID = Dictionary(uniqueKeysWithValues: tx.liveSets.map { ($0.id, $0) })
+        let draftByID = Dictionary(uniqueKeysWithValues: draft.sets.map { ($0.id, $0) })
+
+        for id in plan.removed {
+            existingByID[id]?.markDeleted()
+        }
+
+        for item in plan.kept {
+            guard let ts = existingByID[item.id], let draftSet = draftByID[item.id] else { continue }
+            applyKeptSet(draftSet, to: ts, newOrder: item.newOrder)
+        }
+
+        for item in plan.added {
+            guard let draftSet = draftByID[item.id] else { continue }
+            insertSet(draftSet, order: item.newOrder, into: tx)
+        }
+    }
+
+    private func applyKeptSet(_ draft: DraftSet, to ts: TemplateSet, newOrder: Int) {
+        let changed =
+            ts.order != newOrder
+            || ts.setType != draft.setType
+            || ts.weight != draft.weight
+            || ts.reps != draft.reps
+            || ts.repRangeStart != draft.repRangeStart
+            || ts.repRangeEnd != draft.repRangeEnd
+            || ts.rpe != draft.rpe
+            || ts.restSeconds != draft.restSeconds
+
+        ts.order = newOrder
+        ts.setType = draft.setType
+        ts.weight = draft.weight
+        ts.reps = draft.reps
+        ts.repRangeStart = draft.repRangeStart
+        ts.repRangeEnd = draft.repRangeEnd
+        ts.rpe = draft.rpe
+        ts.restSeconds = draft.restSeconds
+        if changed {
+            ts.markEdited()
+        }
+    }
+
+    private func insertExercise(_ draft: DraftExercise, order: Int, into template: Template) {
+        let tx = TemplateExercise(
+            id: draft.id,
+            order: order,
+            supersetGroupID: draft.supersetGroupID,
+            note: draft.note,
+            stickyNote: draft.stickyNote,
+            defaultRestSeconds: draft.defaultRestSeconds,
+            template: template,
+            exercise: draft.exercise
+        )
+        context.insert(tx)
+        for (setOrder, draftSet) in draft.sets.enumerated() {
+            insertSet(draftSet, order: setOrder, into: tx)
+        }
+    }
+
+    private func insertSet(_ draft: DraftSet, order: Int, into exercise: TemplateExercise) {
+        let ts = TemplateSet(
+            id: draft.id,
+            order: order,
+            setType: draft.setType,
+            weight: draft.weight,
+            reps: draft.reps,
+            repRangeStart: draft.repRangeStart,
+            repRangeEnd: draft.repRangeEnd,
+            rpe: draft.rpe,
+            restSeconds: draft.restSeconds,
+            templateExercise: exercise
+        )
+        context.insert(ts)
     }
 }
 
