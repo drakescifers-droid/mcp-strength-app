@@ -20,7 +20,9 @@ struct WorkoutDetailScreen: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.spacious) {
+            // `comfortable`, not `spacious`: this is a readout, and 24pt
+            // between blocks pushed a three-exercise session onto two screens.
+            VStack(alignment: .leading, spacing: Spacing.comfortable) {
                 header
 
                 ForEach(sortedExercises, id: \.id) { workoutExercise in
@@ -38,11 +40,10 @@ struct WorkoutDetailScreen: View {
     // MARK: - Header
 
     private var header: some View {
+        // NO title here. The navigation bar already shows `workout.name`, and
+        // printing it again immediately underneath cost a full line at the top
+        // of every history entry to say something the user just read.
         VStack(alignment: .leading, spacing: Spacing.compact) {
-            Text(workout.name)
-                .font(Typography.title)
-                .foregroundStyle(Theme.textPrimary)
-
             HStack(spacing: Spacing.spacious) {
                 Label {
                     Text(dateText)
@@ -101,8 +102,19 @@ struct WorkoutDetailScreen: View {
 
 // MARK: - ExerciseDetailBlock
 
-/// One exercise's read-only section in the detail screen: name, column header,
-/// and the full set list rendered as non-editable rows.
+/// One exercise's section: the name, then one compact line per set.
+///
+/// **This screen deliberately does NOT reuse `SetRowColumnHeader` or the entry
+/// chips.** It did, and that was the bug: the header declares six columns
+/// (Set / Previous / lbs / Reps / RPE / ✓) while the read-only row rendered
+/// four values, so the weight landed under "Previous", the reps under "lbs",
+/// and RPE had a heading nothing ever filled.
+///
+/// The deeper reason is that the logging screen's layout is shaped by things
+/// history does not have: tap targets sized for a thumb, a Previous column to
+/// compare against, a checkbox to hit mid-set. Borrowing it imports all of that
+/// dead structure. History has one job — show what happened — so each set is
+/// one self-describing line and the column headings are gone entirely.
 private struct ExerciseDetailBlock: View {
     let workoutExercise: WorkoutExercise
 
@@ -110,91 +122,147 @@ private struct ExerciseDetailBlock: View {
         workoutExercise.liveSets
     }
 
-    // Working-set numbers parallel to `sortedSets`: this screen is read-only
-    // history, so the type is NOT editable here — only the numbering is fixed
-    // so warm-ups no longer consume a working-set slot (docs/01-data-model.md § SetType).
+    /// Whether ANY set here can be estimated. Drives the column heading, so a
+    /// bodyweight exercise gets no "1RM" label over a column of blanks.
+    private var showsOneRepMax: Bool {
+        guard let category = workoutExercise.exercise?.category,
+              OneRepMax.supportsEstimate(category) else { return false }
+        return sortedSets.contains { OneRepMax.estimate(weight: $0.weight, reps: $0.reps) != nil }
+    }
+
+    // Warm-ups do not consume a working-set number (docs/01-data-model.md § SetType).
     private var workingNumbers: [Int?] {
         SetNumbering.workingNumbers(for: sortedSets.map(\.setType))
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.comfortable) {
-            Text(workoutExercise.exercise?.name ?? "Unknown Exercise")
-                .font(Typography.body.weight(.semibold))
-                .foregroundStyle(Theme.accent)
+        VStack(alignment: .leading, spacing: Spacing.compact) {
+            HStack {
+                Text(workoutExercise.exercise?.name ?? "Unknown Exercise")
+                    .font(Typography.body.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
 
-            SetRowColumnHeader(trailingIcon: "checkmark")
+                Spacer(minLength: Spacing.compact)
 
-            VStack(spacing: 0) {
+                // Only headed when the column will actually hold something —
+                // a "1RM" label over an empty column reads as a broken feature
+                // rather than as a category that has no meaningful total load.
+                if showsOneRepMax {
+                    Text("1RM")
+                        .font(Typography.secondary.weight(.semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(sortedSets.enumerated()), id: \.element.id) { index, set in
-                    ReadOnlySetRow(
+                    CompletedSetLine(
                         setType: set.setType,
                         setNumber: workingNumbers[index],
                         weight: set.weight,
                         reps: set.reps,
-                        isCompleted: set.isCompleted
+                        rpe: set.rpe,
+                        isCompleted: set.isCompleted,
+                        oneRepMax: OneRepMax.estimate(
+                            for: set, category: workoutExercise.exercise?.category
+                        )
                     )
-
-                    if index < sortedSets.count - 1 {
-                        RestDivider(restSeconds: set.restSeconds)
-                    }
                 }
             }
         }
-        .padding(Spacing.comfortable)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Spacing.comfortable)
+        .padding(.vertical, Spacing.comfortable)
         .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.card))
     }
 }
 
-// MARK: - ReadOnlySetRow
+// MARK: - CompletedSetLine
 
-/// A non-editable set row for the detail screen: badge, weight, reps, and a
-/// completion indicator. Mirrors the SetRow layout but with Text instead of
-/// TextFields — nothing can be changed.
-private struct ReadOnlySetRow: View {
+/// One set, as a single line: badge, what was lifted, and RPE if it was recorded.
+///
+/// No checkbox. On a finished workout a circle is not a control — nothing can
+/// be tapped — and an empty one reads as an unticked box the user is being
+/// invited to fix. The done/not-done distinction still matters, so it is
+/// carried by WEIGHT AND COLOUR instead of a widget: a set that was never
+/// completed is dimmed and marked "skipped", which says the same thing without
+/// looking like something is waiting on you.
+///
+/// THE WHOLE LINE takes the set type's colour, not just the badge. A warm-up is
+/// orange end to end and a drop set purple, matching the reference app — at a
+/// glance you read the shape of the session (two warm-ups, three working sets,
+/// a drop) without parsing a small badge on every row.
+private struct CompletedSetLine: View {
     let setType: SetType
     let setNumber: Int?
     let weight: Double?
     let reps: Int?
+    let rpe: Double?
     let isCompleted: Bool
+    let oneRepMax: Double?
+
+    /// The line's colour. Set type wins; an incomplete set is muted regardless,
+    /// because "you did not do this" outranks "this was a drop set".
+    private var lineColor: Color {
+        guard isCompleted else { return Theme.textSecondary }
+        switch setType {
+        case .normal:  return Theme.textPrimary
+        case .warmup:  return Theme.warmup
+        case .dropSet: return Theme.dropSet
+        case .failure: return Theme.failure
+        }
+    }
 
     var body: some View {
-        HStack(spacing: Spacing.compact) {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.comfortable) {
             SetTypeBadge(setType: setType, setNumber: setNumber)
-                .frame(width: 28)
+                .frame(width: 26, alignment: .leading)
 
-            Text(weightText)
-                .font(Typography.chipValue)
-                .foregroundStyle(Theme.textPrimary)
-                .entryChipStyle()
-                .frame(width: 64)
+            Text(performanceText)
+                .font(Typography.body)
+                .monospacedDigit()
+                .foregroundStyle(lineColor)
 
-            Text(repsText)
-                .font(Typography.chipValue)
-                .foregroundStyle(Theme.textPrimary)
-                .entryChipStyle()
-                .frame(width: 56)
+            Spacer(minLength: Spacing.compact)
 
-            Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 28, weight: .regular))
-                .foregroundStyle(isCompleted ? Theme.success : Theme.textSecondary)
-                .frame(width: 36)
+            if !isCompleted {
+                Text("skipped")
+                    .font(Typography.secondary)
+                    .foregroundStyle(Theme.textSecondary)
+            } else if let rpe {
+                Text("RPE \(RPE.format(rpe))")
+                    .font(Typography.secondary)
+                    .foregroundStyle(Theme.textSecondary)
+                    .monospacedDigit()
+            }
+
+            if let oneRepMax {
+                Text(PreviousText.formatWeight(oneRepMax))
+                    .font(Typography.body)
+                    .monospacedDigit()
+                    .foregroundStyle(lineColor.opacity(0.75))
+                    .frame(minWidth: 44, alignment: .trailing)
+            }
         }
-        .padding(.vertical, Spacing.compact)
-        .background(
-            isCompleted ? Theme.success.opacity(0.12) : Color.clear,
-            in: .rect(cornerRadius: Radius.chip)
-        )
+        .padding(.vertical, 5)
     }
 
-    private var weightText: String {
-        guard let weight else { return "" }
-        return PreviousText.formatWeight(weight)
-    }
-
-    private var repsText: String {
-        guard let reps else { return "" }
-        return String(reps)
+    /// Self-describing on one line, so no column headings are needed.
+    ///
+    /// The em dash is for a set that carries no numbers at all. Showing an
+    /// empty line there would read as a rendering fault rather than as "nothing
+    /// was recorded" — the same reasoning as never displaying a fabricated zero.
+    private var performanceText: String {
+        switch (weight, reps) {
+        case let (weight?, reps?):
+            "\(PreviousText.formatWeight(weight)) lb × \(reps)"
+        case let (weight?, nil):
+            "\(PreviousText.formatWeight(weight)) lb"
+        case let (nil, reps?):
+            reps == 1 ? "1 rep" : "\(reps) reps"
+        case (nil, nil):
+            "—"
+        }
     }
 }
 

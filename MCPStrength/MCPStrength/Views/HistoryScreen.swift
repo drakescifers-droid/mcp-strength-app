@@ -18,6 +18,13 @@ struct HistoryScreen: View {
            sort: [SortDescriptor(\Workout.completedAt, order: .reverse)])
     private var allWorkouts: [Workout]
 
+    /// The workout whose detail sheet is open.
+    ///
+    /// `.sheet(item:)`, never `isPresented` plus companion state — the Add
+    /// Template bug in docs/04-status.md was exactly that mistake, and it
+    /// shipped past a green suite while filing nothing.
+    @State private var presentedWorkout: Workout?
+
     private var workouts: [Workout] {
         WorkoutStats.completedWorkouts(from: allWorkouts)
     }
@@ -56,8 +63,19 @@ struct HistoryScreen: View {
                 ForEach(monthSections, id: \.key) { section in
                     Section {
                         ForEach(section.workouts, id: \.id) { workout in
-                            NavigationLink {
-                                WorkoutDetailScreen(workout: workout)
+                            // A SHEET, not a NavigationLink push. History is
+                            // somewhere you dip into and come back from — you
+                            // are scanning a list, you open one to look, you
+                            // dismiss it and carry on scanning. A push replaces
+                            // the list and makes returning a deliberate act;
+                            // a sheet keeps it a glance, and matches the
+                            // reference app.
+                            //
+                            // `.sheet(item:)`, never `isPresented` + companion
+                            // state — the lesson from the Add Template bug in
+                            // docs/04-status.md.
+                            Button {
+                                presentedWorkout = workout
                             } label: {
                                 WorkoutHistoryCard(workout: workout)
                             }
@@ -70,6 +88,22 @@ struct HistoryScreen: View {
             }
             .padding(.horizontal, Spacing.screenMargin)
             .padding(.bottom, Spacing.spacious)
+        }
+        .sheet(item: $presentedWorkout) { workout in
+            NavigationStack {
+                WorkoutDetailScreen(workout: workout)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button {
+                                presentedWorkout = nil
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .foregroundStyle(Theme.textPrimary)
+                            }
+                        }
+                    }
+            }
+            .preferredColorScheme(.dark)
         }
     }
 
