@@ -80,6 +80,17 @@ final class SyncEngine {
     /// line written to the local log (and to `Logger`) at the same time.
     private(set) var discardedEdits: [DiscardedLocalEdit] = []
 
+    /// Ids this run actually sent. Push confirms a row with `markSynced()`
+    /// BEFORE pull examines it — on purpose, so a crash between phases
+    /// does not re-send a row the server already has. That leaves
+    /// `needsSync` false on every dirty row this run handled, and
+    /// ConflictResolver told only the flag would see a clean row and
+    /// collapse every outcome to `.takeRemote`. This set is what was
+    /// true before the push, carried into the pull. It is not a second
+    /// dirty flag: the model column stays the source of truth for the
+    /// NEXT run; this memory dies with the run.
+    private var pushedThisRun: Set<UUID> = []
+
     private let discardLogger = Logger(
         subsystem: "us.aiagent4.MCPStrength",
         category: "sync.conflicts"
@@ -110,6 +121,7 @@ final class SyncEngine {
         defer { inFlight = false }
 
         discardedEdits = []
+        pushedThisRun = []
         // Point the cursor at this account BEFORE beginRun. `adopt` reloads
         // persisted state and would otherwise overwrite `.syncing` with
         // `.never` / `.upToDate`.
@@ -266,6 +278,10 @@ final class SyncEngine {
             let batch = Array(pairs[start..<end])
             try await transport.upsert(batch.map(\.1), into: table)
             for (model, _) in batch {
+                // Record BEFORE clearing the flag. The pull reads this
+                // set, not the flag, to decide whether the local row
+                // still has an edit worth protecting. See `pushedThisRun`.
+                pushedThisRun.insert(model.id)
                 model.markSynced()
             }
             try context.save()
@@ -585,14 +601,27 @@ final class SyncEngine {
         for row in rows {
             newest = SyncCursor.advanced(from: newest, seeing: row.serverUpdatedAt)
             if let existing = index[row.id] {
+                // The flag alone is a lie by this point: every row this
+                // run confirmed has already been markSynced. Dirtiness
+                // for THIS pull is the flag OR membership in the set
+                // push filled — what was true before the push. The
+                // resolver stays the decision; we just stop lying to it.
+                // `updatedAt` is untouched by markSynced, so that
+                // argument is still the local edit's real time.
+                let localIsDirty = existing.needsSync
+                    || pushedThisRun.contains(existing.id)
                 switch ConflictResolver.resolve(
                     localUpdatedAt: existing.updatedAt,
-                    localIsDirty: existing.needsSync,
+                    localIsDirty: localIsDirty,
                     remoteUpdatedAt: row.updatedAt
                 ) {
                 case .keepLocal:
-                    // Newer (or tied) unpushed local edit. Leave it dirty
-                    // so the next push sends it.
+                    // Newer (or tied) local edit. Leave the row as-is.
+                    // If this run already confirmed it, it is clean and
+                    // must stay clean — flipping the flag back on would
+                    // resend the same row on every subsequent run. If it
+                    // never left the device (PushFilter, a failed encode)
+                    // the flag is still set and the next run will retry.
                     continue
                 case .takeRemoteDiscardingLocalEdit:
                     // Last-write-wins is throwing away a real user edit.

@@ -238,32 +238,13 @@ struct SyncEngineTests {
 
     // MARK: - 5. Conflicts
     //
-    // BOTH CASES BELOW ARE KNOWN-FAILING, AND THE TESTS ARE RIGHT — THE ENGINE
-    // IS WRONG. They assert the conflict table in docs/06-sync.md § Conflicts,
-    // which ConflictResolver implements correctly and which the engine then
-    // cannot reach:
-    //
-    //   push runs before pull (deliberately), and a confirmed push calls
-    //   markSynced(). So by the time pull examines the same row, needsSync is
-    //   already false, ConflictResolver sees a CLEAN local row, and every
-    //   outcome collapses to .takeRemote. `.keepLocal` and
-    //   .takeRemoteDiscardingLocalEdit are unreachable for any row this run
-    //   pushed — which is every dirty row.
-    //
-    // Underneath that is the one that costs data: the server has NO
-    // last-write-wins guard (supabase/migrations/20260815120100_sync.sql
-    // stamps server_updated_at and clamps a far-future updated_at, and that is
-    // all), so an upsert overwrites unconditionally. A device holding a STALE
-    // edit therefore destroys a NEWER edit made elsewhere, and the "newer edit
-    // wins" contract is enforced nowhere.
-    //
-    // Marked known rather than deleted, disabled, or left red: withKnownIssue
-    // keeps the assertions running and self-unmasking, so the day the guard
-    // lands these start passing and Swift Testing reports the unexpected pass
-    // instead of quietly staying green. Remove the wrappers with the fix.
+    // Dirtiness for a pull is `needsSync || pushedThisRun`. Push runs first
+    // and a confirmed upsert calls markSynced(), so the flag alone would
+    // tell ConflictResolver every row this run sent is clean — and both
+    // `.keepLocal` and `.takeRemoteDiscardingLocalEdit` would collapse to
+    // `.takeRemote`. The set carries what was true before the push.
 
     @Test func aNewerDirtyLocalRowSurvivesAPull() async throws {
-        try await withKnownIssue("Unreachable until the server LWW guard lands — see the note above") {
         let context = try makeContext()
         let transport = FakeSyncTransport()
         let id = UUID()
@@ -281,12 +262,14 @@ struct SyncEngineTests {
         await engine.run(as: user)
 
         #expect(local.name == "Local edit")
-        #expect(local.needsSync == true, "keepLocal must leave the row dirty so it pushes")
-        }
+        // The content assertion is the point. needsSync is false because
+        // this run already confirmed the push — leaving the row dirty
+        // would resend it on every subsequent run, forever.
+        #expect(local.needsSync == false)
+        #expect(engine.discardedEdits.isEmpty)
     }
 
     @Test func anOlderDirtyLocalRowLosesAndIsLogged() async throws {
-        try await withKnownIssue("Unreachable until the server LWW guard lands — see the note above") {
         let context = try makeContext()
         let transport = FakeSyncTransport()
         let id = UUID()
@@ -310,16 +293,11 @@ struct SyncEngineTests {
         // failed count assertion traps on an empty array and takes the whole
         // test PROCESS down — every other test in the suite included. Unwrap
         // first: one red test is a result, a crashed runner is no result at all.
-        // `#expect` RECORDS and continues, so a bare `discardedEdits[0]` after a
-        // failed count assertion traps on an empty array and takes the whole
-        // test PROCESS down — every other test in the suite included. Unwrap
-        // first: one red test is a result, a crashed runner is no result at all.
         #expect(engine.discardedEdits.count == 1)
         let discarded = try #require(engine.discardedEdits.first)
         #expect(discarded.id == id)
         #expect(discarded.localUpdatedAt == base)
         #expect(discarded.remoteUpdatedAt == remoteAt)
-        }
     }
 
     @Test func aCleanLocalRowTakesTheRemoteEvenWhenTheRemoteIsOlder() async throws {
@@ -342,6 +320,98 @@ struct SyncEngineTests {
         #expect(local.name == "Older remote")
         #expect(local.needsSync == false)
         #expect(engine.discardedEdits.isEmpty, "a clean overwrite is not a discarded edit")
+    }
+
+    @Test func aRowPushedThisRunThenSupersededByANewerRemoteIsLogged() async throws {
+        // The discard path after a push: the flag is already clear, so
+        // without pushedThisRun this would be an ordinary takeRemote and
+        // the log would stay silent. Both timestamps have to be on the
+        // entry — "my template reverted" is unanswerable with only one.
+        let context = try makeContext()
+        let transport = FakeSyncTransport()
+        let id = UUID()
+        let localAt = base
+        let remoteAt = base.addingTimeInterval(60)
+
+        let local = TemplateFolder(id: id, name: "Sent then overwritten", order: 0)
+        local.updatedAt = localAt
+        local.needsSync = true
+        context.insert(local)
+
+        transport.seed([
+            folderRow(id: id, name: "Newer elsewhere", updatedAt: remoteAt, serverUpdatedAt: remoteAt),
+        ], into: "template_folders")
+
+        let (engine, _) = makeEngine(context: context, transport: transport)
+        await engine.run(as: user)
+
+        #expect(transport.upserted(SyncTemplateFolderRow.self, from: "template_folders").map(\.id) == [id])
+        #expect(local.name == "Newer elsewhere")
+        #expect(engine.discardedEdits.count == 1)
+        let discarded = try #require(engine.discardedEdits.first)
+        #expect(discarded.id == id)
+        #expect(discarded.entity == .templateFolders)
+        #expect(discarded.localUpdatedAt == localAt)
+        #expect(discarded.remoteUpdatedAt == remoteAt)
+    }
+
+    @Test func aSuccessfulPushWhoseRowComesBackUnchangedLogsNothing() async throws {
+        // The false-positive guard worth having: a confirmed push whose
+        // echo lands in the same pull (same id, same updatedAt) is not a
+        // discarded edit. Ties go to local, and nothing is logged.
+        let context = try makeContext()
+        let transport = FakeSyncTransport()
+        let id = UUID()
+
+        let local = TemplateFolder(id: id, name: "Mine", order: 0)
+        local.updatedAt = base
+        local.needsSync = true
+        context.insert(local)
+
+        transport.seed([
+            folderRow(id: id, name: "Mine", updatedAt: base, serverUpdatedAt: base),
+        ], into: "template_folders")
+
+        let (engine, _) = makeEngine(context: context, transport: transport)
+        await engine.run(as: user)
+
+        #expect(transport.upserted(SyncTemplateFolderRow.self, from: "template_folders").map(\.id) == [id])
+        #expect(local.name == "Mine")
+        #expect(local.needsSync == false)
+        #expect(engine.discardedEdits.isEmpty, "an unchanged echo is not a discarded edit")
+    }
+
+    @Test func anAcceptedPushThenANewerRemoteStillLogsADiscard() async throws {
+        // Tension (a): we do not ask the server what it actually accepted.
+        // FakeSyncTransport (and the live client) treat a non-throwing
+        // upsert as success, so this run cannot tell "the guard kept a
+        // newer row" from "our write landed and another device then won".
+        // The second case is a false log entry. We accept that: the log
+        // is local, the case is rare, and returning every upsert body to
+        // suppress it is more machinery than a diagnostic line is worth.
+        let context = try makeContext()
+        let transport = FakeSyncTransport()
+        let id = UUID()
+        let localAt = base
+        let remoteAt = base.addingTimeInterval(90)
+
+        let local = TemplateFolder(id: id, name: "Accepted locally", order: 0)
+        local.updatedAt = localAt
+        local.needsSync = true
+        context.insert(local)
+
+        transport.seed([
+            folderRow(id: id, name: "Later winner", updatedAt: remoteAt, serverUpdatedAt: remoteAt),
+        ], into: "template_folders")
+
+        let (engine, _) = makeEngine(context: context, transport: transport)
+        await engine.run(as: user)
+
+        #expect(!transport.upserted(SyncTemplateFolderRow.self, from: "template_folders").isEmpty)
+        #expect(engine.discardedEdits.count == 1)
+        let discarded = try #require(engine.discardedEdits.first)
+        #expect(discarded.localUpdatedAt == localAt)
+        #expect(discarded.remoteUpdatedAt == remoteAt)
     }
 
     // MARK: - 6. Echo trap
