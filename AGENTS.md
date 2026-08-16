@@ -4,12 +4,35 @@ Read this before changing anything. It is short on purpose — it routes you to 
 documentation and lists only the rules that are expensive to get wrong.
 
 **Read `docs/04-status.md` first.** It says what is built, what is half-built, and what was skipped
-deliberately, and it opens with the current state in one line. Its table points at the other six
-docs — the data model, the architecture, the MCP tool contract, the database, and sync. Do not
-re-derive from the code what those files already explain, and do not duplicate them into new files.
+deliberately, and it opens with the current state in one line. Do not re-derive from the code what
+these files already explain, and do not duplicate them into new files:
+
+| Doc | Answers |
+|---|---|
+| `docs/01-data-model.md` | Why the schema is shaped this way |
+| `docs/02-architecture.md` | Why Supabase, how sync works, observability |
+| `docs/03-mcp-tools.md` | The MCP tool contract |
+| `docs/04-status.md` | **What is built, what is half-built, what was skipped on purpose** |
+| `docs/05-database.md` | Why the Postgres schema differs from the SwiftData one |
+| `docs/06-sync.md` | How sync works on the client, and how it is made visible |
+| `~/ringer/docs/MODEL-NOTES.md` | Which worker models are good at what |
 
 The app is `MCPStrength/` — a native iOS workout logger, SwiftData locally, syncing to Supabase.
 Phase 2 is in progress: everything around sync exists, but **no row has ever travelled**.
+
+## The design reference
+
+Five folders of screenshots at the repo root — `Home screen/`, `Workout screen/`, `Edit Template/`,
+`Other main screens/`, `Settings accessed from profile page/` — are the visual spec, and they are
+tracked in git. The docs refer to them as "the reference". **Look at them before designing any
+screen**, particularly if you can display images; most agents working here cannot reach the running
+app, and this is the closest thing to seeing it.
+
+They are a reference, **not a specification to match pixel for pixel.** Several divergences are
+deliberate and reasoned in `docs/04-status.md` — Archive and Share are absent from the template menu
+because their behaviour was never designed, the "enable Health" hint is absent because it would
+point at a setting that does not exist, and PR counts are absent because a hardcoded zero reads as
+*you set no records*. **Check the docs before adding something because the reference has it.**
 
 ---
 
