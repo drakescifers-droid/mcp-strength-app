@@ -17,6 +17,22 @@ enum SetType: String, Codable, CaseIterable, Sendable {
 @Model
 final class TemplateFolder {
     var id: UUID
+
+    // MARK: Sync metadata
+    //
+    // Three columns, mirroring the server. The DEFAULTS are the load-bearing
+    // part and the reasoning is in Sync/Syncable.swift — in short: declaration
+    // -level defaults so SwiftData can lightweight-migrate an existing store,
+    // and `needsSync = true` so a migrated or newly created row is PUSHED
+    // rather than silently assumed clean.
+
+    /// Wall-clock time of the last local edit. The last-write-wins key.
+    var updatedAt: Date = Date.distantPast
+    /// Tombstone. Non-nil means deleted; the row stays so the delete can reach
+    /// devices that were offline when it happened.
+    var deletedAt: Date?
+    /// Has local changes the server has not confirmed.
+    var needsSync: Bool = true
     var name: String
     /// Position among folders, 0-based. Distinct from `Template.order`, which
     /// is position within a folder (or the unfiled list) — not a global rank.
@@ -54,6 +70,22 @@ final class TemplateFolder {
 @Model
 final class Template {
     var id: UUID
+
+    // MARK: Sync metadata
+    //
+    // Three columns, mirroring the server. The DEFAULTS are the load-bearing
+    // part and the reasoning is in Sync/Syncable.swift — in short: declaration
+    // -level defaults so SwiftData can lightweight-migrate an existing store,
+    // and `needsSync = true` so a migrated or newly created row is PUSHED
+    // rather than silently assumed clean.
+
+    /// Wall-clock time of the last local edit. The last-write-wins key.
+    var updatedAt: Date = Date.distantPast
+    /// Tombstone. Non-nil means deleted; the row stays so the delete can reach
+    /// devices that were offline when it happened.
+    var deletedAt: Date?
+    /// Has local changes the server has not confirmed.
+    var needsSync: Bool = true
     var name: String
     var note: String?
     /// Position within its folder (or within the unfiled list when `folder` is
@@ -109,6 +141,22 @@ final class Template {
 @Model
 final class TemplateExercise {
     var id: UUID
+
+    // MARK: Sync metadata
+    //
+    // Three columns, mirroring the server. The DEFAULTS are the load-bearing
+    // part and the reasoning is in Sync/Syncable.swift — in short: declaration
+    // -level defaults so SwiftData can lightweight-migrate an existing store,
+    // and `needsSync = true` so a migrated or newly created row is PUSHED
+    // rather than silently assumed clean.
+
+    /// Wall-clock time of the last local edit. The last-write-wins key.
+    var updatedAt: Date = Date.distantPast
+    /// Tombstone. Non-nil means deleted; the row stays so the delete can reach
+    /// devices that were offline when it happened.
+    var deletedAt: Date?
+    /// Has local changes the server has not confirmed.
+    var needsSync: Bool = true
     var order: Int
     var supersetGroupID: UUID?
     var note: String?
@@ -145,6 +193,22 @@ final class TemplateExercise {
 @Model
 final class TemplateSet {
     var id: UUID
+
+    // MARK: Sync metadata
+    //
+    // Three columns, mirroring the server. The DEFAULTS are the load-bearing
+    // part and the reasoning is in Sync/Syncable.swift — in short: declaration
+    // -level defaults so SwiftData can lightweight-migrate an existing store,
+    // and `needsSync = true` so a migrated or newly created row is PUSHED
+    // rather than silently assumed clean.
+
+    /// Wall-clock time of the last local edit. The last-write-wins key.
+    var updatedAt: Date = Date.distantPast
+    /// Tombstone. Non-nil means deleted; the row stays so the delete can reach
+    /// devices that were offline when it happened.
+    var deletedAt: Date?
+    /// Has local changes the server has not confirmed.
+    var needsSync: Bool = true
     var order: Int
     var setType: SetType
     var weight: Double?
