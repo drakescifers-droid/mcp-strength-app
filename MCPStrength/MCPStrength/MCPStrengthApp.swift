@@ -69,6 +69,10 @@ struct MCPStrengthApp: App {
     /// restart its session observation and drop back to `.loading` mid-use.
     @State private var auth = AuthController()
 
+    /// The backup state the Profile tab reads. Owned here for the same reason
+    /// as `auth`: it holds a per-user cursor that must survive view rebuilds.
+    @State private var sync = SyncStatus()
+
     var body: some Scene {
         WindowGroup {
             // AuthGate, not ContentView: the app proper is unreachable until a
@@ -79,6 +83,7 @@ struct MCPStrengthApp: App {
             // library is ready the moment the gate opens.
             AuthGate()
                 .environment(auth)
+                .environment(sync)
                 // The design tokens are a dark-only palette, sampled from the dark reference
                 // app (see Design/Theme.swift). System-provided chrome — navigation titles,
                 // pickers, keyboards — takes its colours from the environment colour scheme,
@@ -89,6 +94,15 @@ struct MCPStrengthApp: App {
                     // Idempotent — guarded inside, so the re-run SwiftUI may
                     // perform on reattach cannot start a second observer.
                     auth.start()
+                }
+                .onChange(of: auth.state) { _, state in
+                    // The sync cursor is per-account: pointing it at the signed
+                    // -in user is what stops one person resuming from another
+                    // person's position and skipping everything before it.
+                    switch state {
+                    case .signedIn(let userID, _): sync.adopt(userID: userID)
+                    default:                       sync.clearSession()
+                    }
                 }
         }
         .modelContainer(sharedModelContainer)

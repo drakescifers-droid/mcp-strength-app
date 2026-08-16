@@ -22,6 +22,7 @@ import Charts
 
 struct ProfileTab: View {
     @Environment(AuthController.self) private var auth
+    @Environment(SyncStatus.self) private var sync
 
     @Query(filter: #Predicate<Workout> { $0.deletedAt == nil },
            sort: [SortDescriptor(\Workout.startedAt, order: .reverse)])
@@ -90,6 +91,8 @@ struct ProfileTab: View {
                     .foregroundStyle(Theme.textPrimary)
             }
 
+            backupRow
+
             Button("Sign Out") { confirmingSignOut = true }
                 .buttonStyle(.tintedDestructive)
                 .disabled(auth.isBusy)
@@ -97,6 +100,45 @@ struct ProfileTab: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Spacing.comfortable)
         .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.card))
+    }
+
+    // MARK: - Backup state
+    //
+    // The whole point of docs/02-architecture.md § Observability: a failed push
+    // is indistinguishable from a successful one unless something says so. This
+    // is the detailed view; a failure ALSO shows a marker on the card title, so
+    // it is noticed without coming looking.
+    //
+    // Today this reads "Not backed up yet", and that is the truth rather than a
+    // placeholder — nothing syncs, so anything more reassuring would be a lie.
+
+    private var backupRow: some View {
+        HStack(alignment: .top, spacing: Spacing.compact) {
+            Image(systemName: syncSymbol)
+                .font(Typography.secondary)
+                .foregroundStyle(sync.state.demandsAttention ? Theme.destructive : Theme.textSecondary)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(sync.state.title)
+                    .font(Typography.secondary.weight(.semibold))
+                    .foregroundStyle(sync.state.demandsAttention ? Theme.destructive : Theme.textPrimary)
+                Text(sync.state.detail())
+                    .font(Typography.secondary)
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var syncSymbol: String {
+        switch sync.state {
+        case .never:     "icloud.slash"
+        case .syncing:   "arrow.triangle.2.circlepath"
+        case .upToDate:  "checkmark.icloud"
+        case .pending:   "clock.arrow.circlepath"
+        case .failed:    "exclamationmark.icloud"
+        }
     }
 
     // MARK: - Total
@@ -158,6 +200,7 @@ struct ProfileTab: View {
 #Preview {
     ProfileTab()
         .environment(AuthController())
+        .environment(SyncStatus())
         .modelContainer(for: [
             Exercise.self,
             TemplateFolder.self,
