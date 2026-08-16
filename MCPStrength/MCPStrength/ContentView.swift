@@ -23,7 +23,9 @@ struct ContentView: View {
     @State private var activeWorkout: Workout?
 
     // Start Workout is the middle tab (index 2 of 5) and the app's home.
-    @State private var selectedTab = 2
+    // In UI preview mode a launch argument can open straight onto any tab, so
+    // screenshotting a screen does not depend on driving taps by coordinate.
+    @State private var selectedTab = UIPreviewMode.initialTab ?? 2
 
     var body: some View {
         ZStack {

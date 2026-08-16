@@ -41,6 +41,22 @@ enum WorkoutStats {
         return BestSet(weight: best.weight, reps: best.reps)
     }
 
+    /// The best set of an exercise that carries NO WEIGHT — pull-ups, crunches,
+    /// anything reps-only. Most reps wins.
+    ///
+    /// This exists because `bestSet` requires both weight AND reps, so a
+    /// bodyweight exercise returned nil and the history card dropped the row
+    /// ENTIRELY: three sets of pull-ups logged, and the session summary did not
+    /// mention them. Found by looking at the screen, which is the only way this
+    /// class of bug ever gets found — it needs content of a shape the happy
+    /// path does not produce.
+    static func bestRepCount(for workoutExercise: WorkoutExercise) -> Int? {
+        workoutExercise.liveSets
+            .filter(\.isCompleted)
+            .compactMap(\.reps)
+            .max()
+    }
+
     // MARK: - Total volume
 
     /// Sum of `weight × reps` over `workout`'s COMPLETED, LIVE sets only. An

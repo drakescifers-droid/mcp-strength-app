@@ -25,6 +25,19 @@ struct AuthGate: View {
     @Environment(AuthController.self) private var auth
 
     var body: some View {
+        // DEBUG-only, and only with an explicit launch argument. See
+        // Auth/UIPreviewMode.swift for why this exists and why it cannot reach
+        // a released build. It skips the GATE, not authentication — there is no
+        // session, so every request would still be rejected by RLS.
+        if UIPreviewMode.isEnabled {
+            ContentView()
+        } else {
+            gatedContent
+        }
+    }
+
+    @ViewBuilder
+    private var gatedContent: some View {
         switch auth.state {
         case .loading:
             AuthLoadingView()

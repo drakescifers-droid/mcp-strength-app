@@ -38,7 +38,16 @@ enum TemplateStarter {
         at date: Date = Date(),
         in context: ModelContext
     ) -> Workout {
-        let workout = Workout(name: template.name, startedAt: date, template: template)
+        // The template's note travels WITH the workout. It holds the plan's
+        // instructions — increasingly the MCP server's — and leaving it behind
+        // meant an AI could write guidance onto a template that vanished the
+        // moment the user started training from it.
+        let workout = Workout(
+            name: template.name,
+            startedAt: date,
+            note: template.note,
+            template: template
+        )
         context.insert(workout)
 
         for templateExercise in template.liveExercises {

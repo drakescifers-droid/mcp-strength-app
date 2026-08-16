@@ -221,6 +221,7 @@ struct SyncWorkoutRow: Codable, Sendable, Equatable {
     let completedAt: Date?
     let durationSeconds: Int
     let note: String?
+    let summary: String?
     let totalVolume: Double
     let prCount: Int
     let updatedAt: Date
@@ -228,7 +229,7 @@ struct SyncWorkoutRow: Codable, Sendable, Equatable {
     var serverUpdatedAt: Date?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, note
+        case id, name, note, summary
         case userID = "user_id"
         case templateID = "template_id"
         case startedAt = "started_at"
@@ -476,6 +477,7 @@ enum SyncRowMapper {
             completedAt: workout.completedAt,
             durationSeconds: workout.durationSeconds,
             note: workout.note,
+            summary: workout.summary,
             totalVolume: workout.totalVolume,
             prCount: workout.prCount,
             updatedAt: workout.updatedAt,

@@ -95,6 +95,19 @@ struct MCPStrengthApp: App {
                     // perform on reattach cannot start a second observer.
                     auth.start()
                 }
+                .task {
+                    // Preview launches have no session, so nothing would ever
+                    // point the sync status at a user. Do it here so the
+                    // Profile tab's backup card renders like a signed-in one.
+                    if UIPreviewMode.isEnabled {
+                        sync.adopt(userID: UIPreviewMode.previewUserID)
+                        #if DEBUG
+                        if UIPreviewMode.wantsFixtures {
+                            UIPreviewFixtures.install(in: sharedModelContainer)
+                        }
+                        #endif
+                    }
+                }
                 .onChange(of: auth.state) { _, state in
                     // The sync cursor is per-account: pointing it at the signed
                     // -in user is what stops one person resuming from another

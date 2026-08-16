@@ -210,33 +210,14 @@ struct ActiveWorkoutScreen: View {
     // straight from the model — this view never generates or renames it.
     private var workoutHeaderBlock: some View {
         VStack(alignment: .leading, spacing: Spacing.compact) {
-            HStack(spacing: Spacing.compact) {
-                Text(workout.name)
-                    .font(Typography.title)
-                    .foregroundStyle(Theme.textPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                // A note about the SESSION, not an exercise — "slept badly",
-                // "gym was packed". It matters more than it looks: it is what
-                // explains a bad session to anyone reading the numbers later,
-                // including the MCP server, which cannot tell a bad night from
-                // a downward trend without it.
-                Button {
-                    editingWorkoutNote = true
-                } label: {
-                    Label(
-                        (workout.note ?? "").isEmpty ? "Add Note" : "Edit Note",
-                        systemImage: "doc.text"
-                    )
-                    .labelStyle(.iconOnly)
-                    .font(Typography.body)
-                    .foregroundStyle(Theme.accent)
-                    .padding(.horizontal, Spacing.compact)
-                    .padding(.vertical, 4)
-                    .background(Theme.accentFill, in: .rect(cornerRadius: Radius.badge))
-                }
-                .accessibilityLabel((workout.note ?? "").isEmpty ? "Add workout note" : "Edit workout note")
-            }
+            // The header DISPLAYS the session note; the button to write one
+            // lives at the bottom, next to Finish. Two entry points for the
+            // same field would be clutter, and the bottom is where the note
+            // actually gets written.
+            Text(workout.name)
+                .font(Typography.title)
+                .foregroundStyle(Theme.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             if let note = workout.note, !note.isEmpty {
                 ExpandableNote(text: note, kind: .session)
@@ -283,10 +264,25 @@ struct ActiveWorkoutScreen: View {
             Button("Add Exercises") { showingExercisePicker = true }
                 .buttonStyle(.tintedAccent)
 
+            // A SUMMARY note belongs here, not at the top. It is written at the
+            // END of a session — "slept badly", "gym was packed, rushed the
+            // last two" — so the entry point sits where the thumb already is
+            // when finishing, immediately above Cancel and a scroll from
+            // Finish. Putting it in the header meant scrolling back up to write
+            // the one thing you only know once you are done.
+            Button(hasSessionNote ? "Edit Workout Note" : "Add Workout Note") {
+                editingWorkoutNote = true
+            }
+            .buttonStyle(.tintedAccent)
+
             Button("Cancel Workout") { showingCancelConfirm = true }
                 .buttonStyle(.tintedDestructive)
         }
         .opacity(isReordering ? 0.4 : 1)
+    }
+
+    private var hasSessionNote: Bool {
+        !(workout.note ?? "").isEmpty
     }
 
     // MARK: - Derived

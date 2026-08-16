@@ -145,6 +145,7 @@ enum SyncRowApply {
         workout.completedAt = row.completedAt
         workout.durationSeconds = row.durationSeconds
         workout.note = row.note
+        workout.summary = row.summary
         workout.totalVolume = row.totalVolume
         workout.prCount = row.prCount
         workout.template = template

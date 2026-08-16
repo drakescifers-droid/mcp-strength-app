@@ -236,9 +236,19 @@ private struct WorkoutHistoryCard: View {
     // MARK: - Best set table
 
     private var bestSetTable: some View {
-        let rows = sortedExercises.compactMap { exercise -> (exercise: WorkoutExercise, best: WorkoutStats.BestSet)? in
-            guard let best = WorkoutStats.bestSet(for: exercise) else { return nil }
-            return (exercise, best)
+        // An exercise with no weight still HAPPENED. Requiring a
+        // weight-and-reps best set dropped bodyweight work from the summary
+        // silently — three sets of pull-ups logged and not mentioned. The
+        // summary text is resolved per exercise instead, so a reps-only
+        // exercise reads "8 reps" rather than vanishing.
+        let rows = sortedExercises.compactMap { exercise -> (exercise: WorkoutExercise, best: String)? in
+            if let best = WorkoutStats.bestSet(for: exercise) {
+                return (exercise, PreviousText.format(.init(weight: best.weight, reps: best.reps)))
+            }
+            if let reps = WorkoutStats.bestRepCount(for: exercise) {
+                return (exercise, reps == 1 ? "1 rep" : "\(reps) reps")
+            }
+            return nil
         }
 
         return VStack(spacing: 0) {
@@ -262,10 +272,10 @@ private struct WorkoutHistoryCard: View {
         .padding(.bottom, Spacing.compact)
     }
 
-    private func tableRow(for workoutExercise: WorkoutExercise, best: WorkoutStats.BestSet) -> some View {
+    private func tableRow(for workoutExercise: WorkoutExercise, best: String) -> some View {
         let exerciseName = workoutExercise.exercise?.name ?? "Unknown Exercise"
         let setCount = workoutExercise.liveSets.count
-        let bestText = PreviousText.format(.init(weight: best.weight, reps: best.reps))
+        let bestText = best
 
         return HStack {
             Text("\(setCount) × \(exerciseName)")

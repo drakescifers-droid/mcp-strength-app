@@ -29,7 +29,25 @@ final class Workout {
     var startedAt: Date
     var completedAt: Date?
     var durationSeconds: Int
+
+    // MARK: The two workout-level notes
+    //
+    // They are NOT two entry points to one field. They differ in author,
+    // direction and moment, and collapsing them would leave an AI reading
+    // history unable to tell its own instruction from the user's report of how
+    // it went — poisoning the judgement both exist to support.
+    //
+    //   note    — INSTRUCTIONS GOING IN. Written by the plan (copied from
+    //             Template.note when a workout starts) or by the MCP server.
+    //             Read before and during: "focus on tempo, you are deloading".
+    //   summary — FEEDBACK COMING OUT. Written by the user at the end, read
+    //             later by the AI: "slept badly, everything felt heavy". This
+    //             is what distinguishes a bad night from a downward trend.
+
+    /// Instructions for this session. Carried from the template at start.
     var note: String?
+    /// The user's closing note about how the session went.
+    var summary: String? 
     var totalVolume: Double
     var prCount: Int
 
@@ -45,6 +63,7 @@ final class Workout {
         completedAt: Date? = nil,
         durationSeconds: Int = 0,
         note: String? = nil,
+        summary: String? = nil,
         totalVolume: Double = 0,
         prCount: Int = 0,
         template: Template? = nil
@@ -55,6 +74,7 @@ final class Workout {
         self.completedAt = completedAt
         self.durationSeconds = durationSeconds
         self.note = note
+        self.summary = summary
         self.totalVolume = totalVolume
         self.prCount = prCount
         self.template = template
