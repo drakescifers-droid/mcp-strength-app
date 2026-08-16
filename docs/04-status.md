@@ -95,10 +95,17 @@ right.**
 ### Traps that will bite the transport specifically
 
 - **Pull on `server_updated_at` with a five-second overlap window, never on `updated_at`** (`05`).
-- **Nothing calls `markEdited` at mutation sites yet.** Harmless *only* because `needsSync`
-  defaults to true and nothing clears it. The moment the engine clears flags after a successful
-  push, every mutation site that does not set it stops syncing — silently, with the UI reporting
-  everything is backed up. **This is the nastiest scheduled failure in the codebase.**
+- **`markEdited` is called on the active-workout path ONLY.** Nine call sites, all in
+  `ActiveWorkoutScreen` and `WorkoutFinishing`. Every other edit site sets no flag: renaming a
+  folder or a template (`StartWorkoutTab.swift:299`, `:309`), reordering templates or moving one
+  between folders (`:437`–`:442`), and the template name on save (`TemplateEditorScreen.swift:473`).
+  Creating and deleting are already covered — `needsSync` defaults to `true` on every `@Model` and
+  `markDeleted` sets it — so the hole is **edits to rows that already exist**, and it is harmless
+  *only* because nothing clears the flag yet. The moment the engine calls `markSynced` after a
+  successful push, those edits stop syncing — silently, with the UI reporting everything is backed
+  up. **This is the nastiest scheduled failure in the codebase. Close it in the same change that
+  adds the transport, not after it** — shipping the transport first writes the bug and its fix into
+  two different sessions, with a window in between where the app lies about your data being safe.
 - **`TemplateEditorScreen.save()` replaces a template's whole subtree on every save**, so each edit
   would tell the server the contents were deleted and recreated with fresh ids. Fix by diffing
   before the engine ships.
@@ -146,8 +153,6 @@ ringer `docs/MODEL-NOTES.md`.
 - Creating an account, the confirmation email, and password reset — **email confirmation is
   currently DISABLED on the project** because the confirmation link pointed at `localhost:3000`.
   Must be re-enabled before launch, together with deep links.
-
-**Phases 3–4 — not started.** The real multi-user MCP server, then product.
 
 > **When Apple/Google/Facebook sign-in is added, LINK the identity to the existing account.** Drake
 > intends to offer all three, which makes Sign in with Apple mandatory rather than optional (Apple
