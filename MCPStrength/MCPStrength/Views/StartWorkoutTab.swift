@@ -256,6 +256,7 @@ struct StartWorkoutTab: View {
         Menu {
             Button(folder.isCollapsed ? "Expand Folder" : "Collapse Folder") {
                 folder.isCollapsed.toggle()
+                folder.markEdited()
             }
             Button("Add Template") {
                 editorTarget = EditorTarget(template: nil, folder: folder)
@@ -297,6 +298,7 @@ struct StartWorkoutTab: View {
             return
         }
         folder.name = name
+        folder.markEdited()
         renamingFolder = nil
     }
 
@@ -307,6 +309,7 @@ struct StartWorkoutTab: View {
             return
         }
         template.name = name
+        template.markEdited()
         renamingTemplate = nil
     }
 
@@ -435,11 +438,14 @@ struct StartWorkoutTab: View {
         let byID = Dictionary(uniqueKeysWithValues: templates.map { ($0.id, $0) })
         for (i, tid) in result.source.enumerated() {
             byID[tid]?.order = i
+            byID[tid]?.markEdited()
         }
         for (i, tid) in result.destination.enumerated() {
             byID[tid]?.order = i
+            byID[tid]?.markEdited()
         }
         moved.folder = destFolder
+        moved.markEdited()
         return true
     }
 }

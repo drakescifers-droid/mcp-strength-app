@@ -485,6 +485,7 @@ struct ActiveWorkoutScreen: View {
         let byID = Dictionary(uniqueKeysWithValues: workout.liveExercises.map { ($0.id, $0) })
         for (i, eid) in result.destination.enumerated() {
             byID[eid]?.order = i
+            byID[eid]?.markEdited()
         }
         return true
     }
@@ -561,10 +562,10 @@ private struct ExerciseBlock: View {
                 VStack(spacing: 0) {
                     ForEach(Array(sortedSets.enumerated()), id: \.element.id) { index, set in
                         SetRow(
-                            setType: Binding(get: { set.setType }, set: { set.setType = $0 }),
+                            setType: Binding(get: { set.setType }, set: { set.setType = $0; set.markEdited() }),
                             setNumber: workingNumbers[index],
                             previousText: previousText(for: set, position: index),
-                            weight: Binding(get: { set.weight }, set: { set.weight = $0 }),
+                            weight: Binding(get: { set.weight }, set: { set.weight = $0; set.markEdited() }),
                             prescription: Binding(
                                 get: { RepRange.fromWorkout(reps: set.reps) },
                                 set: { newValue in
@@ -575,10 +576,11 @@ private struct ExerciseBlock: View {
                                         if case .fixed(let n) = range { return n }
                                         return nil
                                     }
+                                    set.markEdited()
                                 }
                             ),
                             allowRange: false,
-                            rpe: Binding(get: { set.rpe }, set: { set.rpe = $0 }),
+                            rpe: Binding(get: { set.rpe }, set: { set.rpe = $0; set.markEdited() }),
                             trailing: .completion(
                                 isCompleted: set.isCompleted,
                                 onToggle: { toggleComplete(set) }
@@ -654,6 +656,7 @@ private struct ExerciseBlock: View {
     private func toggleComplete(_ set: WorkoutSet) {
         set.isCompleted.toggle()
         set.completedAt = set.isCompleted ? Date() : nil
+        set.markEdited()
         // Starting a rest only fires when the set becomes complete —
         // unchecking does not start one.
         if set.isCompleted {
