@@ -22,6 +22,11 @@ struct ContentView: View {
     @Environment(\.modelContext) private var context
     @State private var activeWorkout: Workout?
 
+    /// Optional because `MCPStrengthApp` creates the engine in a `.task`, so
+    /// it is absent on the first frame (see `optionalEnvironment` there).
+    @Environment(SyncEngine.self) private var engine: SyncEngine?
+    @Environment(AuthController.self) private var auth
+
     // Start Workout is the middle tab (index 2 of 5) and the app's home.
     // In UI preview mode a launch argument can open straight onto any tab, so
     // screenshotting a screen does not depend on driving taps by coordinate.
@@ -34,13 +39,38 @@ struct ContentView: View {
             if let activeWorkout {
                 ActiveWorkoutScreen(
                     workout: activeWorkout,
-                    onFinish: { self.activeWorkout = nil },
+                    onFinish: {
+                        self.activeWorkout = nil
+                        syncAfterFinish()
+                    },
                     onCancel: { self.activeWorkout = nil }
                 )
                 .transition(.opacity)
             }
         }
         .animation(.default, value: activeWorkout != nil)
+    }
+
+    /// The third sync trigger, alongside launch and foreground in
+    /// `MCPStrengthApp`. It belongs here rather than inside
+    /// `ActiveWorkoutScreen` for the same reason the mutations do: the screen
+    /// reports that it finished and this view decides what that means, so the
+    /// logging screen stays ignorant of whether a backend exists at all.
+    ///
+    /// Finishing is the ONLY moment a workout becomes eligible to push —
+    /// `PushFilter` blocks an unfinished one and everything under it — so
+    /// without this trigger a session just logged would sit on the phone until
+    /// the app was next backgrounded and reopened. That is precisely the window
+    /// docs/06-sync.md exists to close: the app has the only copy and says
+    /// nothing about it.
+    ///
+    /// Cancel deliberately does NOT sync. A cancelled workout is hard-deleted
+    /// and never left the device, so there is nothing to send.
+    private func syncAfterFinish() {
+        guard !UIPreviewMode.isEnabled else { return }
+        guard let engine else { return }
+        guard case .signedIn(let userID, _) = auth.state else { return }
+        Task { await engine.run(as: userID) }
     }
 
     // MARK: - Tab view
@@ -125,4 +155,8 @@ struct ContentView: View {
             MeasurementType.self,
             MeasurementEntry.self,
         ], inMemory: true)
+        // Non-optional in the view, so a preview that finishes a workout would
+        // trap without it. The SyncEngine is deliberately NOT injected: it is
+        // optional by design, and a preview has no session for it to sync with.
+        .environment(AuthController())
 }
