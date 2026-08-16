@@ -128,6 +128,41 @@ diagnosable rather than spooky. So the discard is written to a local log with bo
 both values, per `02-architecture.md` § Observability. The log is local; nothing about a discarded
 edit needs to leave the device.
 
+### The table above is the client half. The server has to enforce it too.
+
+The client resolver only runs on a PULLED row. A PUSHED row is just an upsert, and for a while the
+server had no opinion about which edit won — it overwrote unconditionally. So a device holding a
+stale edit destroyed a newer edit made on another device, and the table above described something
+nothing implemented.
+
+A `BEFORE UPDATE` trigger now cancels any write whose `updated_at` is older than the row it would
+replace (`supabase/migrations/20260816140000_last_write_wins.sql`). Three properties of it are
+load-bearing and are argued in that file rather than repeated here: a suppressed write must not
+bump `server_updated_at` (it is every device's pull cursor), tombstones must still pass, and ties
+are allowed through because housekeeping writes deliberately leave `updated_at` alone.
+
+### Push-before-pull hides the local flag, so the engine carries it
+
+A run pushes first, and a confirmed push calls `markSynced()`. So by the time the pull examines a
+row, **this run's own push has already cleared the flag the conflict decision wants to read.** Read
+naively, `needsSync` is false for every row the run sent — which is every dirty row — and all three
+outcomes above collapse to `.takeRemote`, making `.keepLocal` and
+`.takeRemoteDiscardingLocalEdit` unreachable in normal operation.
+
+The engine therefore records the ids it sent this run and decides dirtiness as *flag OR sent*.
+`updatedAt` needs no such treatment: `markSynced` clears the flag and touches nothing else.
+
+> **Do not "fix" this by leaving the row dirty after a confirmed push.** It makes the obvious test
+> pass and re-sends the same row on every subsequent run, forever — an unreachable branch traded
+> for an infinite upload loop, and no structural check can see it.
+
+One imprecision is accepted deliberately: a row pushed successfully and *then* superseded by a
+newer remote edit inside the same pull is logged as a discard, though nothing was discarded. The
+common case is already silent, because an echo of our own write carries the same `updatedAt` and
+ties go to local, so this needs two devices writing inside one pull window. The alternative —
+`upsert(returning: .representation)`, inferring rejection from an absent row — couples the client
+to the guard's internals for the sake of a local diagnostic log.
+
 ---
 
 ## The visible sync state

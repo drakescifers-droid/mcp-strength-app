@@ -36,12 +36,16 @@ and a five-tab shell.
 true today — with the standing caveat that it should **not** hold real training data until Phase 2
 provides sync and backup, because a local-only store has no recovery story.
 
-**Phase 2 — in progress. Everything except the transport. Not one row has ever travelled.**
+**Phase 2 — in progress. The transport is built and wired; nothing has been run against the real
+project yet.**
 
 > **START HERE IN A NEW SESSION.** The one-line state: the database is live, the app requires
-> sign-in, deletes are soft, both directions of row mapping are written and tested, and the
-> per-exercise menu works — but **nothing has ever been sent to or received from the server.**
-> The remaining work in this phase is the network layer and the loop that drives it.
+> sign-in, deletes are soft, both mapping directions work, and **the transport now exists and is
+> called** — claim → push → pull → report, triggered on launch, on foreground, and on finishing a
+> workout. Every layer is covered by tests against a fake transport and a throwaway Postgres.
+> **What has NOT happened is a single real round trip against `mcp-strength`.** No row has provably
+> travelled; only that the code which would carry it passes its tests. The next thing worth doing
+> is signing in on a simulator, logging one workout, and confirming the row appears in the project.
 
 ### Landed
 
@@ -58,6 +62,20 @@ provides sync and backup, because a local-only store has no recovery story.
   the per-account `SyncStatus`. The Profile tab says "Not backed up yet", truthfully.
 - **Both mapping directions.** `SyncRowMapper` (model → row) and `SyncRowApply` (row → model),
   the latter built by a Ringer worker and reviewed here.
+- **THE TRANSPORT, and the loop that drives it.** `SyncClient.swift` is the network layer behind a
+  protocol — behind one deliberately, because an engine reachable only through a live project and a
+  real account is an engine nobody tests. `SyncEngine.swift` is claim → push → pull → report. It
+  calls the existing pure rules rather than re-deriving them (`SyncEntity`, `SyncCursor`,
+  `PushFilter`, `ConflictResolver`, both mappers). Triggered on launch, on foreground, and on
+  finishing a workout — that third one matters most, because finishing is the only moment a workout
+  becomes eligible to push at all.
+- **Last-write-wins, actually enforced.** A `BEFORE UPDATE` trigger refuses a stale write
+  (`20260816140000_last_write_wins.sql`, 15 assertions across two tables), and the engine carries
+  what was true before its own push into the pull so the client resolver stops being lied to. Both
+  halves are argued in `06-sync.md` § Conflicts.
+- **`markEdited` at every mutation site**, and **template saves diff instead of rebuilding**. Both
+  were open traps in this document; see the trap list below for what they were and why the shapes
+  are worth remembering.
 - **Finishing discards unticked sets**, and **unfinished workouts are ineligible to push** — see
   the decisions below.
 - **The per-exercise options menu**, one shared component with two callers, six of eight items.
@@ -83,45 +101,48 @@ right.**
 
 ### What is left, in order
 
-1. **THE TRANSPORT.** The network calls and the run loop. Everything around it is written and
-   tested; nothing calls it. Best remaining Ringer candidate — non-visual, well-specified,
-   executable check.
+1. **ONE REAL ROUND TRIP.** Sign in on a simulator, log a workout, and confirm the rows land in
+   `mcp-strength`. Everything below the network is tested; the network itself has only ever talked
+   to a fake. Until this happens the honest claim is "it should work", and the whole point of this
+   document is not to make claims like that. Watch specifically for: the claim step on a store that
+   predates the sign-in gate, RLS rejecting a row the client thought it owned, and enum or date
+   encodings that the fake accepted and Postgres will not.
 2. **A settings model**, which unblocks the two missing menu items. Decisions already made: the
    warm-up calculator is a **single global auto-generated config the user can then edit**,
    generating **3 sets at percentages**, rounded to the **nearest 5 lb**. `Preferences` needs a
    model for `exercise_preferences`, which exists as a table with no SwiftData model.
 3. **Canonical units**, before there is real history (`05`).
 
-### Traps that will bite the transport specifically
+### Traps around the transport
+
+The first three were open warnings until the transport landed and are now **closed**. They are kept
+here, briefly, because each one is a shape that will recur and the reasoning is the reusable part.
 
 - **Pull on `server_updated_at` with a five-second overlap window, never on `updated_at`** (`05`).
-- **`markEdited` covers EXERCISE-level edits on the active-workout path, and nothing else.** The
-  call sites are `ActiveWorkoutScreen`'s option handlers plus the workout at finish. Two whole
-  categories are missing:
-  - **Every set-level mutation, on the screen that already looks covered.** Weight, reps, RPE, set
-    type and the completion tick all write straight through their bindings
-    (`ActiveWorkoutScreen.swift:540`–`562`, `toggleComplete` at `:631`). Entering a weight and
-    ticking a set are the two most common actions in the entire app, and neither marks its row.
-  - **Everything outside that screen:** renaming a folder or a template (`StartWorkoutTab.swift:299`,
-    `:309`), reordering templates or moving one between folders (`:437`–`:442`), and the template
-    name on save (`TemplateEditorScreen.swift:473`).
-
-  Creating and deleting ARE covered — `needsSync` defaults to `true` on every `@Model` and
-  `markDeleted` sets it — so the hole is **edits to rows that already exist**, and it is harmless
-  today *only* because nothing clears the flag and `PushFilter` blocks unfinished workouts, so the
-  first push after Finish carries everything anyway. The exposure opens the moment a workout is
-  edited **after** it has been pushed once — correcting a weight in a finished session — and once
-  the engine calls `markSynced`, that correction never leaves the phone. Silently, with the UI
-  reporting everything is backed up. **This is the nastiest scheduled failure in the codebase.
-  Close it in the same change that adds the transport, not after it** — shipping the transport
-  first writes the bug and its fix into two different sessions, with a window in between where the
-  app lies about your data being safe.
-
-  The set-rest editor added alongside this note is the pattern to copy: it marks the set dirty at
-  the point of the write (`ActiveWorkoutScreen.swift`, the `editingSetRest` sheet).
-- **`TemplateEditorScreen.save()` replaces a template's whole subtree on every save**, so each edit
-  would tell the server the contents were deleted and recreated with fresh ids. Fix by diffing
-  before the engine ships.
+  Still true, and still the single most consequential line in the pull.
+- **CLOSED — `markEdited` at every mutation site.** It used to cover only EXERCISE-level edits on
+  the active-workout path. Every set-level write (weight, reps, RPE, set type, the completion
+  tick), the reorder loops, and the whole templates tab (folder and template renames, moving a
+  template between folders, collapse) marked nothing. Harmless only while nothing cleared the flag.
+  Closed in `f0d3274`, deliberately *before* the transport: shipping the engine first would have
+  written the bug and its fix into two sessions with a window between them where the app claimed
+  your data was backed up and it was not. **The shape to remember:** creating and deleting were
+  always covered (`needsSync` defaults to `true`; `markDeleted` sets it), so the hole was only ever
+  *edits to rows that already exist* — which is exactly the class a green test suite does not
+  notice.
+- **CLOSED — `TemplateEditorScreen.save()` rebuilt the whole subtree on every save**, which would
+  have told the server every exercise and set was deleted and recreated on each edit. The root
+  cause was identity, not the write: `loadDraft` minted a fresh `UUID()` for drafts hydrated from
+  existing rows, so a diff was impossible by construction. Fixed in `c0fd5ed`; the rule is a pure
+  function in `Workout/TemplateSaveDiff.swift` and the load-bearing test is that an unchanged save
+  produces no insertions and no tombstones.
+- **CLOSED, and it was a design gap rather than a coding one — nothing enforced last-write-wins.**
+  The server overwrote unconditionally, so a stale device destroyed a newer edit made elsewhere;
+  and the client's resolver could never see a dirty row because push runs first and clears the flag
+  before pull reads it. Both halves are fixed (`72dbcb2`, `e84d3b3`) and the reasoning lives in
+  `06-sync.md` § Conflicts. **The shape to remember:** the contract was written in a design doc,
+  implemented correctly on one side, and enforced nowhere — and it took building the caller to
+  notice. Two tests could not be made to pass, and that was the only symptom.
 - **Rows created before sign-in have no owner.** New installs cannot produce any; the store on this
   machine predates the gate.
 - **The seeded library exists twice** — local rows and global Postgres rows sharing baked UUIDs.
@@ -165,6 +186,16 @@ ringer `docs/MODEL-NOTES.md`.
 
 ### Not verified
 
+- **THE TRANSPORT HAS NEVER TALKED TO THE REAL PROJECT.** Every layer under it is tested — the
+  engine against a fake, the schema and the LWW guard against a throwaway Postgres — and the two
+  suites are green. But a fake accepts what Postgres might reject, so nothing here is evidence that
+  a row actually travels. This is the top of the "what is left" list for a reason.
+- **The second-account refusal has never been exercised.** `06-sync.md` leaves signing out with
+  unpushed changes as an OPEN QUESTION, so the engine takes the only safe reading available without
+  an answer: it records which account this device claimed for, and if a DIFFERENT account signs in
+  it refuses to push and reports the failure rather than guessing. A device that will not sync is a
+  far better failure than one that quietly hands one person's training history to another — but it
+  IS a refusal, and the real rule still needs deciding before anyone but Drake uses the app.
 - The per-exercise menu, sticky notes and truncation limits have not been used on a real device.
 - **The tappable rest divider has not been used on a real device either.** A hairline is far under
   the 44pt minimum target, so the hit area is expanded and then negated out of layout
