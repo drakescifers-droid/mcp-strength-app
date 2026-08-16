@@ -104,6 +104,20 @@ Swap `build` for `test -only-testing:MCPStrengthTests` to run the unit suite. Ch
 Claude Code, Cursor, and Xcode's agent all operate on this one working tree. They cannot see each
 other's context — this file and `docs/` are the only things passing between them.
 
+**Work out which one you are, because the capabilities genuinely differ:**
+
+| If you are… | You can | You cannot |
+|---|---|---|
+| A **Ringer worker** | Typecheck via `verify_compile.sh` | Run `xcodebuild` **at all** — the sandbox forbids it — so you can never run a test or see the app. Green means it compiles. |
+| **Claude Code** (terminal or desktop) | Build and run the full unit suite with `xcodebuild` | Reach the live workout screen or the template editor — preview mode lands on a tab and the tap tooling crash-loops |
+| **Cursor** | Same as Claude Code | Same blind spot |
+| **Xcode's agent** | Build, run the tests, **and run the app on a simulator and look at it** | — |
+
+If you are the agent inside Xcode, that last row is the point. Two screens — the live workout screen
+and the template editor — have never been visually verified by anyone, and every UI bug found in this
+project so far was found by looking at the running app rather than by a passing test. Checking a
+screen against `docs/04-status.md`'s "Not verified" list is worth more here than another green suite.
+
 - **One agent at a time, and commit before switching.** There are no branches; whoever saves last
   wins, silently.
 - **Builds collide.** Everything shares `DerivedData`, so concurrent builds slow each other down —
