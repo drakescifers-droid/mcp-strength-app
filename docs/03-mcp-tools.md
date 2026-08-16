@@ -200,8 +200,34 @@ Refines the sketch in `02`. Changes from that sketch are marked.
 | `get_templates` / `get_template` | Read plans | Accept UUID; name accepted only as a lookup that returns candidates when ambiguous |
 | `create_template` | Write plans — the transcript path | Errors on name collision (**new**) |
 | `update_template` | Revise plans | **Missing from the spike entirely**; "add 3x8 squats to my leg day" has no path today |
-| `get_workout_history` | Read history, date-filtered | Unchanged |
-| `get_exercise_progress` | Per-exercise time series | Unchanged |
+| `get_workout_history` | Read history, date-filtered | **Must return notes** — see below |
+| `get_exercise_progress` | Per-exercise time series | **Must return notes** — see below |
+
+> ### Notes are a two-way coaching channel, not metadata
+>
+> This is the requirement most easily lost, because "note" reads like a
+> throwaway string field. It is not one here.
+>
+> **The AI writes them as instructions.** `TemplateExercise.note` and
+> `.stickyNote` are how a generated plan says *"elbows tucked"* or *"stop one
+> short of failure"*. A sticky note stays pinned under the exercise for the
+> whole session; a plain note lives behind the options menu. So
+> `create_template` / `update_template` MUST accept both, per exercise — and
+> `Workout.note`, `WorkoutExercise.note` and `.stickyNote` carry the same text
+> into the performed session.
+>
+> **The user writes them back as context.** *"Slept badly"*, *"quad still
+> sore"*, *"gym was packed, rushed the last two sets"*. Without them the
+> reporting tools see a bad session and cannot distinguish it from a downward
+> trend — which is the single most likely way this product gives confidently
+> wrong coaching advice.
+>
+> So the READ tools must return them too. A history response that omits notes is
+> a response that has thrown away the explanation for its own numbers.
+>
+> **Phase 0 already lost these once.** The silent-field-discard row in the
+> findings table above is a set-level `note` vanishing while the call returned
+> success. That was the cheap version of this mistake.
 | `log_workout` | Conversational logging | Unchanged |
 | `create_program` | Ordered multi-week plan | **New.** Creates a folder with `kind: Program` plus its `ProgramDay` sequence — see `01` § Programs. Day slots reference templates by UUID and **may repeat** (a 3-day A/B split needs `A, B, A`) |
 | `delete_template` | Remove a plan | **New.** Soft, UUID-only, destructive-annotated — see below |

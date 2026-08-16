@@ -77,9 +77,7 @@ struct WorkoutDetailScreen: View {
             }
 
             if let note = workout.note, !note.isEmpty {
-                Text(note)
-                    .font(Typography.body)
-                    .foregroundStyle(Theme.textPrimary)
+                ExpandableNote(text: note, kind: .session)
                     .padding(.top, Spacing.compact)
             }
         }
@@ -152,6 +150,18 @@ private struct ExerciseDetailBlock: View {
                         .font(Typography.secondary.weight(.semibold))
                         .foregroundStyle(Theme.textSecondary)
                 }
+            }
+
+            // Notes are shown here because they are not only the user's — the
+            // MCP server writes coaching instructions into them, and an
+            // instruction you cannot read after the session is not an
+            // instruction. Sticky is tinted like its pinned form during the
+            // workout so the same note looks like the same note.
+            if let sticky = workoutExercise.stickyNote, !sticky.isEmpty {
+                ExpandableNote(text: sticky, kind: .exercise, tint: Theme.warmup)
+            }
+            if let note = workoutExercise.note, !note.isEmpty {
+                ExpandableNote(text: note, kind: .exercise)
             }
 
             VStack(alignment: .leading, spacing: 0) {

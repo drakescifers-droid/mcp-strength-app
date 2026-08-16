@@ -161,10 +161,12 @@ private struct WorkoutHistoryCard: View {
             header
             statsRow
             if let note = workout.note, !note.isEmpty {
-                Text(note)
-                    .font(Typography.secondary)
-                    .foregroundStyle(Theme.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                // `.exercise` — the SHORTER limit, on purpose, even though this
+                // is a session note. The card is a scannable summary in a list;
+                // 200 characters here would push the Exercise/Best Set table
+                // off the card and turn the list into a wall of prose. The full
+                // note is one tap away in the detail sheet.
+                ExpandableNote(text: note, kind: .exercise)
             }
             bestSetTable
         }

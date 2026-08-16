@@ -27,6 +27,14 @@ struct DraftExercise: Identifiable {
     let id: UUID
     var exercise: Exercise
     var defaultRestSeconds: Int
+    /// Carried through so Save does not lose it — same reason as DraftSet's
+    /// repRange/rpe below. Save REPLACES a template's exercises, so anything
+    /// the draft does not hold is erased on every edit. Before the options
+    /// menu these three had no UI and no way to be set, which made the loss
+    /// invisible; the menu makes it immediate.
+    var note: String?
+    var stickyNote: String?
+    var supersetGroupID: UUID?
     var sets: [DraftSet]
 }
 
@@ -74,6 +82,20 @@ struct TemplateEditorScreen: View {
     @State private var exercises: [DraftExercise] = []
     @State private var showingExercisePicker = false
 
+    /// Which option sheet is open, and for which exercise.
+    ///
+    /// One identifiable value rather than a boolean per sheet: the index and
+    /// the presentation cannot disagree, which is the `.sheet(item:)` lesson
+    /// from docs/04-status.md.
+    @State private var activeOption: ActiveOption?
+
+    struct ActiveOption: Identifiable {
+        enum Kind { case note, stickyNote, rest, replace }
+        let id = UUID()
+        let index: Int
+        let kind: Kind
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -93,6 +115,9 @@ struct TemplateEditorScreen: View {
             }
         }
         .background(Theme.surface)
+        .sheet(item: $activeOption) { option in
+            optionSheet(for: option)
+        }
         .sheet(isPresented: $showingExercisePicker) {
             ExercisesScreen(onSelect: { exercise in
                 addExercise(exercise)
@@ -135,6 +160,92 @@ struct TemplateEditorScreen: View {
         .padding(.vertical, Spacing.compact)
     }
 
+    // MARK: - Options sheets
+
+    @ViewBuilder
+    private func optionSheet(for option: ActiveOption) -> some View {
+        if exercises.indices.contains(option.index) {
+            let draft = exercises[option.index]
+            switch option.kind {
+            case .note:
+                ExerciseNoteSheet(
+                    isSticky: false,
+                    exerciseName: draft.exercise.name,
+                    initialText: draft.note
+                ) { exercises[option.index].note = $0 }
+
+            case .stickyNote:
+                ExerciseNoteSheet(
+                    isSticky: true,
+                    exerciseName: draft.exercise.name,
+                    initialText: draft.stickyNote
+                ) { exercises[option.index].stickyNote = $0 }
+
+            case .rest:
+                RestTimerSheet(
+                    exerciseName: draft.exercise.name,
+                    current: draft.defaultRestSeconds
+                ) { exercises[option.index].defaultRestSeconds = $0 }
+
+            case .replace:
+                // Swaps the movement and KEEPS the sets. Replacing an exercise
+                // means "I did this on a different machine", not "start over" —
+                // wiping the prescription would make it faster to delete and
+                // re-add, which is the tell that the feature is wrong.
+                ExercisesScreen(onSelect: { picked in
+                    exercises[option.index].exercise = picked
+                    activeOption = nil
+                })
+            }
+        }
+    }
+
+    // MARK: - Options menu
+
+    /// The menu owns no behaviour; this decides what each choice means HERE.
+    /// The live workout screen answers the same menu differently — it edits
+    /// persisted models, this edits in-memory drafts — which is exactly why the
+    /// menu itself is behaviour-free.
+    private func onOption(_ index: Int, _ option: ExerciseOption) {
+        guard exercises.indices.contains(index) else { return }
+        switch option {
+        case .addNote:
+            activeOption = ActiveOption(index: index, kind: .note)
+        case .addStickyNote:
+            activeOption = ActiveOption(index: index, kind: .stickyNote)
+        case .updateRestTimers:
+            activeOption = ActiveOption(index: index, kind: .rest)
+        case .replaceExercise:
+            activeOption = ActiveOption(index: index, kind: .replace)
+        case .createSuperset:
+            toggleSuperset(at: index)
+        case .removeExercise:
+            exercises.remove(at: index)
+        }
+    }
+
+    /// Group an exercise with the one above it, or leave the group it is in.
+    ///
+    /// Pairing with the PRECEDING exercise is the whole rule. A superset is
+    /// performed round-robin in list order, so "join the thing before me" is
+    /// both the common case and the only one expressible without a second
+    /// selection UI. Leaving is symmetrical: clear the id.
+    private func toggleSuperset(at index: Int) {
+        if exercises[index].supersetGroupID != nil {
+            exercises[index].supersetGroupID = nil
+            return
+        }
+        guard index > 0 else {
+            // Nothing above to pair with. A superset of one is not a superset,
+            // so this is a no-op rather than a group containing one exercise.
+            return
+        }
+        let existing = exercises[index - 1].supersetGroupID
+        let group = existing ?? UUID()
+        exercises[index - 1].supersetGroupID = group
+        exercises[index].supersetGroupID = group
+    }
+
     // MARK: - Name field
 
     private var nameField: some View {
@@ -161,9 +272,23 @@ struct TemplateEditorScreen: View {
         let workingNumbers = SetNumbering.workingNumbers(for: draft.sets.map(\.setType))
 
         VStack(alignment: .leading, spacing: Spacing.comfortable) {
-            Text(draft.exercise.name)
-                .font(Typography.body.weight(.semibold))
-                .foregroundStyle(Theme.accent)
+            HStack(spacing: Spacing.compact) {
+                Text(draft.exercise.name)
+                    .font(Typography.body.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                ExerciseOptionsMenu(
+                    hasNote: !(draft.note ?? "").isEmpty,
+                    hasStickyNote: !(draft.stickyNote ?? "").isEmpty,
+                    isInSuperset: draft.supersetGroupID != nil,
+                    onSelect: { onOption(index, $0) }
+                )
+            }
+
+            if let sticky = draft.stickyNote, !sticky.isEmpty {
+                ExpandableNote(text: sticky, kind: .exercise, tint: Theme.warmup)
+            }
 
             SetRowColumnHeader(trailingIcon: "lock.fill")
 
@@ -277,6 +402,9 @@ struct TemplateEditorScreen: View {
                             focusMetric: .totalVolume
                         ),
                         defaultRestSeconds: tx.defaultRestSeconds,
+                        note: tx.note,
+                        stickyNote: tx.stickyNote,
+                        supersetGroupID: tx.supersetGroupID,
                         sets: tx.liveSets
                             .sorted(by: { $0.order < $1.order })
                             .map { ts in
@@ -365,6 +493,9 @@ struct TemplateEditorScreen: View {
         for (exerciseOrder, draftExercise) in exercises.enumerated() {
             let tx = TemplateExercise(
                 order: exerciseOrder,
+                supersetGroupID: draftExercise.supersetGroupID,
+                note: draftExercise.note,
+                stickyNote: draftExercise.stickyNote,
                 defaultRestSeconds: draftExercise.defaultRestSeconds,
                 template: target,
                 exercise: draftExercise.exercise

@@ -23,6 +23,21 @@ struct ActiveWorkoutScreen: View {
     /// presentation cannot disagree.
     @State private var pendingDiscard: WorkoutFinishing.DiscardSummary?
 
+    /// Which option sheet is open, and for which exercise. Holds the EXERCISE,
+    /// not an index: this screen's list can be reordered mid-session, and an
+    /// index would silently start pointing at a different exercise.
+    @State private var activeOption: ActiveOption?
+
+    /// Whether the session-note editor is open.
+    @State private var editingWorkoutNote = false
+
+    struct ActiveOption: Identifiable {
+        enum Kind { case note, stickyNote, rest, replace }
+        let id = UUID()
+        let exercise: WorkoutExercise
+        let kind: Kind
+    }
+
     @Environment(\.modelContext) private var context
 
     let workout: Workout
@@ -79,6 +94,9 @@ struct ActiveWorkoutScreen: View {
                             },
                             onOpenRestControls: {
                                 showingRestControls = true
+                            },
+                            onOption: { option in
+                                handleOption(option, for: workoutExercise)
                             }
                         )
                         .dropDestination(for: String.self) { items, _ in
@@ -104,6 +122,19 @@ struct ActiveWorkoutScreen: View {
                 addExercise(exercise)
                 showingExercisePicker = false
             })
+        }
+        .sheet(item: $activeOption) { option in
+            optionSheet(for: option)
+        }
+        .sheet(isPresented: $editingWorkoutNote) {
+            ExerciseNoteSheet(
+                isSticky: false,
+                exerciseName: workout.name,
+                initialText: workout.note
+            ) {
+                workout.note = $0
+                workout.markEdited()
+            }
         }
         .sheet(isPresented: $showingRestControls) {
             RestControlsSheet(
@@ -179,9 +210,37 @@ struct ActiveWorkoutScreen: View {
     // straight from the model — this view never generates or renames it.
     private var workoutHeaderBlock: some View {
         VStack(alignment: .leading, spacing: Spacing.compact) {
-            Text(workout.name)
-                .font(Typography.title)
-                .foregroundStyle(Theme.textPrimary)
+            HStack(spacing: Spacing.compact) {
+                Text(workout.name)
+                    .font(Typography.title)
+                    .foregroundStyle(Theme.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                // A note about the SESSION, not an exercise — "slept badly",
+                // "gym was packed". It matters more than it looks: it is what
+                // explains a bad session to anyone reading the numbers later,
+                // including the MCP server, which cannot tell a bad night from
+                // a downward trend without it.
+                Button {
+                    editingWorkoutNote = true
+                } label: {
+                    Label(
+                        (workout.note ?? "").isEmpty ? "Add Note" : "Edit Note",
+                        systemImage: "doc.text"
+                    )
+                    .labelStyle(.iconOnly)
+                    .font(Typography.body)
+                    .foregroundStyle(Theme.accent)
+                    .padding(.horizontal, Spacing.compact)
+                    .padding(.vertical, 4)
+                    .background(Theme.accentFill, in: .rect(cornerRadius: Radius.badge))
+                }
+                .accessibilityLabel((workout.note ?? "").isEmpty ? "Add workout note" : "Edit workout note")
+            }
+
+            if let note = workout.note, !note.isEmpty {
+                ExpandableNote(text: note, kind: .session)
+            }
 
             HStack(spacing: Spacing.spacious) {
                 Label {
@@ -263,6 +322,82 @@ struct ActiveWorkoutScreen: View {
     /// to tick. Confirming every finish would be nagging; confirming none of
     /// them loses a set to a mis-tap. So the prompt appears only when a doomed
     /// set actually has values in it.
+    // MARK: - Exercise options
+
+    /// The same menu as the template editor, answered differently: this screen
+    /// edits PERSISTED models, so every change marks the row for sync and a
+    /// removal is a soft delete rather than dropping an array element.
+    private func handleOption(_ option: ExerciseOption, for exercise: WorkoutExercise) {
+        switch option {
+        case .addNote:
+            activeOption = ActiveOption(exercise: exercise, kind: .note)
+        case .addStickyNote:
+            activeOption = ActiveOption(exercise: exercise, kind: .stickyNote)
+        case .updateRestTimers:
+            activeOption = ActiveOption(exercise: exercise, kind: .rest)
+        case .replaceExercise:
+            activeOption = ActiveOption(exercise: exercise, kind: .replace)
+        case .createSuperset:
+            toggleSuperset(for: exercise)
+        case .removeExercise:
+            // Soft, unlike the discard at Finish. This row may already exist on
+            // the server if the workout was finished and reopened, and the
+            // cascade to its sets has to propagate either way.
+            SoftDelete.workoutExercise(exercise)
+        }
+    }
+
+    /// Pair with the exercise ABOVE, or leave the current group. See the
+    /// template editor's copy for the reasoning — a superset is round-robin in
+    /// list order, so "join the one before me" is the only rule that needs no
+    /// second selection UI.
+    private func toggleSuperset(for exercise: WorkoutExercise) {
+        let ordered = workout.liveExercises
+        guard let index = ordered.firstIndex(where: { $0.id == exercise.id }) else { return }
+
+        if exercise.supersetGroupID != nil {
+            exercise.supersetGroupID = nil
+            exercise.markEdited()
+            return
+        }
+        guard index > 0 else { return }
+        let previous = ordered[index - 1]
+        let group = previous.supersetGroupID ?? UUID()
+        previous.supersetGroupID = group
+        previous.markEdited()
+        exercise.supersetGroupID = group
+        exercise.markEdited()
+    }
+
+    @ViewBuilder
+    private func optionSheet(for option: ActiveOption) -> some View {
+        let exercise = option.exercise
+        let name = exercise.exercise?.name ?? "Exercise"
+        switch option.kind {
+        case .note:
+            ExerciseNoteSheet(isSticky: false, exerciseName: name, initialText: exercise.note) {
+                exercise.note = $0
+                exercise.markEdited()
+            }
+        case .stickyNote:
+            ExerciseNoteSheet(isSticky: true, exerciseName: name, initialText: exercise.stickyNote) {
+                exercise.stickyNote = $0
+                exercise.markEdited()
+            }
+        case .rest:
+            RestTimerSheet(exerciseName: name, current: exercise.defaultRestSeconds) {
+                exercise.defaultRestSeconds = $0
+                exercise.markEdited()
+            }
+        case .replace:
+            ExercisesScreen(onSelect: { picked in
+                exercise.exercise = picked
+                exercise.markEdited()
+                activeOption = nil
+            })
+        }
+    }
+
     private func finish() {
         let summary = WorkoutFinishing.discardSummary(for: workout)
         if summary.hasEnteredValues {
@@ -356,24 +491,49 @@ private struct ExerciseBlock: View {
     var onReorderEnded: () -> Void = {}
     let onStartRest: (UUID, Int) -> Void
     let onOpenRestControls: () -> Void
+    /// The menu selection, handled by the screen — this block owns no
+    /// behaviour of its own.
+    var onOption: (ExerciseOption) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.comfortable) {
-            // Name only today — this block has no stat chip or `...`
-            // menu. Full-width so the title row is the lift target,
-            // not just the glyph bounds of the name.
-            Text(workoutExercise.exercise?.name ?? "Unknown Exercise")
-                .font(Typography.body.weight(.semibold))
-                .foregroundStyle(Theme.accent)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .draggable(workoutExercise.id.uuidString) {
-                    Text(workoutExercise.exercise?.name ?? "Unknown Exercise")
-                        .font(Typography.body.weight(.semibold))
-                        .foregroundStyle(Theme.accent)
-                        .onAppear(perform: onReorderLift)
-                        .onDisappear(perform: onReorderEnded)
+            // The name is still the DRAG HANDLE — long-pressing it starts a
+            // reorder — so the menu button sits beside it rather than inside
+            // it. Putting a Menu inside a `.draggable` makes the two gestures
+            // fight: a long press has to be either a lift or a menu.
+            HStack(spacing: Spacing.compact) {
+                Text(workoutExercise.exercise?.name ?? "Unknown Exercise")
+                    .font(Typography.body.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .draggable(workoutExercise.id.uuidString) {
+                        Text(workoutExercise.exercise?.name ?? "Unknown Exercise")
+                            .font(Typography.body.weight(.semibold))
+                            .foregroundStyle(Theme.accent)
+                            .onAppear(perform: onReorderLift)
+                            .onDisappear(perform: onReorderEnded)
+                    }
+
+                // Hidden while reordering: the whole point of the collapse is
+                // to get the list small enough to drag across, and a row of
+                // menu buttons is noise you cannot tap mid-drag anyway.
+                if !isCollapsed {
+                    ExerciseOptionsMenu(
+                        hasNote: !(workoutExercise.note ?? "").isEmpty,
+                        hasStickyNote: !(workoutExercise.stickyNote ?? "").isEmpty,
+                        isInSuperset: workoutExercise.supersetGroupID != nil,
+                        onSelect: { onOption($0) }
+                    )
                 }
+            }
+
+            // A sticky note is pinned BELOW the name and stays visible while
+            // logging — that is the entire difference between it and a note,
+            // which lives behind the menu.
+            if let sticky = workoutExercise.stickyNote, !sticky.isEmpty, !isCollapsed {
+                ExpandableNote(text: sticky, kind: .exercise, tint: Theme.warmup)
+            }
 
             if !isCollapsed {
                 SetRowColumnHeader(trailingIcon: "checkmark")
