@@ -115,6 +115,13 @@ Each device keeps a `last_synced_at` cursor.
 - **Conflict:** compare `updated_at`, last write wins at record level
 - **Delete:** never hard-delete a synced row; set `deleted_at` and let it propagate
 
+> **The Pull line above is wrong, and is left in place so the correction is findable.** Pulling on
+> `updated_at` — a CLIENT wall clock — loses rows silently: a device with a slow clock writes a row
+> stamped in the past, and any device whose cursor has moved past that point never sees it again.
+> Pull on `server_updated_at`, which the server sets and no client can move backwards, with a small
+> overlap window. `updated_at` stays exactly right for the Conflict line. Full reasoning in
+> `05-database.md` § "Two timestamps"; the client side is `06-sync.md`.
+
 **Hard deletes only after a tombstone-retention window** (say 90 days), swept server-side — a
 device offline longer than that resyncs from scratch rather than resurrecting deleted rows.
 

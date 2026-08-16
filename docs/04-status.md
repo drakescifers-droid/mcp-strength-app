@@ -11,11 +11,12 @@ This is the one document that is expected to go stale, so it is deliberately nar
 | Why Supabase, how does sync work, what about observability? | `02-architecture.md` |
 | What is the MCP tool contract? | `03-mcp-tools.md` |
 | Why does the Postgres schema differ from the SwiftData one? | `05-database.md` |
+| How does sync work on the client, and how is it made visible? | `06-sync.md` |
 | Which worker models are good at what? | `~/ringer/docs/MODEL-NOTES.md` |
 | **What is built, what is half-built, and what did we skip on purpose?** | **this file** |
 
-Do not duplicate the other five here. If a design question is genuinely open, it belongs in
-`01`/`02`/`03`/`05` under their Open questions sections, not in this list.
+Do not duplicate the other six here. If a design question is genuinely open, it belongs in
+`01`/`02`/`03`/`05`/`06` under their Open questions sections, not in this list.
 
 ---
 
