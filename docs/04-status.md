@@ -126,8 +126,11 @@ right.**
   machine predates the gate.
 - **The seeded library exists twice** — local rows and global Postgres rows sharing baked UUIDs.
   `PushFilter` already excludes them; do not undo that.
-- **Do not run `xcodebuild` while a Ringer check is running.** The compile check uses ~36s of a
-  hard-coded 60s budget.
+- **Give any Ringer task whose check compiles a `check_timeout_s`.** The check budget used to be a
+  hard-coded 60s, which the ~36s compile check fitted only while nothing else was building — so a
+  concurrent `xcodebuild` pushed it over and the *model* was recorded as failing. It is now a
+  per-task manifest field (default still 60). Set it to ~300 on compile checks. Raising it removes
+  the false failure, **not** the contention: two compiles still slow each other down.
 
 ### Decisions made this session, with their reasoning
 

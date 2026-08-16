@@ -106,9 +106,13 @@ other's context — this file and `docs/` are the only things passing between th
 
 - **One agent at a time, and commit before switching.** There are no branches; whoever saves last
   wins, silently.
-- **Builds collide.** Everything shares `DerivedData`. Do not run `xcodebuild` while a Ringer check
-  is running — the compile check uses ~36s of a hard-coded 60s budget — and watch for Xcode
-  building in the background.
+- **Builds collide.** Everything shares `DerivedData`, so concurrent builds slow each other down —
+  watch for Xcode building in the background. Ringer tasks whose check compiles need
+  `check_timeout_s` set (~300) in the manifest, or a slow check is killed and scored as the model
+  failing.
+- **A green Ringer check means it COMPILES, not that it works.** `xcodebuild` cannot run inside a
+  Ringer worker's sandbox at all, so the check is a two-stage `swiftc` typecheck that never executes
+  a test. Run the real suite outside the sandbox before trusting a worker's output.
 - **Ringer routing is about cost, not capability** (`docs/04-status.md`). Mechanical, checkable work
   goes to a cheaper worker under supervision; **visual work does not** — a check cannot assert
   whether something looks right.
