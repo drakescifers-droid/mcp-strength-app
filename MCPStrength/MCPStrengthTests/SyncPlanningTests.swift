@@ -151,22 +151,97 @@ struct SyncPlanningTests {
 
     // MARK: - What gets pushed
 
+    // TemplateFolder, not Workout: these cover the GENERAL rule, and Workout
+    // now carries the unfinished-workout special case, which would make them
+    // test two things at once and fail for the wrong reason.
     @Test func aDirtyRowIsPushed() {
-        let workout = Workout(name: "Afternoon Workout")
-        #expect(PushFilter.shouldPush(workout))
+        #expect(PushFilter.shouldPush(TemplateFolder(name: "Q2 2026", order: 0)))
     }
 
     @Test func aCleanRowIsNotPushed() {
+        let folder = TemplateFolder(name: "Q2 2026", order: 0)
+        folder.markSynced()
+        #expect(!PushFilter.shouldPush(folder))
+    }
+
+    // MARK: - Unfinished workouts never leave the device
+
+    @Test func anUnfinishedWorkoutIsNotPushed() {
+        // The guarantee WorkoutFinishing's hard delete depends on. A workout in
+        // progress is a draft: sets appear, get retyped, get discarded at
+        // Finish. None of that belongs on the server.
         let workout = Workout(name: "Afternoon Workout")
-        workout.markSynced()
+        #expect(workout.completedAt == nil)
+        #expect(workout.needsSync, "fixture is clean, so the assertion below would be vacuous")
         #expect(!PushFilter.shouldPush(workout))
+    }
+
+    @Test func aFinishedWorkoutIsPushed() {
+        let workout = Workout(name: "Afternoon Workout")
+        workout.completedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        #expect(PushFilter.shouldPush(workout))
+    }
+
+    @Test func childrenOfAnUnfinishedWorkoutAreNotPushedEither() {
+        // Excluding only the workout row would still upload its sets, which is
+        // the half-session case this rule exists to prevent — and would leave
+        // orphans on the server pointing at a workout that never arrived.
+        let workout = Workout(name: "Afternoon Workout")
+        let exercise = WorkoutExercise(order: 0, workout: workout)
+        let set = WorkoutSet(order: 0, weight: 135, reps: 5, workoutExercise: exercise)
+
+        #expect(!PushFilter.shouldPush(exercise))
+        #expect(!PushFilter.shouldPush(set))
+
+        workout.completedAt = Date(timeIntervalSince1970: 1_800_000_000)
+
+        #expect(PushFilter.shouldPush(exercise))
+        #expect(PushFilter.shouldPush(set))
+    }
+
+    @Test func theWorkoutRuleAppliesThroughTheSyncableOverload() {
+        // The engine iterates a heterogeneous list; if the rule is not reached
+        // through `any Syncable`, it is decorative.
+        let workout = Workout(name: "Afternoon Workout")
+        let exercise = WorkoutExercise(order: 0, workout: workout)
+        let set = WorkoutSet(order: 0, workoutExercise: exercise)
+        for row in [workout, exercise, set] as [any Syncable] {
+            #expect(!PushFilter.shouldPush(row))
+        }
+    }
+
+    @Test func anOrphanedWorkoutChildIsNotPushed() {
+        // No workout means nothing can prove it is finished. Defaulting to
+        // "push it" would upload a set belonging to nothing.
+        let orphan = WorkoutSet(order: 0, weight: 135, reps: 5)
+        #expect(!PushFilter.shouldPush(orphan))
+    }
+
+    @Test func pendingCountIgnoresUnfinishedWorkouts() {
+        // Otherwise the UI reports "12 changes waiting" mid-session for a
+        // workout that is not going anywhere until you tap Finish.
+        let workout = Workout(name: "In progress")
+        let done = Workout(name: "Done")
+        done.completedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        #expect(PushFilter.pendingCount([workout, done]) == 1)
     }
 
     @Test func aTombstoneIsStillPushed() {
         // The delete IS the change. A tombstone that never leaves the device is
         // identical, from every other device's point of view, to never having
         // deleted anything.
+        let folder = TemplateFolder(name: "Q2 2026", order: 0)
+        folder.markSynced()
+        folder.markDeleted()
+        #expect(PushFilter.shouldPush(folder))
+    }
+
+    @Test func aDeletedFinishedWorkoutStillPushesItsTombstone() {
+        // The workout rule must not swallow deletes of workouts that DID reach
+        // the server, or deleting a session on one device would never reach the
+        // others.
         let workout = Workout(name: "Afternoon Workout")
+        workout.completedAt = Date(timeIntervalSince1970: 1_800_000_000)
         workout.markSynced()
         workout.markDeleted()
         #expect(PushFilter.shouldPush(workout))
@@ -211,7 +286,7 @@ struct SyncPlanningTests {
                      category: .barbell, isCustom: false, focusMetric: .totalVolume),
             Exercise(name: "Reverse Nordic", bodyPart: .legs,
                      category: .repsOnly, isCustom: true, focusMetric: .totalReps),
-            Workout(name: "Afternoon Workout"),
+            TemplateFolder(name: "Q2 2026", order: 0),
         ]
         #expect(PushFilter.pendingCount(rows) == 2)
     }

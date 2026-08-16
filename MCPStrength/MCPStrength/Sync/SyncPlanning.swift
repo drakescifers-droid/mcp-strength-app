@@ -165,12 +165,44 @@ enum PushFilter {
         exercise.needsSync && exercise.isCustom
     }
 
+    /// An UNFINISHED workout never leaves the device, and neither does anything
+    /// under it.
+    ///
+    /// A workout in progress is not a record of training, it is a draft — sets
+    /// appear, get retyped, get discarded at Finish. Uploading that would put
+    /// half a session on the server and, worse, would make the discard at
+    /// Finish unsafe: WorkoutFinishing HARD-deletes unticked sets, which is
+    /// only correct while those rows have never left the device.
+    ///
+    /// This is enforced here rather than by scheduling sync carefully. "Never
+    /// sync during a workout" is a rule someone has to remember and a
+    /// foreground event can violate by accident; "an unfinished workout is not
+    /// eligible" cannot be violated at all.
+    ///
+    /// Live session mirroring — a Watch showing the current set, heart rate
+    /// coming back — is a different transport (Bluetooth, on-device) and a
+    /// different problem. It does not belong on the path that talks to Postgres.
+    static func shouldPush(_ workout: Workout) -> Bool {
+        workout.needsSync && workout.completedAt != nil
+    }
+
+    static func shouldPush(_ exercise: WorkoutExercise) -> Bool {
+        exercise.needsSync && exercise.workout?.completedAt != nil
+    }
+
+    static func shouldPush(_ set: WorkoutSet) -> Bool {
+        set.needsSync && set.workoutExercise?.workout?.completedAt != nil
+    }
+
     /// Everything else is simply "has unconfirmed local changes".
     static func shouldPush(_ row: any Syncable) -> Bool {
-        if let exercise = row as? Exercise {
-            return shouldPush(exercise)
+        switch row {
+        case let exercise as Exercise:          shouldPush(exercise)
+        case let workout as Workout:            shouldPush(workout)
+        case let workoutExercise as WorkoutExercise: shouldPush(workoutExercise)
+        case let set as WorkoutSet:             shouldPush(set)
+        default:                                row.needsSync
         }
-        return row.needsSync
     }
 
     /// How many local changes are waiting — the number the UI reports.

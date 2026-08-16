@@ -18,6 +18,11 @@ import Combine
 /// the caller (ContentView) to the root — this screen does not decide whether
 /// the workout object survives; it only mutates it and reports.
 struct ActiveWorkoutScreen: View {
+    /// Set when Finish would throw away sets that have values typed in them.
+    /// `.alert(item:)`-shaped for the same reason sheets are: the value and the
+    /// presentation cannot disagree.
+    @State private var pendingDiscard: WorkoutFinishing.DiscardSummary?
+
     @Environment(\.modelContext) private var context
 
     let workout: Workout
@@ -113,6 +118,22 @@ struct ActiveWorkoutScreen: View {
         ) {
             Button("Cancel Workout", role: .destructive) { cancel() }
             Button("Keep Logging", role: .cancel) {}
+        }
+        // Driven BY the value, not by a separate flag: `presenting:` takes the
+        // summary itself, so the alert and the thing it describes cannot
+        // disagree. Same reasoning as .sheet(item:) in docs/04-status.md.
+        .alert(
+            "Discard unfinished sets?",
+            isPresented: Binding(
+                get: { pendingDiscard != nil },
+                set: { if !$0 { pendingDiscard = nil } }
+            ),
+            presenting: pendingDiscard
+        ) { _ in
+            Button("Discard and Finish", role: .destructive) { commitFinish() }
+            Button("Keep Logging", role: .cancel) { pendingDiscard = nil }
+        } message: { summary in
+            Text(discardMessage(for: summary))
         }
         .onReceive(ticker) { now = $0 }
     }
@@ -235,21 +256,53 @@ struct ActiveWorkoutScreen: View {
         context.insert(firstSet)
     }
 
+    /// Tapping Finish. Asks first ONLY when there is something to lose.
+    ///
+    /// Unticked sets are discarded on finish (WorkoutFinishing explains why),
+    /// and that destroys numbers the user may have typed and simply forgotten
+    /// to tick. Confirming every finish would be nagging; confirming none of
+    /// them loses a set to a mis-tap. So the prompt appears only when a doomed
+    /// set actually has values in it.
     private func finish() {
-        workout.completedAt = Date()
-        workout.durationSeconds = elapsedSeconds
-        workout.totalVolume = WorkoutStats.totalVolume(for: workout)
+        let summary = WorkoutFinishing.discardSummary(for: workout)
+        if summary.hasEnteredValues {
+            pendingDiscard = summary
+        } else {
+            commitFinish()
+        }
+    }
+
+    /// Names what is about to be lost, specifically. "Some sets weren't
+    /// completed" is a shrug; "2 sets on Barbell Row" is something the user can
+    /// check against what they remember doing.
+    private func discardMessage(for summary: WorkoutFinishing.DiscardSummary) -> String {
+        let sets = summary.setCount == 1 ? "1 set has" : "\(summary.setCount) sets have"
+        var text = "\(sets) weights or reps typed in but were never ticked off. "
+        if summary.exerciseCount == 1 {
+            text += "1 exercise will be removed from this workout. "
+        } else if summary.exerciseCount > 1 {
+            text += "\(summary.exerciseCount) exercises will be removed from this workout. "
+        }
+        return text + "Finishing keeps only the sets you completed."
+    }
+
+    private func commitFinish() {
+        pendingDiscard = nil
+        WorkoutFinishing.finish(workout, elapsedSeconds: elapsedSeconds, in: context)
         onFinish()
     }
 
     private func cancel() {
-        // Tombstoned rather than removed, even though a cancelled workout
-        // "never happened". docs/06-sync.md allows a hard delete for a row that
-        // has never been pushed, but nothing yet records whether a row HAS been
-        // pushed — and guessing wrong deletes a workout the server has already
-        // accepted, leaving it alive on every other device with nothing to
-        // remove it. Uniformly soft until that signal exists.
-        SoftDelete.workout(workout)
+        // A REAL delete, and now provably safe. An unfinished workout is not
+        // eligible to push (PushFilter.shouldPush), so a cancelled one has
+        // never reached the server and there is nothing out there for a
+        // tombstone to propagate to. Keeping one would store — and later
+        // upload — a record of a workout that never happened.
+        //
+        // This was a soft delete until the "only finished workouts sync" rule
+        // existed, because nothing could then PROVE the workout had not been
+        // pushed. The rule turned a guess into a guarantee.
+        context.delete(workout)
         onCancel()
     }
 
