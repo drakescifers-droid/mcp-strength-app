@@ -35,22 +35,40 @@ and a five-tab shell.
 true today — with the standing caveat that it should **not** hold real training data until Phase 2
 provides sync and backup, because a local-only store has no recovery story.
 
-**Phase 2 — started. The database exists; nothing talks to it yet.**
+**Phase 2 — in progress. The database is live and the app can sign in. Nothing syncs.**
 
-`supabase/migrations/` holds the Postgres schema, the sync trigger, the RLS policies and the seeded
-library, all applied and tested against a throwaway container by `./supabase/tests/run.sh`. Twelve
-tables mirroring the SwiftData model, with one deliberate split (`exercise_preferences`) and four
-reserved-word renames. `05-database.md` is the decisions record.
+Landed:
 
-**No project is provisioned and no client code exists**, so this is schema-on-disk, not a backend.
-The app is still local-only and the standing caveat below still holds in full.
+- **The schema, on a real project.** Twelve tables, 18 RLS policies, 12 sync triggers, the seeded
+  library. Applied to `mcp-strength` (`knrmembtnmgddzyyvyvq`) and verified by dumping the remote
+  schema back and reading it, not by trusting `db push`. `05-database.md` is the decisions record;
+  `./supabase/tests/run.sh` exercises it against a throwaway container.
+- **Sign-in, required up front.** Email and password, via supabase-swift — the first external
+  dependency this project has had. `AuthGate` replaces `ContentView` as the app root.
+
+**Nothing syncs yet, and that gap is the whole remaining phase.** The app knows who you are and
+still writes only to SwiftData; not one row has ever travelled. The standing caveat below holds in
+full — there is still no recovery story.
 
 What lands next is the part `02-architecture.md` flags as easy to get wrong: the sync engine, and
-the **visible sync state** designed alongside it rather than retrofitted. Two things from the schema
-work feed straight into it — pull on `server_updated_at` with a five-second overlap window, never on
-`updated_at`; and settle the canonical-units question *before* there is real history, because
-converting stored values afterwards is a migration against numbers a user typed. Both are written up
-in `05-database.md`.
+the **visible sync state** designed alongside it rather than retrofitted. Five things feed into it:
+
+- Pull on `server_updated_at` with a five-second overlap window, never on `updated_at` (`05`).
+- Settle canonical units *before* there is real history — converting afterwards is a migration
+  against numbers a user typed (`05`).
+- **Deletes have to become soft across the whole app.** SwiftData deletes are hard today; tombstones
+  are what let an offline device learn about a delete. This touches every screen that deletes and
+  every query that lists, and it is the largest single piece of work left in the phase.
+- **Rows created before sign-in have no owner.** Sign-in is required up front so new installs cannot
+  produce any, but the local store on THIS machine predates the gate.
+- **The seeded library now exists in two places** — local SwiftData rows and global Postgres rows
+  sharing the same baked UUIDs. Sync must not treat the local copies as user data to push.
+
+> **When Apple/Google/Facebook sign-in is added, LINK the identity to the existing account.** Drake
+> intends to offer all three, which makes Sign in with Apple mandatory rather than optional (Apple
+> requires it only once a third-party login is offered — email/password alone does not trigger it).
+> A new provider treated as a fresh sign-up gives the user a second, empty account and their history
+> appears to have vanished.
 
 **Phases 3–4 — not started.** The real multi-user MCP server, then product.
 
@@ -148,3 +166,14 @@ _None outstanding._ The list has been empty before; things land on it as they ar
 - **Black-box first, then read the source.** Driving a tool surface as a client shows where a
   caller trips; only the source tells you whether the cause was a schema gap or a description gap.
   They look identical from outside and have completely different fixes.
+- **Never classify an error by `String(describing:)`.** `AuthErrorPresenter` detected a lost
+  connection by scanning for "network" / "offline" / "timed out", and that branch could never fire:
+  a `URLError` stringifies to `URLError(_nsError: Error Domain=NSURLErrorDomain Code=-1009 "(null)")`
+  and contains none of those words. Every offline user would have been told "something went wrong" —
+  useless *and* false, since nothing was lost. Match on the TYPE (`error as? URLError`, then the
+  code), and keep string matching only as a backstop for errors a library has wrapped. The same trap
+  is waiting in the sync engine, which has far more error paths than sign-in does.
+- **A dependency's behaviour is a fact to look up, not to assume.** Where supabase-swift persists
+  the session (keychain, not UserDefaults) and what `signUp` returns when confirmation is pending
+  (a user, no session) were both read out of the checked-out source. The second one decides whether
+  a successful sign-up shows a "check your email" screen or silently returns you to an empty form.
