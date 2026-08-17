@@ -290,4 +290,51 @@ struct SyncPlanningTests {
         ]
         #expect(PushFilter.pendingCount(rows) == 2)
     }
+
+    // MARK: - Seeded measurement types
+
+    // THE FIRST FAILURE A REAL ROUND TRIP PRODUCED, and one the fake transport
+    // had accepted for the whole life of the suite. Seeded measurement types
+    // exist twice — local rows, and global Postgres rows owned by nobody,
+    // sharing baked UUIDs. `needsSync` defaults to true, so unfiltered all 18
+    // get pushed as user data; the RLS update policy refuses them with 42501
+    // and the WHOLE RUN aborts, so the pull never happens either and every
+    // later sync fails the same way.
+
+    @Test func aSeededMeasurementTypeIsNeverPushed() {
+        let id = UUID()
+        let type = MeasurementType(id: id, name: "Weight", group: .core, sortOrder: 0)
+        #expect(type.needsSync, "a new model starts dirty; the filter is the only thing stopping it")
+        #expect(!PushFilter.shouldPush(type, seededIDs: [id]))
+    }
+
+    @Test func aUserCreatedMeasurementTypeIsPushed() {
+        // Not in the seed file, so it is the user's and must travel.
+        let type = MeasurementType(id: UUID(), name: "Forearm", group: .bodyPart, sortOrder: 9)
+        #expect(PushFilter.shouldPush(type, seededIDs: [UUID()]))
+    }
+
+    @Test func aCleanUserCreatedMeasurementTypeIsNotPushed() {
+        let type = MeasurementType(id: UUID(), name: "Forearm", group: .bodyPart, sortOrder: 9)
+        type.markSynced()
+        #expect(!PushFilter.shouldPush(type, seededIDs: []))
+    }
+
+    @Test func theGenericFilterAlsoExcludesSeededMeasurementTypes() {
+        // pushModels dispatches through `shouldPush(_ row: any Syncable)`, so a
+        // rule that only exists on the concrete overload would never run.
+        let seeded = MeasurementSeedImporter.seededIDs
+        #expect(!seeded.isEmpty, "the bundled seed should be readable from the test host")
+        guard let seededID = seeded.first else { return }
+        let type = MeasurementType(id: seededID, name: "Weight", group: .core, sortOrder: 0)
+        #expect(!PushFilter.shouldPush(type as any Syncable))
+        #expect(PushFilter.pendingCount([type]) == 0,
+                "a seeded type must not be counted as a change waiting, or the UI reports work that can never clear")
+    }
+
+    @Test func theRealSeedIsNotEmpty() {
+        // If the bundle read fails, seededIDs is empty and EVERY seeded type
+        // becomes pushable again — the exact 42501 that broke the first sync.
+        #expect(MeasurementSeedImporter.seededIDs.count >= 18)
+    }
 }

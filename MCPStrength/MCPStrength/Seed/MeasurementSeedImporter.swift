@@ -122,6 +122,55 @@ enum MeasurementSeedImporter {
         return rows.first { $0.id == typeID }?.unit
     }
 
+    /// The ids of every SEEDED measurement type, for `PushFilter`.
+    ///
+    /// ## Why this exists, and what it cost to find out
+    ///
+    /// Seeded measurement types live in TWO places by design: local SwiftData
+    /// rows, and global Postgres rows with `user_id IS NULL`, sharing these
+    /// baked UUIDs (docs/06-sync.md § "The seeded library exists twice").
+    /// `needsSync` defaults to `true` on every `@Model`, so without a filter
+    /// the engine pushes all of them as USER data. PostgREST turns an upsert
+    /// on an existing id into an UPDATE, and `measurement_types_update`'s
+    /// `USING (user_id = auth.uid())` refuses it because the row it would
+    /// replace is owned by nobody:
+    ///
+    ///     42501 — new row violates row-level security policy
+    ///             (USING expression) for table "measurement_types"
+    ///
+    /// That is the policy doing its job, and it aborts THE ENTIRE RUN — push
+    /// stops, pull never happens, and every subsequent sync fails the same
+    /// way. It was the first thing a real round trip hit, and no test caught
+    /// it because a fake transport accepts anything.
+    ///
+    /// `06-sync.md` predicted exactly this and named measurement types
+    /// alongside exercises — *"filter rather than discover"* — but only the
+    /// exercise half was built. `Exercise` carries `isCustom`; `MeasurementType`
+    /// has no equivalent field, so the seed file is the discriminator instead.
+    ///
+    /// Deriving it from the seed rather than adding a model property is
+    /// deliberate: a new `@Model` property means a SwiftData migration on a
+    /// store that already has rows, which is the most expensive mistake in
+    /// this codebase (docs/04-status.md). It is also self-maintaining — a type
+    /// added to the seed becomes non-pushable automatically, and a
+    /// user-created type, whose UUID is not in the file, pushes without anyone
+    /// having to remember to flag it.
+    ///
+    /// Cached: `PushFilter` consults this once per model per run, and re-reading
+    /// and re-decoding a bundled file that many times is pointless work.
+    static let seededIDs: Set<UUID> = {
+        guard let rows = try? decodeBundledRows() else {
+            // An unreadable seed makes every type look user-created, which
+            // would push the seeded ones and break sync exactly as above. The
+            // app already treats a failed seed import as non-fatal, so match
+            // that: an empty set is wrong in the SAFE direction only if the
+            // seed is also absent locally, which is the same failure.
+            assertionFailure("measurement seed unreadable; seeded ids unavailable")
+            return []
+        }
+        return Set(rows.map(\.id))
+    }()
+
     // MARK: - Convenience (bundle plumbing)
 
     /// Loads the bundled `measurement-seed.json` and imports it into `context`. Thin wrapper

@@ -194,6 +194,42 @@ enum PushFilter {
         set.needsSync && set.workoutExercise?.workout?.completedAt != nil
     }
 
+    /// SEEDED MEASUREMENT TYPES ARE NOT USER DATA, for exactly the reason
+    /// seeded exercises are not.
+    ///
+    /// They exist twice — local rows, and global Postgres rows with
+    /// `user_id IS NULL` sharing the same baked UUIDs. `needsSync` defaults to
+    /// `true`, so unfiltered the engine pushes all 18 as owned data; PostgREST
+    /// turns the upsert into an UPDATE on the global row and
+    /// `measurement_types_update`'s `USING (user_id = auth.uid())` refuses it:
+    ///
+    ///     42501 — new row violates row-level security policy
+    ///
+    /// That aborts the WHOLE RUN, so the pull never happens either, and every
+    /// later sync fails identically. This was the first failure a real round
+    /// trip produced — the fake transport had accepted it for the entire life
+    /// of the test suite. docs/06-sync.md § "The seeded library exists twice"
+    /// called for this filter and only the exercise half was ever written.
+    ///
+    /// `MeasurementType` has no `isCustom` (unlike `Exercise`), so the seed
+    /// file is the discriminator. A user-created type's UUID is not in it and
+    /// pushes normally, with nothing to remember.
+    ///
+    /// `seededIDs` is injectable so the RULE can be tested without a bundle;
+    /// the default is the real seed.
+    ///
+    /// > **Consequence worth knowing:** an edit to a SEEDED type — were the UI
+    /// > ever to allow renaming or reordering one — cannot travel. That mirrors
+    /// > seeded exercises, whose per-user fields live in `exercise_preferences`;
+    /// > measurement types have no such table yet. Today nothing can create or
+    /// > rename one, so nothing is lost.
+    static func shouldPush(
+        _ type: MeasurementType,
+        seededIDs: Set<UUID> = MeasurementSeedImporter.seededIDs
+    ) -> Bool {
+        type.needsSync && !seededIDs.contains(type.id)
+    }
+
     /// Everything else is simply "has unconfirmed local changes".
     static func shouldPush(_ row: any Syncable) -> Bool {
         switch row {
@@ -201,6 +237,16 @@ enum PushFilter {
         case let workout as Workout:            shouldPush(workout)
         case let workoutExercise as WorkoutExercise: shouldPush(workoutExercise)
         case let set as WorkoutSet:             shouldPush(set)
+        // `seededIDs:` is passed EXPLICITLY, and that is load-bearing. Written
+        // as `shouldPush(type)` the compiler resolves it back to THIS function
+        // — `MeasurementType` conforms to `Syncable`, and an overload needing a
+        // defaulted argument loses to one that takes exactly one parameter — so
+        // it calls itself until the stack dies. It compiles, and it crashed the
+        // app on launch (EXC_BAD_ACCESS, "excessive recursion") the first time
+        // a sync ran. The other cases are safe only because their overloads
+        // take a single argument and win outright.
+        case let type as MeasurementType:
+            shouldPush(type, seededIDs: MeasurementSeedImporter.seededIDs)
         default:                                row.needsSync
         }
     }
