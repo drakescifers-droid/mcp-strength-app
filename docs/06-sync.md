@@ -224,6 +224,92 @@ The seeded exercises and measurement types are local SwiftData rows *and* global
 
 ---
 
+## Per-exercise preferences get their own local model
+
+**Status: APPROVED by Drake 2026-08-16. Not built yet.**
+
+> **Two things learned after this was written, from screenshots of the reference app.** Neither
+> changes the decision below; both change the scope.
+>
+> 1. **The Preferences sheet is TWO items, not four** — Weight Unit and Bar Type. `focusMetric` and
+>    `notes` are not edited there. The model still carries all four (they exist and the seed
+>    importer preserves them); only the sheet is smaller than assumed.
+> 2. **Weight Unit has three options, not two:** Default, Metric (kg), US/Imperial (lbs), where
+>    *Default* follows a global setting. `weightUnitOverride: WeightUnit?` already expresses that
+>    exactly — `nil` IS Default — so the model needs nothing, but the global setting it defers to is
+>    the canonical-units work and does not exist yet.
+>
+> **And one open question this raised:** the reference app's Bar Type carries a WEIGHT per case
+> (Olympic 45, Short 33, EZ 20, Hex 75, None 0) and is used by the plate and warm-up calculators.
+> Our `BarType` has no weights and a different set of cases (`standardBar`, `trapBar`, `dumbbell`,
+> `other`). Decide whether to adopt the reference's list and attach weights before building the
+> sheet — a picker that shows bar types without their weights is less useful, and changing the cases
+> later is an enum migration on both sides.
+
+`exercise_preferences` has existed as a table since the first migration with nothing writing it
+(`05-database.md` § "The one real divergence"). Wiring it up looked like a small job and is not,
+because four things do not line up between the two sides. They are recorded here because three of
+them have the silent-data-loss failure mode, and because the alternative — hanging the sync off
+`Exercise`, which already carries the four fields — makes all four worse at once.
+
+### What does not line up
+
+1. **The table has no `id`.** Its primary key is `(user_id, exercise_id)`. Every other synced table
+   has a single `id`, and `SyncWireRow`, the pull's index, and the upsert's conflict target all
+   assume that.
+2. **The upsert always conflicts on `"id"`.** Hard-coded in `SyncClient`. This table needs the pair.
+3. **The push rule is INVERTED relative to exercises.** `PushFilter.shouldPush(Exercise)` requires
+   `isCustom`, because a seeded exercise is global library and pushing it as owned data breaks the
+   run. But a *preference* on a seeded exercise — the bar type you use for Bench Press — is the
+   user's own data and MUST travel. Two rules reading the same object, disagreeing by design, is a
+   thing somebody later "tidies up" into one.
+4. **One local object, two server rows, one dirty flag.** With the fields on `Exercise`, the
+   exercises push and the preferences push share `needsSync` and `updatedAt`. Exercises push FIRST
+   (`SyncEntity` order), and a confirmed push calls `markSynced()` — so by the time the preferences
+   pass runs, the flag it needs to read has already been cleared by the pass before it. That is the
+   same shape as the bug fixed in `e84d3b3`, one phase earlier in the run.
+
+### The decision: move the four fields to an `ExercisePreference` @Model
+
+`weightUnitOverride`, `barType`, `focusMetric` and `notes` leave `Exercise` and become their own
+synced model, keyed to an exercise. `Exercise` goes back to being purely what the library defines —
+which is exactly the split the server already made. `05-database.md` says of that split: *"This line
+already existed; it just wasn't a table boundary yet."* This makes it one on the client too.
+
+Doing that dissolves three of the four problems rather than solving them:
+
+- **(1) and (2) shrink to one line.** The local model gets an ordinary `id`, so the pull index and
+  `SyncWireRow` work unchanged. The conflict target becomes a per-entity fact on `SyncEntity`
+  alongside `tableName`, defaulting to `"id"`, because the two facts about a table belong together.
+- **(3) disappears.** The preference row is not the exercise row, so it needs no exception and no
+  second opinion about `isCustom`. A preference on a seeded exercise pushes because it is an
+  ordinary owned row that happens to point at a global one.
+- **(4) disappears.** Its own `needsSync` and its own `updatedAt`, so nothing upstream in the run
+  can clear a flag it depends on.
+
+And one thing it buys that the alternative cannot: **the table stays sparse by construction.** A
+preference row exists only where the user actually set one. Hanging sync off `Exercise` would push a
+row for every dirty exercise — and on a fresh install every one of the 25 seeded exercises is dirty,
+because `needsSync` defaults to `true` and the exercise push filter never clears them. The first
+sync would have written 25 rows of pure defaults. That is the same shape as the 43 fabricated
+discard entries in `00faec1`: a flag that means "never confirmed" being read as "the user did
+something".
+
+### Why this migration is the safe kind
+
+The rule that has cost this project the most is *every `@Model` property needs a declaration-level
+default* — adding a property to a model whose store already has rows. **This is not that.** Adding a
+NEW `@Model` type creates a new local table with no existing rows to migrate, which lightweight
+migration handles without an opinion.
+
+Removing the four properties from `Exercise` is the half worth checking, and it is safe for a
+reason that will not stay true: **nothing writes them today.** There is no UI for them — that is
+precisely why this work exists — so there is no user data to carry across. `ExerciseSeedImporter`
+preserves them on re-seed and must stop referring to them; that is the one call site to update.
+
+> **If this is deferred, do it before there are users, not after.** The moment somebody has set a
+> bar type, moving the field stops being free.
+
 ## Out of scope
 
 - **Realtime.** Pull on launch, on foreground, and after a workout is finished. A push
