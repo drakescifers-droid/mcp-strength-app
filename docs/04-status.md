@@ -36,16 +36,17 @@ and a five-tab shell.
 true today — with the standing caveat that it should **not** hold real training data until Phase 2
 provides sync and backup, because a local-only store has no recovery story.
 
-**Phase 2 — in progress. The transport is built and wired; nothing has been run against the real
-project yet.**
+**Phase 2 — in progress. Sync is built, wired, and PROVEN against the real project.** What remains
+is the settings model, canonical units, and Apple Health.
 
-> **START HERE IN A NEW SESSION.** The one-line state: the database is live, the app requires
-> sign-in, deletes are soft, both mapping directions work, and **the transport now exists and is
-> called** — claim → push → pull → report, triggered on launch, on foreground, and on finishing a
-> workout. Every layer is covered by tests against a fake transport and a throwaway Postgres.
-> **What has NOT happened is a single real round trip against `mcp-strength`.** No row has provably
-> travelled; only that the code which would carry it passes its tests. The next thing worth doing
-> is signing in on a simulator, logging one workout, and confirming the row appears in the project.
+> **START HERE IN A NEW SESSION.** The one-line state: **sync works, end to end, proven against the
+> real project.** A workout logged on a simulator (Bench Press 135×5) reached `mcp-strength` with
+> its exercise and set, correctly owned; 43 global library rows came down the other way; the cursor
+> advances; the seeded library stays global. Read out of the database, not inferred from the UI.
+>
+> **The round trip found four real bugs that 350 green tests did not**, which is the single most
+> useful thing this document can tell you — see "What running it for real found" below. Phase 2's
+> remaining work is now the settings model, canonical units, and Apple Health.
 
 ### Landed
 
@@ -105,15 +106,29 @@ cards, because "best set" required both weight and reps. Three sets of pull-ups 
 mentioned in the summary. That bug survived ~295 tests. **Use this before believing any UI is
 right.**
 
+### What running it for real found
+
+**Four bugs in about an hour, none of which the suite could see.** Kept because the *reasons* they
+were invisible recur, and because together they are the argument for doing this before shipping
+anything else.
+
+| Bug | Why no test could catch it |
+|---|---|
+| `workouts.summary` missing from the live database — the migration existed locally and had never been pushed, and every workout push sends that column | Tests build their Postgres from the local migration files, so the schema is correct there **by construction** |
+| All 18 seeded measurement types rejected with RLS `42501`, aborting the entire run — push stopped, so the pull never happened, and every later sync failed identically | The fake transport accepts anything. Only a real policy refuses |
+| Infinite recursion in `PushFilter` — introduced while fixing the above; compiled clean, killed the app on launch, and crashed the **test host** so the suite reported `0 passed, 1 failed` | A compile cannot see it, and the crash prevented the very test written to catch it from running |
+| Rows created but never edited pushed with `updated_at = 0001-01-01`, so they lose every conflict forever | Visible only in the stored data. The local model looks fine |
+
+> **`0 passed, 1 failed` is not one broken test.** It means the host crashed before bootstrapping
+> and NOTHING was verified. It looks like a trivial failure and is the most serious one there is.
+
+> **One row on the server still reads `0001-01-01`** — the workout_exercise pushed before the
+> backfill landed. Harmless (it is test data on a project with no users) and left as the before/after
+> evidence, but a store that already pushed such rows will not re-push them, because they are clean.
+
 ### What is left, in order
 
-1. **ONE REAL ROUND TRIP.** Sign in on a simulator, log a workout, and confirm the rows land in
-   `mcp-strength`. Everything below the network is tested; the network itself has only ever talked
-   to a fake. Until this happens the honest claim is "it should work", and the whole point of this
-   document is not to make claims like that. Watch specifically for: the claim step on a store that
-   predates the sign-in gate, RLS rejecting a row the client thought it owned, and enum or date
-   encodings that the fake accepted and Postgres will not.
-2. **A settings model**, which unblocks the two missing menu items. Decisions already made: the
+1. **A settings model**, which unblocks the two missing menu items. Decisions already made: the
    warm-up calculator is a **single global auto-generated config the user can then edit**,
    generating **3 sets at percentages**, rounded to the **nearest 5 lb**. `Preferences` needs a
    model for `exercise_preferences`, which exists as a table with no SwiftData model.
@@ -192,10 +207,9 @@ ringer `docs/MODEL-NOTES.md`.
 
 ### Not verified
 
-- **THE TRANSPORT HAS NEVER TALKED TO THE REAL PROJECT.** Every layer under it is tested — the
-  engine against a fake, the schema and the LWW guard against a throwaway Postgres — and the two
-  suites are green. But a fake accepts what Postgres might reject, so nothing here is evidence that
-  a row actually travels. This is the top of the "what is left" list for a reason.
+- **Sync itself is now VERIFIED against the real project** (see above), so it has moved off this
+  list. What remains unverified there: a SECOND device pulling the first one's data, anything
+  involving a genuine conflict between two devices, and a push large enough to page.
 - **The second-account refusal has never been exercised, and DELIBERATELY STAYS AS IT IS.** The
   engine records which account claimed this device, and if a DIFFERENT one signs in it refuses to
   push and reports it. That guard is load-bearing — local rows carry no owner (ownership is stamped
