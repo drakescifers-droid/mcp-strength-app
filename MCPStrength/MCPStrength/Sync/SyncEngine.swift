@@ -96,6 +96,17 @@ final class SyncEngine {
         category: "sync.conflicts"
     )
 
+    /// The underlying error behind a failed run, which `SyncState` cannot
+    /// carry. Its `reason` is a sentence for a human — deliberately calm and
+    /// deliberately vague — so the detail has to go somewhere else or it goes
+    /// nowhere. The first real round trip failed on a PostgREST 42501 and the
+    /// only way to see that was to add a temporary log; this is that log,
+    /// kept.
+    private let failureLogger = Logger(
+        subsystem: "us.aiagent4.MCPStrength",
+        category: "sync.failures"
+    )
+
     init(
         context: ModelContext,
         transport: any SyncTransport,
@@ -136,6 +147,18 @@ final class SyncEngine {
         } catch let error as ClaimMismatch {
             status.failRun(reason: error.reason, pending: (try? pendingCount()) ?? 0)
         } catch {
+            // The UNDERLYING error, not the sentence shown to the user.
+            // `failureReason` deliberately flattens everything into something
+            // reassuring ("Backup could not finish."), which is right on the
+            // Profile tab and useless when a sync is failing and nobody knows
+            // why. The first real round trip failed on
+            // `PostgrestError(code: 42501, …)` and the app's own UI could not
+            // have told anyone that; it took a temporary NSLog to find it.
+            //
+            // Logged, not surfaced: docs/02-architecture.md § Observability
+            // asks for diagnosability, and the sentence a user reads and the
+            // detail a developer needs are different artefacts.
+            failureLogger.error("sync run failed: \(String(describing: error), privacy: .public)")
             status.failRun(reason: Self.failureReason(for: error), pending: (try? pendingCount()) ?? 0)
         }
     }
@@ -268,6 +291,30 @@ final class SyncEngine {
         pairs.reserveCapacity(models.count)
         for model in models {
             guard PushFilter.shouldPush(model) else { continue }
+            // BACKFILL A ROW THAT WAS CREATED BUT NEVER EDITED.
+            //
+            // `updatedAt` defaults to `.distantPast` — "never stamped" — and
+            // only `markEdited` moves it. A row that is created and then
+            // pushed without ever being mutated therefore arrives at the
+            // server claiming it was last modified in year 1. The first real
+            // sync did exactly that: the workout carried a true timestamp
+            // (Finish stamps it) and so did its set (entering a weight stamps
+            // it), but the WorkoutExercise between them went up as
+            // `0001-01-01 00:00:00+00`.
+            //
+            // That is not cosmetic. `updated_at` is the last-write-wins key,
+            // so such a row LOSES every conflict it will ever have — any stale
+            // edit from any device outranks it, permanently. The server's
+            // far-future clamp guards the opposite direction only.
+            //
+            // docs/06-sync.md § "Rows that predate sign-in" already says the
+            // first sync backfills these; this is that backfill. Done here
+            // rather than in the model initialisers because the DECLARATION
+            // default must stay `.distantPast` — a migrating store has to land
+            // there honestly rather than claim it was edited at upgrade time.
+            if model.updatedAt == .distantPast {
+                model.updatedAt = Date()
+            }
             guard let row = map(model, userID) else { continue }
             pairs.append((model, row))
         }
@@ -608,7 +655,23 @@ final class SyncEngine {
                 // resolver stays the decision; we just stop lying to it.
                 // `updatedAt` is untouched by markSynced, so that
                 // argument is still the local edit's real time.
-                let localIsDirty = existing.needsSync
+                // `PushFilter.shouldPush`, not the raw `needsSync` flag. A row
+                // the filter will NEVER send cannot be holding a local edit
+                // worth protecting, whatever its flag says — and the seeded
+                // library says `true` forever, because it is excluded from
+                // every push so nothing ever calls markSynced on it.
+                //
+                // Read naively, the first sync of a fresh install logged 43
+                // discarded edits: 25 seeded exercises and 18 seeded
+                // measurement types, every one with
+                // `updatedAt == .distantPast`, which is the "never stamped"
+                // default and the opposite of an edit. Nothing was discarded.
+                // The discard log exists so "my template reverted" is
+                // answerable, and 43 fabricated entries on day one is exactly
+                // the kind of noise that makes a log worth ignoring.
+                //
+                // "Would we push it, or did we?" is the honest question.
+                let localIsDirty = PushFilter.shouldPush(existing)
                     || pushedThisRun.contains(existing.id)
                 switch ConflictResolver.resolve(
                     localUpdatedAt: existing.updatedAt,

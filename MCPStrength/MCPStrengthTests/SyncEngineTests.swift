@@ -557,6 +557,121 @@ struct SyncEngineTests {
         #expect(transport.upserted(SyncTemplateSetRow.self, from: "template_sets").isEmpty)
     }
 
+
+    // MARK: - Seeded rows are not "edits"
+
+    @Test func pullingTheSeededLibraryLogsNoDiscardedEdits() async throws {
+        // THE FIRST SYNC OF A FRESH INSTALL LOGGED 43 DISCARDED EDITS, all of
+        // them fabricated. Seeded rows keep needsSync == true forever — they
+        // are excluded from every push, so markSynced never runs on them — and
+        // their updatedAt is .distantPast, the "never stamped" default. Read as
+        // "dirty with a very old edit", every one loses last-write-wins and
+        // gets recorded as a discard. Nothing was discarded. The log exists so
+        // "my template reverted" is answerable; 43 false entries on day one is
+        // how a log becomes noise.
+        let context = try makeContext()
+        let transport = FakeSyncTransport()
+        let id = UUID()
+
+        let seeded = Exercise(
+            id: id, name: "Bench Press (Barbell)", bodyPart: .chest,
+            category: .barbell, isCustom: false, focusMetric: .totalVolume
+        )
+        #expect(seeded.needsSync, "a seeded row starts dirty and nothing ever clears it")
+        #expect(seeded.updatedAt == .distantPast, "and it has never been stamped")
+        context.insert(seeded)
+
+        transport.seed([
+            exerciseRow(id: id, name: "Bench Press (Barbell)",
+                        updatedAt: base, serverUpdatedAt: base),
+        ], into: "exercises")
+
+        let (engine, _) = makeEngine(context: context, transport: transport)
+        await engine.run(as: user)
+
+        #expect(engine.discardedEdits.isEmpty,
+                "a row PushFilter will never send cannot be holding an edit worth discarding")
+        #expect(seeded.name == "Bench Press (Barbell)")
+        #expect(seeded.needsSync == false, "the pull settles it clean")
+    }
+
+    @Test func aCustomExerciseSupersededByANewerRemoteIsStillLogged() async throws {
+        // The counterpart, and the reason the seeded fix has to be narrow: a
+        // CUSTOM exercise IS pushable, so when a newer remote overtakes it the
+        // discard is real and must still be recorded. Same shape as the test
+        // above, one field different — isCustom.
+        //
+        // The push must SUCCEED here. A failing push aborts the run before the
+        // pull (docs/06-sync.md § The shape), so there is no pull to resolve a
+        // conflict against and nothing could be logged either way.
+        let context = try makeContext()
+        let transport = FakeSyncTransport()
+        let id = UUID()
+
+        let mine = Exercise(
+            id: id, name: "Reverse Nordic", bodyPart: .legs,
+            category: .repsOnly, isCustom: true, focusMetric: .totalReps
+        )
+        mine.updatedAt = base
+        context.insert(mine)
+
+        let newer = base.addingTimeInterval(60)
+        transport.seed([
+            exerciseRow(id: id, name: "Renamed elsewhere",
+                        updatedAt: newer, serverUpdatedAt: newer),
+        ], into: "exercises")
+
+        let (engine, _) = makeEngine(context: context, transport: transport)
+        await engine.run(as: user)
+
+        #expect(engine.discardedEdits.count == 1,
+                "a pushable row overtaken by a newer remote IS a real discard")
+        #expect(mine.name == "Renamed elsewhere", "last-write-wins should have taken the remote")
+    }
+
+    // MARK: - Never-stamped rows
+
+    @Test func aRowCreatedButNeverEditedIsStampedBeforeItIsPushed() async throws {
+        // FOUND IN THE FIRST REAL ROUND TRIP. `updatedAt` defaults to
+        // .distantPast ("never stamped") and only markEdited moves it, so a row
+        // that is created and pushed without ever being mutated reached the
+        // server as 0001-01-01. The WorkoutExercise did exactly that, sitting
+        // between a workout and a set that both carried real timestamps.
+        //
+        // updated_at is the last-write-wins key, so such a row loses every
+        // conflict it will ever have, to anything, forever.
+        let context = try makeContext()
+        let transport = FakeSyncTransport()
+
+        let folder = TemplateFolder(name: "Untouched", order: 0)
+        context.insert(folder)
+        #expect(folder.updatedAt == .distantPast, "created, never edited")
+
+        let (engine, _) = makeEngine(context: context, transport: transport)
+        await engine.run(as: user)
+
+        let sent = transport.upserted(SyncTemplateFolderRow.self, from: "template_folders")
+        #expect(sent.count == 1)
+        #expect(sent.first?.updatedAt != .distantPast,
+                "a never-stamped row went up claiming it was last edited in year 1")
+        #expect(folder.updatedAt != .distantPast, "and the local row keeps the backfilled stamp")
+    }
+
+    @Test func backfillDoesNotOverwriteARealEditTimestamp() async throws {
+        let context = try makeContext()
+        let transport = FakeSyncTransport()
+
+        let folder = TemplateFolder(name: "Edited", order: 0)
+        folder.markEdited(at: base)
+        context.insert(folder)
+
+        let (engine, _) = makeEngine(context: context, transport: transport)
+        await engine.run(as: user)
+
+        let sent = transport.upserted(SyncTemplateFolderRow.self, from: "template_folders")
+        #expect(sent.first?.updatedAt == base, "backfill clobbered a genuine edit time")
+    }
+
     // MARK: - Row fixtures
 
     private func folderRow(
@@ -574,6 +689,27 @@ struct SyncEngineTests {
             kind: .folder,
             programCursor: 0,
             totalCycles: nil,
+            updatedAt: updatedAt ?? serverUpdatedAt ?? base,
+            deletedAt: nil,
+            serverUpdatedAt: serverUpdatedAt
+        )
+    }
+
+    private func exerciseRow(
+        id: UUID,
+        name: String,
+        isCustom: Bool = false,
+        updatedAt: Date? = nil,
+        serverUpdatedAt: Date?
+    ) -> SyncExerciseRow {
+        SyncExerciseRow(
+            id: id,
+            userID: isCustom ? user : nil,
+            name: name,
+            aliases: [],
+            bodyPart: .chest,
+            category: .barbell,
+            isCustom: isCustom,
             updatedAt: updatedAt ?? serverUpdatedAt ?? base,
             deletedAt: nil,
             serverUpdatedAt: serverUpdatedAt
