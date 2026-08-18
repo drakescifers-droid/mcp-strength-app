@@ -36,8 +36,14 @@ and a five-tab shell.
 true today — with the standing caveat that it should **not** hold real training data until Phase 2
 provides sync and backup, because a local-only store has no recovery story.
 
-**Phase 2 — in progress. Sync is built, wired, and PROVEN against the real project.** What remains
-is the settings model, canonical units, and Apple Health.
+**Phase 2 — in progress. Sync is PROVEN against the real project.** What remains is per-exercise
+Preferences, canonical units, and Apple Health.
+
+> **The settings model that used to be item 2 on this list no longer exists as a requirement.** It
+> was there to hold editable warm-up percentages — and the reference app offers no way to adjust
+> them at all. You generate the sets and then edit the SETS. The ramp is hard-coded in
+> `Workout/WarmupSets.swift` and the whole model evaporated. Worth remembering as a shape: a
+> requirement inherited from "surely the reference app has a screen for this" that it does not have.
 
 > **START HERE IN A NEW SESSION.** The one-line state: **sync works, end to end, proven against the
 > real project.** A workout logged on a simulator (Bench Press 135×5) reached `mcp-strength` with
@@ -45,13 +51,12 @@ is the settings model, canonical units, and Apple Health.
 > advances; the seeded library stays global. Read out of the database, not inferred from the UI.
 >
 > **The round trip found four real bugs that 350 green tests did not**, which is the single most
-> useful thing this document can tell you — see "What running it for real found" below. Phase 2's
-> remaining work is now the settings model, canonical units, and Apple Health.
+> useful thing this document can tell you — see "What running it for real found" below.
 
 ### Landed
 
 - **The schema, on a real project.** Twelve tables, 18 RLS policies, 12 sync triggers, the seeded
-  library, and now the last-write-wins guard (12 more triggers). **All 7 migrations applied and
+  library, and now the last-write-wins guard (12 more triggers). **All 8 migrations applied and
   verified remote == local by dumping the schema back**, not by trusting `db push`.
   `05-database.md` is the decisions record; `./supabase/tests/run.sh` exercises it against a
   throwaway container.
@@ -85,7 +90,14 @@ is the settings model, canonical units, and Apple Health.
   are worth remembering.
 - **Finishing discards unticked sets**, and **unfinished workouts are ineligible to push** — see
   the decisions below.
-- **The per-exercise options menu**, one shared component with two callers, six of eight items.
+- **The per-exercise options menu**, one shared component with two callers, SEVEN of eight items.
+  `Add Warm-up Sets` landed once the settings model it was blocked on turned out not to be needed;
+  only Preferences is still absent, waiting on the `ExercisePreference` split.
+- **The warm-up ramp** (`Workout/WarmupSets.swift`), wired into both screens. Percentages are
+  MEASURED from the reference app, not chosen, and bar weight floors it so it cannot propose a load
+  lighter than the bar. **Never yet watched running on a screen.**
+- **Bar types carry weights**, and a `hammerStrength` exercise category exists in the app and in
+  the live database.
 - **UI preview mode** — see below. This is the single most useful thing to know about.
 
 ### THE LOOP THAT WAS MISSING FOR A DAY: seeing the app
@@ -128,11 +140,16 @@ anything else.
 
 ### What is left, in order
 
-1. **A settings model**, which unblocks the two missing menu items. Decisions already made: the
-   warm-up calculator is a **single global auto-generated config the user can then edit**,
-   generating **3 sets at percentages**, rounded to the **nearest 5 lb**. `Preferences` needs a
-   model for `exercise_preferences`, which exists as a table with no SwiftData model.
-3. **Canonical units**, before there is real history (`05`).
+1. **LOOK AT `Add Warm-up Sets` ON A REAL SCREEN.** Built, wired into both screens, tested — and
+   never once watched running. A test cannot judge whether the ramp reads correctly in the set
+   list, nor whether a second tap visibly REPLACES the warm-ups rather than appending. Every UI
+   bug in this project was found by looking.
+2. **Per-exercise Preferences.** Design decided and approved: `docs/06-sync.md` § "Per-exercise
+   preferences get their own local model". The sheet is two rows — Weight Unit and Bar Type — not
+   four; `focusMetric` and `notes` are not edited there.
+3. **Canonical units**, before there is real history (`05`). Also unblocks the *Default* option in
+   the weight-unit picker, and `BarType.weight` is where lb→kg must happen.
+4. **Apple Health.** The last item in Phase 2.
 
 ### Traps around the transport
 
