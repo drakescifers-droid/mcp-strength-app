@@ -91,7 +91,7 @@ not a fix to existing behavior. Worth a design pass rather than a quick
 patch — e.g., should pausing cancel the pending notification, should editing
 the rest time reschedule it, does Finishing early cancel it.
 
-## 4. [BUILT] No way to delete a single set — add swipe-to-delete on set rows
+## 4. [FIXED — CONFIRMED by Drake] No way to delete a single set — add swipe-to-delete on set rows
 
 **Screens:** Both the active workout screen and the template editor (shared
 `SetRow` component).
@@ -168,7 +168,7 @@ set without one had a value that could be displayed but never changed.
 **Severity guess:** was logged Low. Understated — it was hiding an edit
 affordance, not just a line.
 
-## 6. Reordering exercises gives no live feedback about where the drop lands
+## 6. [FIXED, needs a thumb] Reordering exercises gives no live feedback about where the drop lands
 
 **Screen:** Active workout, dragging an exercise by its title.
 
@@ -264,7 +264,18 @@ organisation the templates tab has.
     changed.
 - **#5 FIXED.** Every set gets a rest row now, on both screens.
 - **#7 CAUSE FOUND AND FIXED** (Button ate the long press); test written but blocked on a runner that will not launch.
-- **#6 LOGGED** — both are drag-and-drop, both need a real thumb to judge.
+- **#4 CONFIRMED working by Drake**, slide-clipping included — not a problem in the hand.
+- **#3 CONFIRMED silent** on skip and on Finish, which was the failure mode that mattered.
+- **#7 PARTLY CONFIRMED: the drag now starts** (the Button fix was right), but Drake reported
+  "a very small area triggers the drop". Cause: the only drop targets were the folder HEADER strip
+  and the cards themselves, so the gaps between cards, the margins, and the space under the last
+  row were all dead. The whole folder section is now one target that appends, with the per-card
+  target kept for precise placement — innermost wins, so precision is available without being
+  required. Both highlight while targeted.
+- **#6 FIXED with the same technique.** `isTargeted` now drives an insertion rule above the block
+  the drop would land on. A rule rather than an opened gap: inserting real space would reflow a
+  list that is already collapsed mid-drag, shifting everything below out from under the thumb
+  while the user is aiming at it.
 - **#3 BUILT.** Local notification, scheduled from the timer's own state
   rather than at each mutation site — `RestNotificationRule` is a pure function
   of (timer, now), so start/pause/resume/adjust/reset/skip are all covered by

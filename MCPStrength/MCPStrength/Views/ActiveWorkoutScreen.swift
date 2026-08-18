@@ -88,6 +88,14 @@ struct ActiveWorkoutScreen: View {
     // sets away.
     @State private var draggingExerciseID: UUID?
 
+    /// Which exercise the dragged one is currently hovering over.
+    ///
+    /// Separate from `draggingExerciseID`, which records what was LIFTED. This
+    /// is where it would LAND, and nothing tracked it before — so a reorder
+    /// was performed blind: the list collapsed, and then nothing moved, opened
+    /// a gap, or lit up until the drop had already happened.
+    @State private var dropTargetExerciseID: UUID?
+
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     /// Whether the current rest has already buzzed.
@@ -116,7 +124,10 @@ struct ActiveWorkoutScreen: View {
                             restingSetID: restingSetID,
                             isCollapsed: isReordering,
                             onReorderLift: { draggingExerciseID = workoutExercise.id },
-                            onReorderEnded: { draggingExerciseID = nil },
+                            onReorderEnded: {
+                                draggingExerciseID = nil
+                                dropTargetExerciseID = nil
+                            },
                             onStartRest: { setID, seconds in
                                 startRest(for: setID, seconds: seconds)
                             },
@@ -130,13 +141,42 @@ struct ActiveWorkoutScreen: View {
                                 editingSetRest = SetRestEdit(set: set)
                             }
                         )
+                        // The insertion marker. `.draggable`/`.dropDestination`
+                        // report a DROP, not a continuous position, so there is
+                        // no in-between layout to animate — but `isTargeted`
+                        // does say which block is under the finger, and a rule
+                        // above that block answers the actual question: where
+                        // will this land if I let go.
+                        //
+                        // A rule rather than an opened gap: inserting real space
+                        // would reflow a list that is already collapsed
+                        // mid-drag, and everything below would shift under the
+                        // thumb while the user is aiming at it.
+                        .overlay(alignment: .top) {
+                            if dropTargetExerciseID == workoutExercise.id,
+                               draggingExerciseID != workoutExercise.id {
+                                Capsule()
+                                    .fill(Theme.accent)
+                                    .frame(height: 3)
+                                    .padding(.horizontal, Spacing.compact)
+                                    .offset(y: -Spacing.compact)
+                                    .transition(.opacity)
+                            }
+                        }
+                        .animation(.snappy(duration: 0.15), value: dropTargetExerciseID)
                         .dropDestination(for: String.self) { items, _ in
-                            handleExerciseDrop(items, onto: workoutExercise)
+                            dropTargetExerciseID = nil
+                            return handleExerciseDrop(items, onto: workoutExercise)
                         } isTargeted: { targeted in
                             // Payload isn't readable until drop. Any non-nil
                             // id is enough to collapse the list.
                             if targeted, draggingExerciseID == nil {
                                 draggingExerciseID = workoutExercise.id
+                            }
+                            if targeted {
+                                dropTargetExerciseID = workoutExercise.id
+                            } else if dropTargetExerciseID == workoutExercise.id {
+                                dropTargetExerciseID = nil
                             }
                         }
                     }

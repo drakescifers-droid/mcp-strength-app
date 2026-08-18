@@ -74,6 +74,15 @@ struct StartWorkoutTab: View {
 
     @State private var templatePendingDelete: Template?
 
+    /// Which folder the dragged template is currently over, and which card.
+    ///
+    /// Drives the highlight. Without it a drag is blind — you hold a card over
+    /// the screen and nothing anywhere says whether letting go will do
+    /// anything, which is what made this feel broken even after the drag
+    /// itself started working.
+    @State private var targetedFolderID: UUID?
+    @State private var targetedTemplateID: UUID?
+
     private let columns = [
         GridItem(.flexible(), spacing: Spacing.comfortable),
         GridItem(.flexible(), spacing: Spacing.comfortable),
@@ -181,14 +190,7 @@ struct StartWorkoutTab: View {
             templateGrid(templates)
         } else {
             ForEach(folders, id: \.id) { folder in
-                folderHeader(folder)
-                // Empty folders still render their header (count 0, menu
-                // reachable). A newly created folder has no templates; the
-                // old `if !folderTemplates.isEmpty` guard made Save look
-                // like a no-op.
-                if !folder.isCollapsed {
-                    templateGrid(folder.liveTemplates)
-                }
+                folderSection(folder)
             }
             // Templates with no folder (when folders exist) get a trailing
             // headerless grid rather than being hidden or mislabelled.
@@ -227,6 +229,59 @@ struct StartWorkoutTab: View {
             TextField("New Folder", text: $newFolderName)
             Button("Cancel", role: .cancel) { newFolderName = "" }
             Button("Save") { createFolder() }
+        }
+    }
+
+    /// A folder's header and its grid, as ONE drop target.
+    ///
+    /// **The whole area accepts a drop, not just the header and the cards.**
+    /// Before this, the only places that took a drop were the header strip and
+    /// the cards themselves, so the gaps between cards, the margins, and the
+    /// space under the last row were all dead. Drake's report was that the
+    /// drop "works but there is a very small area that triggers it" — that is
+    /// this, exactly: the target was a handful of disconnected islands with
+    /// dead water between them.
+    ///
+    /// Dropping anywhere in the section APPENDS to that folder. A card still
+    /// has its own target for landing at a precise position, and the innermost
+    /// destination wins, so precision is available without being required.
+    private func folderSection(_ folder: TemplateFolder) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            folderHeader(folder)
+            // Empty folders still render their header (count 0, menu
+            // reachable). A newly created folder has no templates; the
+            // old `if !folderTemplates.isEmpty` guard made Save look
+            // like a no-op.
+            if !folder.isCollapsed {
+                templateGrid(folder.liveTemplates)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, Spacing.compact)
+        .background(
+            RoundedRectangle(cornerRadius: Radius.card)
+                .fill(targetedFolderID == folder.id ? Theme.accent.opacity(0.12) : .clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.card)
+                .stroke(
+                    targetedFolderID == folder.id ? Theme.accent : .clear,
+                    lineWidth: 2
+                )
+        )
+        .animation(.snappy(duration: 0.15), value: targetedFolderID)
+        .dropDestination(for: String.self) { items, _ in
+            targetedFolderID = nil
+            return handleFolderDrop(items, onto: folder)
+        } isTargeted: { targeted in
+            // Latch on entry, and only clear if this section still owns the
+            // highlight — sections report enter/exit in an order that would
+            // otherwise leave the previous one lit.
+            if targeted {
+                targetedFolderID = folder.id
+            } else if targetedFolderID == folder.id {
+                targetedFolderID = nil
+            }
         }
     }
 
@@ -396,8 +451,26 @@ struct StartWorkoutTab: View {
                 )
                 // Long-press starts the drag; the card's tap still opens overview.
                 .draggable(template.id.uuidString)
+                .overlay(
+                    // Marks the card the dragged template will land IN FRONT
+                    // OF, so a precise reorder is aimed rather than guessed.
+                    RoundedRectangle(cornerRadius: Radius.card)
+                        .stroke(
+                            targetedTemplateID == template.id ? Theme.accent : .clear,
+                            lineWidth: 2
+                        )
+                )
+                .animation(.snappy(duration: 0.15), value: targetedTemplateID)
                 .dropDestination(for: String.self) { items, _ in
+                    targetedTemplateID = nil
+                    targetedFolderID = nil
                     return handleCardDrop(items, onto: template)
+                } isTargeted: { targeted in
+                    if targeted {
+                        targetedTemplateID = template.id
+                    } else if targetedTemplateID == template.id {
+                        targetedTemplateID = nil
+                    }
                 }
             }
         }
