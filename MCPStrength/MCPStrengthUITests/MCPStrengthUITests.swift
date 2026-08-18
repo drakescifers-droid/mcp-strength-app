@@ -406,3 +406,76 @@ final class TemplateFolderDragTests: XCTestCase {
         testCase.add(attachment)
     }
 }
+
+// MARK: - Control: can XCUITest start a SwiftUI drag at all?
+
+/// Not a test of the app. A test of the HARNESS.
+///
+/// `TemplateFolderDragTests` failed, and that has two possible meanings which
+/// call for opposite responses: either the template fix does not work, or
+/// XCUITest cannot initiate a SwiftUI `.draggable` session and the test could
+/// never have passed either way.
+///
+/// This distinguishes them. Exercise reordering on the workout screen uses the
+/// SAME `.draggable` / `.dropDestination` API and is known to work by hand —
+/// Drake reorders exercises, and the only complaint about it (#6) is that
+/// there is no live feedback WHILE dragging, which means the drag itself
+/// starts. So if the same synthesized gesture fails to move an exercise, the
+/// gesture is the thing that does not work, not the code under it.
+///
+/// A failure here is therefore GOOD NEWS about the app and bad news about the
+/// tooling: it means drag features on this project cannot be verified by
+/// XCUITest and need a thumb, which is worth knowing before writing more tests
+/// that cannot pass.
+final class CanXCUITestStartASwiftUIDragTests: XCTestCase {
+
+    @MainActor
+    func testReorderingAnExerciseByDragMovesIt() throws {
+        continueAfterFailure = false
+
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiPreview", "1", "-uiPreviewTab", "start"]
+        app.launch()
+
+        let start = app.buttons["Start an Empty Workout"]
+        XCTAssertTrue(start.waitForExistence(timeout: 20), app.debugDescription)
+        start.tap()
+
+        func addExercise(_ name: String) {
+            let add = app.buttons["Add Exercises"]
+            XCTAssertTrue(add.waitForExistence(timeout: 10), app.debugDescription)
+            add.tap()
+            let row = app.buttons.containing(
+                NSPredicate(format: "label CONTAINS[c] %@", name)
+            ).firstMatch
+            XCTAssertTrue(row.waitForExistence(timeout: 10), app.debugDescription)
+            row.tap()
+        }
+
+        addExercise("Bench Press (Barbell)")
+        addExercise("Pull Up")
+
+        let first = app.staticTexts["Bench Press (Barbell)"].firstMatch
+        let second = app.staticTexts["Pull Up"].firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(second.waitForExistence(timeout: 10), app.debugDescription)
+
+        let firstWasAbove = first.frame.minY < second.frame.minY
+        XCTAssertTrue(firstWasAbove, "precondition: Bench Press starts above Pull Up")
+
+        // The exercise title is the drag handle.
+        first.press(forDuration: 1.0, thenDragTo: second, withVelocity: .slow, thenHoldForDuration: 0.8)
+
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = "control-after-exercise-drag"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        let firstIsStillAbove = app.staticTexts["Bench Press (Barbell)"].firstMatch.frame.minY
+            < app.staticTexts["Pull Up"].firstMatch.frame.minY
+        XCTAssertFalse(
+            firstIsStillAbove,
+            "The KNOWN-WORKING exercise drag also did not move. XCUITest cannot start a SwiftUI drag on this setup, so TemplateFolderDragTests proves nothing about the template fix."
+        )
+    }
+}

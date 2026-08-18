@@ -225,7 +225,8 @@ composition that reads correctly, compiles, passes every structural check, and
 silently swallows the gesture it depends on. That is why the docs could claim
 this feature was done — it was written and reviewed and unreachable.
 
-**Fix is on the phone but NOT independently verified.** A UI test was written
+**Fix is on the phone but NOT independently verified, and further attempts
+were called off as not worth the cost.** A UI test was written
 (`TemplateFolderDragTests`, with new template fixtures so the tab finally has
 content) and could not be run: the XCUITest runner refuses to launch on this
 machine right now, on two different simulators, with no signing error —
@@ -275,3 +276,25 @@ organisation the templates tab has.
   and that it does NOT fire after Finish. — the local notification. Largest of the four: needs a
   permission prompt, scheduling, and cancel/reschedule rules on pause, edit,
   skip and finish.
+
+---
+
+# Note on verifying drag features
+
+**XCUITest could not verify either drag bug, and chasing it was a poor trade.**
+The runner repeatedly refused to launch (`FBSOpenApplicationServiceErrorDomain`,
+RequestDenied) across two simulators, a clean `derivedDataPath`, and a full
+CoreSimulator restart. When it did launch, the template drag test reported the
+folder count never moving — which does NOT distinguish "the fix is wrong" from
+"the synthesized gesture never started a drag", because SwiftUI `.draggable`
+runs on UIDragInteraction and XCUITest is unreliable at initiating it.
+
+A control test was written to tell those apart (drag an EXERCISE, which is
+known to work by hand, with the same gesture). It never got past app launch
+either.
+
+**The practical conclusion: drag-and-drop on this project is verified by a
+thumb, not by a test** — the same standing conclusion `04-status.md` already
+records for simulator taps. Do not spend another session on it. The two drag
+tests are committed and left in place for whenever the runner is healthy again;
+they are not part of the unit suite and cannot make it red.
