@@ -195,6 +195,13 @@ struct MCPStrengthApp: App {
     /// Pull on launch and on foreground, only when there is a session.
     /// The engine itself no-ops if a run is already in flight.
     private func triggerSyncIfSignedIn() {
+        // A test run is not a person using the app. `MCPStrengthTests` is
+        // app-hosted, so `xcodebuild test` launches THIS app against the
+        // simulator's real store with whatever session is in the keychain —
+        // see AutomatedLaunch. Without this line, running the suite syncs a
+        // developer's simulator into the live project, which is how ten rows
+        // were double-converted on 2026-08-18.
+        guard !AutomatedLaunch.isRunningTests else { return }
         guard !UIPreviewMode.isEnabled else { return }
         guard let engine else { return }
         guard case .signedIn(let userID, _) = auth.state else { return }

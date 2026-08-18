@@ -73,14 +73,32 @@ and Apple Health.
 > missing was a check that could FAIL — nothing anywhere asks "has a client already pushed
 > converted rows?" before the conversion runs.
 >
-> **And the push that caused it is still unexplained.** Both sync triggers are guarded on
-> `!UIPreviewMode.isEnabled`, and a controlled relaunch in preview mode moved no
-> `server_updated_at` at all. The app's own `lastSyncedAt` still reads the 17th, so whatever
-> pushed never finished a run. **Leading hypothesis: the XCTest host** — `xcodebuild test` launches
-> the app itself, with no `-uiPreview` argument and a real session in the keychain, which would
-> mean *running the unit suite syncs a developer's simulator into the live project.* That is a
-> hypothesis and it is the next thing to settle; until it is, do not assume a test run is
-> read-only.
+> **SOLVED: RUNNING THE UNIT SUITE SYNCED TO THE LIVE PROJECT.** `MCPStrengthTests` is app-hosted
+> (`TEST_HOST = MCPStrength.app`), which is the ordinary arrangement and has a consequence nobody
+> had looked at: `xcodebuild test` launches the REAL app — real store, real keychain session, no
+> `-uiPreview` argument — and its launch trigger ran a full sync against `mcp-strength`. That is
+> what pushed at 13:35, and what put the preview fixtures on the server the evening before.
+>
+> **No test could have caught it, and that is the part to remember.** The tests never touch the
+> network: in-memory containers, fake transport, exactly as designed. The damage happened
+> *outside* the code under test, before the first test case ran. A suite cannot test the harness
+> it is running inside.
+>
+> Fixed by `Auth/AutomatedLaunch.swift`, checked at both sync triggers. `AutomatedLaunchTests`
+> pins it and is unusual in being able to observe its own subject — it runs under XCTest, so
+> `isRunningTests` must be true where it is asserted.
+>
+> > **`XCTestConfigurationFilePath` is set to an EMPTY STRING.** Presence is the signal; the value
+> > is not. A reasonable-looking `!(path ?? "").isEmpty` reports "not a test run" throughout a test
+> > run — false in the one direction that lets a sync reach the live project. This cost a second
+> > wrong diagnosis: the first version of the test asserted a non-empty value, failed, and was read
+> > as "the variable disappears once tests are running". It never disappears.
+>
+> > **Never let two `xcodebuild` runs share a log file.** Both redirect with `>` and the output
+> > interleaves: a passed count is inflated, and a stale `Failing tests:` block from one run sits
+> > beside a `TEST SUCCEEDED` from the other. It produced a reported "603 tests green" when the
+> > real figure was 415, and a log carrying both verdict lines. One unique log path per run, and
+> > check that exactly ONE verdict line exists before believing it.
 >
 > > **A dump diff told me preview mode was the culprit and it was wrong.** `pg_dump --data-only`
 > > does not emit rows in a stable ORDER, so a plain `diff` of two dumps reports changes that did

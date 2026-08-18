@@ -90,6 +90,9 @@ struct ContentView: View {
     /// Cancel deliberately does NOT sync. A cancelled workout is hard-deleted
     /// and never left the device, so there is nothing to send.
     private func syncAfterFinish() {
+        // Same two reasons as the launch trigger in `MCPStrengthApp`, in the
+        // same order. See AutomatedLaunch for why a test run must not sync.
+        guard !AutomatedLaunch.isRunningTests else { return }
         guard !UIPreviewMode.isEnabled else { return }
         guard let engine else { return }
         guard case .signedIn(let userID, _) = auth.state else { return }

@@ -29,10 +29,10 @@ both sides.** Swift suite green, SQL suite green.
 > ⚠️ **Two things are outstanding on the live project. Run `supabase migration list` first.**
 > `20260818120000_weights_to_kilograms.sql` is applied. `20260818140000_repair_double_converted_weights.sql`
 > may not be — it repairs ten rows that the first one halved, because a client pushed already-
-> converted rows into the five-minute window between the two. `04-status.md` has the full story,
-> including the part that is still unexplained: **something pushed to the live project during a
-> session that was only supposed to be running tests and looking at screens.** Until that is
-> settled, do not assume `xcodebuild test` is read-only with respect to `mcp-strength`.
+> converted rows into the five-minute window between the two. `04-status.md` has the full story, including the
+> cause: **running the unit suite was syncing to the live project**, because the test bundle is
+> hosted by the app, so `xcodebuild test` launched the real app signed in. Fixed in
+> `Auth/AutomatedLaunch.swift` and pinned by a test.
 
 ## Next piece of work, in order
 
