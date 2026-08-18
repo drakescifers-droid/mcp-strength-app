@@ -58,7 +58,7 @@ are correct, only the anchor is missing.
 **Severity guess:** Low-medium — cosmetic, but the rest timer is looked at on
 every set of every workout, so it's a high-visibility polish item.
 
-## 3. No notification when the rest timer finishes
+## 3. [BUILT] No notification when the rest timer finishes
 
 **Screen:** Active workout, rest timer.
 
@@ -243,6 +243,14 @@ organisation the templates tab has.
     changed.
 - **#5 FIXED.** Every set gets a rest row now, on both screens.
 - **#6, #7 LOGGED** — both are drag-and-drop, both need a real thumb to judge.
-- **#3 IN PROGRESS** — the local notification. Largest of the four: needs a
+- **#3 BUILT.** Local notification, scheduled from the timer's own state
+  rather than at each mutation site — `RestNotificationRule` is a pure function
+  of (timer, now), so start/pause/resume/adjust/reset/skip are all covered by
+  watching the value, and so is any seventh operation added later. Permission
+  is requested on the first rest that would schedule something, not at launch.
+  A delegate presents it while the app is frontmost, which is most of a
+  workout. Guarded off under test and in preview mode.
+  **Still needs a real-device check:** permission prompt, lock-screen delivery,
+  and that it does NOT fire after Finish. — the local notification. Largest of the four: needs a
   permission prompt, scheduling, and cancel/reschedule rules on pause, edit,
   skip and finish.
