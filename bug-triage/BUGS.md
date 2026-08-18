@@ -125,7 +125,7 @@ fields, the set-type badge menu).
 an accidental "+ Add Set" is to leave it blank and let Finish silently drop
 it (workout screen only; templates have no such discard). Worth building.
 
-## 5. No rest divider after the final set of an exercise
+## 5. [FIXED] No rest divider after the final set of an exercise
 
 **Screen:** Active workout.
 
@@ -138,12 +138,14 @@ renders the running progress bar and nothing else. So an unfinished last set
 shows no rest row at all, and ticking it makes the bar appear. That is exactly
 what was reported.
 
-**But the reference app agrees with the current behaviour**, which is why this
-is logged as a decision rather than fixed on sight. `Workout screen/bottom of
-workout buttons and options.PNG` shows two exercises, and BOTH end with a set
-followed immediately by "+ Add Set" — no dangling divider after the last set
-in either. AGENTS.md says to check the reference before diverging, and here it
-sides with what we already do.
+**I claimed the reference agreed with the current behaviour. IT DOES NOT, and
+Drake produced the screenshot that disproves it** — an F Shoulders exercise
+ending set 3 with a 2:00 divider before "+ Add Set". The claim came from
+`Workout screen/bottom of workout buttons and options.PNG`, where two exercises
+do end without a divider; both of those happen to end on a DROP SET. One
+sample, generalised into a rule about every exercise, and used to argue against
+making a change. The reference has more states than any single screenshot
+shows — read several before claiming what it "does".
 
 **So the question is what problem it is actually causing.** Two readings, and
 they want different fixes:
@@ -157,10 +159,14 @@ they want different fixes:
    always render the divider after the last set — a deliberate divergence from
    the reference, and a small one.
 
-**NEEDS DRAKE'S CALL** — reference says leave it, request says change it.
+**FIXED.** Every set now renders its rest row on both screens, last one
+included. Two reasons beyond matching the reference: the rest after an
+exercise's final set is the rest before the NEXT EXERCISE, which is a real rest
+somebody takes; and editing a set's rest goes through tapping its divider, so a
+set without one had a value that could be displayed but never changed.
 
-**Severity guess:** Low. Nothing is broken or lost; it is a question of whether
-the last row should carry a rest control.
+**Severity guess:** was logged Low. Understated — it was hiding an edit
+affordance, not just a line.
 
 ---
 
@@ -188,7 +194,7 @@ the last row should carry a rest control.
     two things you would want while deciding whether to delete that set. This
     matches how iOS swipe rows behave, so it may be fine. Flagged rather than
     changed.
-- **#5 LOGGED, needs a decision** — reference and request disagree.
+- **#5 FIXED.** Every set gets a rest row now, on both screens.
 - **#3 NOT STARTED** — the local notification. Largest of the four: needs a
   permission prompt, scheduling, and cancel/reschedule rules on pause, edit,
   skip and finish.

@@ -397,13 +397,15 @@ struct TemplateEditorScreen: View {
                         onDelete: { deleteSet(at: setIndex, in: index) }
                     )
 
-                    if setIndex < draft.sets.count - 1 {
-                        RestDivider(restSeconds: set.restSeconds) {
-                            activeOption = ActiveOption(
-                                index: index,
-                                kind: .setRest(setIndex)
-                            )
-                        }
+                    // Every set, last one included — same rule as the workout
+                    // screen, and for the same two reasons: the rest after the
+                    // final set is a real rest, and the divider is the only way
+                    // to edit one.
+                    RestDivider(restSeconds: set.restSeconds) {
+                        activeOption = ActiveOption(
+                            index: index,
+                            kind: .setRest(setIndex)
+                        )
                     }
                 }
             }

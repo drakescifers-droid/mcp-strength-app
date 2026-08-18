@@ -694,17 +694,26 @@ private struct ExerciseBlock: View {
                             onDelete: { deleteSet(set) }
                         )
 
-                        if index < sortedSets.count - 1 {
-                            restDividerOrBar(for: set)
-                        } else {
-                            // A rest after the LAST set of an exercise still counts:
-                            // there is no divider below to replace, but the user
-                            // still rests before moving on. Show the progress bar
-                            // only when a rest is actually running for this set.
-                            if isResting(set) {
-                                restDividerOrBar(for: set)
-                            }
-                        }
+                        // EVERY set gets a rest row, including the last one.
+                        //
+                        // This used to special-case the final set: progress bar
+                        // while resting, nothing otherwise. The reasoning was
+                        // that a divider "between" sets has nothing to sit
+                        // between at the bottom of the list — and it was wrong
+                        // twice over. The rest after an exercise's last set is
+                        // the rest before the next EXERCISE, which is a real
+                        // rest you take; and hiding it left that set's rest
+                        // with no way to tap and edit it, since editing goes
+                        // through the divider.
+                        //
+                        // The reference app draws it too
+                        // (`Workout screen/` — the F Shoulders screenshot ends
+                        // set 3 with a 2:00 divider before "+ Add Set"). An
+                        // earlier reading of a DIFFERENT reference screenshot
+                        // concluded the opposite, from a single exercise whose
+                        // last set was a drop set. One sample was not enough to
+                        // support the general claim it was used for.
+                        restDividerOrBar(for: set)
                     }
                 }
 
