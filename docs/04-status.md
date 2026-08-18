@@ -316,6 +316,40 @@ as a generated one.
 > **`Add Warm-up Sets` has now been looked at and is off this list.** It found one real bug, which
 > is recorded below rather than here because the shape of it is the reusable part.
 
+### ON THE PHONE, and the units conversion is proven on a real pounds store
+
+**2026-08-18. `us.aiagent4.MCPStrength` is installed and running on Drake's iPhone 14**, built
+against the paid team and installed OVER the existing app — no delete, so the device's own store
+survived. That store was written by the pounds-era build, which makes it the only real test of the
+conversion that exists.
+
+It passed, and it was read out of the database rather than inferred:
+
+- **It launched.** The store predates both `AppSettings` and `StoreMigrations`, so this was the
+  crash-on-launch case in AGENTS.md rule 2 — a `@Model` added to the `Schema` against a store
+  written before it existed. The process was still alive afterwards.
+- **It converted its own data exactly once.** Two rows it had never synced arrived on the server at
+  `61.2350 kg` — 135.00 lb to five decimal places. A second conversion would have produced 27.78.
+- **It corrupted nothing.** Zero pre-existing rows were rewritten; five rows were added.
+- **Every weighted row on the server lands on a real plate load** (35 / 95 / 135 / 155 / 185 /
+  225 lb). That is the same signature used to find the damaged rows earlier, now used as the
+  all-clear.
+
+> **The signing checks in this section were applied and they worked.** The profile is 365 days
+> (a 7-day one would mean free provisioning), and the team is `OU=ZD2SRFJUPS` read out of the
+> certificate — NOT the `(8THV5TS24T)` in the common name, which is the personal id and the thing
+> that produced a whole false diagnosis last time.
+
+Rebuild and reinstall with:
+
+```
+xcodebuild build -project MCPStrength/MCPStrength.xcodeproj -scheme MCPStrength \
+  -destination 'platform=iOS,id=6902E742-268A-53A7-98B9-C9A034110AC8' \
+  -derivedDataPath DerivedData DEVELOPMENT_TEAM=ZD2SRFJUPS -allowProvisioningUpdates
+xcrun devicectl device install app --device 6902E742-268A-53A7-98B9-C9A034110AC8 \
+  DerivedData/Build/Products/Debug-iphoneos/MCPStrength.app
+```
+
 ### Shipping to a device — the account side is DONE
 
 **The Apple Developer Program is active** (team `ZD2SRFJUPS`, enrolled as an Individual, renewing

@@ -67,6 +67,8 @@ both sides.** Swift suite green, SQL suite green.
   was meant to sync. The leading hypothesis is that `xcodebuild test` launches the app as its own
   test host, signed in, with no preview flag. If that is right it needs fixing before anyone trains
   on this: running the tests would upload whatever is in the simulator.
+- **The app is ON my iPhone 14 and running** (installed 2026-08-18, direct install, no TestFlight
+  needed). The units conversion is proven on a real pounds-era store — see `04-status.md`.
 - **The App Store Connect app record does not exist yet**, so nothing can be uploaded even though
   the build is ready. Only I can create it. Ask before running any upload; it is outward-facing.
 - **The template editor has still never been looked at by anyone.** It is the last completely
