@@ -126,7 +126,23 @@ struct ContentView: View {
                 onStartTemplate: { template in startWorkout(from: template) }
             )
             .tabItem {
-                Label("Start Workout", systemImage: "plus")
+                // "Start", not "Start Workout", and this is a DELIBERATE
+                // divergence from the reference — which does say "Start
+                // Workout" (`Home screen/Home Screen.PNG`).
+                //
+                // The reference's tab bar is flat, full-width, and marks the
+                // selected tab with tint alone. This platform's bar floats and
+                // draws a capsule sized to the selected LABEL, so the longest
+                // label in the middle slot pushes that capsule out into its
+                // neighbours and "History" and "Exercises" end up pressed
+                // against it. Same string, different bar, worse result.
+                //
+                // Shortening restores what the reference actually shows — five
+                // evenly spaced tabs — rather than the string it uses to show
+                // it. The screen's own title is still "Start Workout", so the
+                // full name is never lost; it is one line away from reverting
+                // if a future OS stops drawing the capsule.
+                Label("Start", systemImage: "plus")
             }
             .tag(2)
 

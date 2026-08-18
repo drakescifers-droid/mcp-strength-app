@@ -536,6 +536,20 @@ Small, none blocking, roughly in the order I would do them.
   screen will draw it. Resolve it by designing the grouping and building it, or by removing the
   menu item until then — the same choice Archive is waiting on, and for the same reason.
 
+> **The middle tab reads "Start", where the reference reads "Start Workout".** A deliberate
+> divergence, and the reasoning is about the BAR rather than the word. The reference's tab bar
+> (`Home screen/Home Screen.PNG`) is flat, full-width, and marks the selected tab with tint alone.
+> This platform's bar floats and draws a capsule sized to the selected label, so the longest label
+> sitting in the middle slot pushes that capsule out into its neighbours — "History" and
+> "Exercises" end up pressed against it. Shortening the label reproduces what the reference
+> actually shows, five evenly spaced tabs, rather than the string it uses to show it. The screen's
+> own title is still "Start Workout", so the full name is never lost.
+>
+> **There is no API for this.** `tabBarMinimizeBehavior` only hides the bar on scroll, nothing
+> exposes the selection capsule, and the transitional Info.plist opt-out from the previous release
+> is not in this SDK — checked, not recalled. Label width is the only lever, which is why a
+> one-word change is the whole fix. Revert it in one line if a future OS stops drawing the capsule.
+
 > **Archive and Share are deliberately absent from the template menu.** The reference has both.
 > Archive has no schema *and no designed behaviour* — does it hide the row, where do you
 > unarchive, does it affect history? The Program schema precedent does **not** license adding a
