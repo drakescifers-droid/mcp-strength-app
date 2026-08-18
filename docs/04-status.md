@@ -97,8 +97,13 @@ Preferences, canonical units, and Apple Health.
   MEASURED from the reference app, not chosen, and bar weight floors it so it cannot propose a load
   lighter than the bar. **Now watched running on a screen**, which is where the Previous-column bug
   below came from — see "What looking at the warm-up ramp found".
-- **Bar types carry weights**, and a `hammerStrength` exercise category exists in the app and in
-  the live database.
+- **Bar types carry a weight PER UNIT** (`BarType.weight(in:)`), and a `hammerStrength` exercise
+  category exists in the app and in the live database.
+- **The units foundation, with nothing switched over to it yet.** `AppSettings` (the whole settings
+  field list, one row, `current(in:)`), and `WeightUnits` — the pure kg↔display conversion. Stored
+  weights are STILL POUNDS: none of this is wired to a screen, so the app behaves exactly as before.
+  Deliberate, so the conversion can be wrong on its own rather than inside the change that also
+  rewires six screens and migrates two databases. See "Canonical units" under what is left.
 - **UI preview mode** — see below. This is the single most useful thing to know about.
 
 ### THE LOOP THAT WAS MISSING FOR A DAY: seeing the app
@@ -219,15 +224,74 @@ as a generated one.
 
 ### What is left, in order
 
-1. **Per-exercise Preferences.** Design decided and approved: `docs/06-sync.md` § "Per-exercise
+1. **Canonical units — HALF LANDED, and the half that remains is one change, not two.** The
+   decision is made (kg, `01-data-model.md`) and the foundation is committed. What is left:
+   - **Rewire every read and write of a weight** through `WeightUnits` — `SetRow`'s entry fields,
+     `PreviousText`, history volume and best set, `OneRepMax`, and the warm-up ramp. The ramp should
+     work in the user's DISPLAY unit and convert once at the end, because `plateIncrement` is per
+     unit: an lb lifter must get 45/55/70, not the kg ramp converted into fractions.
+   - **Convert the data that already exists**, in the simulator store AND in the live Supabase
+     project, `× 0.45359237`. Local needs a guard so it runs exactly once — a second pass would
+     convert kg to kg and quietly halve every lift ever logged.
+
+   > **These two must land TOGETHER.** Rewire without converting and every stored weight is read as
+   > kilograms, so 135 lb reads as 298. Convert without rewiring and the reverse. There is no safe
+   > intermediate commit, which is exactly why the foundation was split out first.
+
+   > **DO NOT LOG REAL WORKOUTS UNTIL THIS IS DONE.** The whole reason units came before TestFlight
+   > is that the conversion is free while the only data is test data. Drake's developer account is
+   > live and a store-signed build already exists, so the temptation is real and the window is open.
+
+2. **Per-exercise Preferences.** Design decided and approved: `docs/06-sync.md` § "Per-exercise
    preferences get their own local model". The sheet is two rows — Weight Unit and Bar Type — not
-   four; `focusMetric` and `notes` are not edited there.
-2. **Canonical units**, before there is real history (`05`). Also unblocks the *Default* option in
-   the weight-unit picker, and `BarType.weight` is where lb→kg must happen.
-3. **Apple Health.** The last item in Phase 2.
+   four; `focusMetric` and `notes` are not edited there. The *Default* option in its weight-unit row
+   is what item 1 unblocks, and `AppSettings` is what it defers to.
+3. **Settings screen, units rows only**, off the profile page — reference screenshots are in
+   `Settings accessed from profile page/`. This is what makes canonical storage visible: without it
+   nobody can change the unit, so the conversion is only ever exercised in one direction.
+4. **Sync `AppSettings`.** It carries the sync columns and deliberately does NOT conform to
+   `Syncable` — there is no Postgres table yet (`05-database.md`). One row per user means the key is
+   `user_id`, which is the same per-entity conflict-target work `06-sync.md` specifies for
+   `exercise_preferences`; do it once for both.
+5. **Apple Health.** The last item in Phase 2, and no longer blocked — see the signing note below.
 
 > **`Add Warm-up Sets` has now been looked at and is off this list.** It found one real bug, which
 > is recorded below rather than here because the shape of it is the reusable part.
+
+### Shipping to a device — the account side is DONE
+
+**The Apple Developer Program is active** (team `ZD2SRFJUPS`, enrolled as an Individual, renewing
+2026-08-16), and the whole path to a distributable build is proven: `xcodebuild archive` then
+`-exportArchive` with `method: app-store-connect` produces an `.ipa` signed
+`Apple Distribution: DRAKE PHILIP SCIFERS (ZD2SRFJUPS)` carrying a Store provisioning profile, and
+it passes Apple's `-validate-for-store` on the way through. `DEVELOPMENT_TEAM` is pinned in the
+project because the machine knows two teams and automatic signing was otherwise free to guess.
+
+This unblocks **Apple Health** — HealthKit is a restricted capability Apple does not grant free
+accounts at all — and **Sign in with Apple**, which is paid-only and carries the identity-linking
+work already flagged under "Not verified".
+
+What is NOT done: **no app record exists in App Store Connect**, so nothing can actually be
+uploaded yet. That record is Drake's to create (name, bundle id `us.aiagent4.MCPStrength`, SKU).
+
+> **Two hours went into diagnosing this and the diagnosis was wrong twice**, so the reusable part is
+> how to read the output rather than the conclusion:
+>
+> * **`security find-identity` prints the certificate's COMMON NAME, and for an Apple Development
+>   certificate the value in parentheses is not the team.** `Apple Development: … (8THV5TS24T)` has
+>   `OU=ZD2SRFJUPS` — the parenthetical is the developer's personal id, stable across teams. Read
+>   the `OU` field (`openssl x509 -noout -subject`), never the display name.
+> * **A 7-day provisioning profile does not prove a free account.** Xcode issues one under
+>   free-provisioning rules whenever it has not yet refreshed membership status, and stamps it with
+>   the paid team anyway. The tell that the membership is live is a profile expiring in a YEAR.
+> * **Certificates and provisioning profiles are different objects and the words blur.** The
+>   certificate is the identity; the profile is the permit naming an app id, the certificates it
+>   trusts, and where it may run. Every failure here was a stale PROFILE while the certificates were
+>   fine, and "doesn't include signing certificate" means that literally — the profile predates the
+>   certificate — rather than indicating a team mismatch.
+>
+> Apple limits quoted from memory were wrong too (a third Apple Development certificate was created
+> without complaint after "two is the cap"). Check the portal rather than trusting a recalled limit.
 
 ### Traps around the transport
 

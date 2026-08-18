@@ -18,23 +18,33 @@ I'm not a developer — explain things in plain English. Code, commits and docs 
 state, the traps, the decisions and the reasoning behind them. Don't re-derive from the code what
 those files already explain, and don't duplicate them into new files.
 
-The one-line state: **sync is proven end to end against the real project, and Phase 2 is down to
-three things.** 370 Swift tests green, SQL suite green, all 8 migrations applied and verified
-remote == local.
+The one-line state: **sync is proven end to end, and canonical units are half done — the decision
+and the foundation are in, the rewiring and the data conversion are not.** 395 Swift tests green,
+SQL suite green, all 8 migrations applied and verified remote == local.
+
+> **Weights are still stored in POUNDS.** `AppSettings` and `WeightUnits` exist and nothing is wired
+> to them, on purpose. Do not assume a stored weight is kilograms until the item below is finished.
 
 ## Next piece of work, in order
 
-1. **Per-exercise Preferences.** The design is decided and approved — read
-   `docs/06-sync.md` § "Per-exercise preferences get their own local model" before writing any of
-   it. Short version: the four fields move off `Exercise` into their own `ExercisePreference`
-   model, which is how the server already stores them and which dissolves three of the four sync
-   problems rather than working around them. The sheet itself is only two rows (Weight Unit, Bar
-   Type), not four.
-2. **Canonical units**, before there is real history (`05`). Also unblocks the *Default* option in
-   the weight-unit picker, and `BarType.weight` is where lb→kg has to happen — a kg user wants a
-   20 kg Olympic bar, not 45 lb.
-3. **Apple Health.** Last thing in Phase 2. Then Phase 3, the real MCP server, which Drake has
-   confirmed is in scope for v1.
+1. **Finish canonical units — and it is ONE change, not two.** Read `04-status.md` § "What is left"
+   first; it spells out both halves. Rewire every weight read/write through `WeightUnits`, AND
+   convert the existing data in the simulator store and the live Supabase project, in the same
+   change. Doing either alone leaves every weight in the app wrong by a factor of 2.2 — there is no
+   safe intermediate commit, which is why the foundation was landed separately first.
+   > **The local conversion needs a run-exactly-once guard.** A second pass converts kg to kg and
+   > quietly halves every lift ever logged.
+2. **Per-exercise Preferences.** Design decided and approved — read `docs/06-sync.md` §
+   "Per-exercise preferences get their own local model" before writing any of it. The four fields
+   move off `Exercise` into their own `ExercisePreference` model, which is how the server already
+   stores them and dissolves three of the four sync problems rather than working around them. The
+   sheet is two rows (Weight Unit, Bar Type), not four.
+3. **The settings screen's units rows**, off the profile page. Until these exist the unit can never
+   be changed, so the conversion is only ever exercised in one direction.
+4. **Sync `AppSettings`** — no Postgres table yet, and one row per user means the key is `user_id`.
+   Same per-entity conflict-target work `06-sync.md` already specifies for `exercise_preferences`.
+5. **Apple Health.** Last thing in Phase 2, and no longer blocked — the developer account is live.
+   Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
 
 > **`Add Warm-up Sets` has been looked at and is done.** It found one real bug — the Previous
 > column followed row position, so a generated ramp moved your last working set onto a warm-up.
@@ -42,6 +52,12 @@ remote == local.
 
 ## Waiting on me
 
+- **DO NOT let me start logging real workouts until item 1 is finished.** My developer account is
+  live and a store-signed build already exists, so the app is one upload away from my phone. Every
+  workout I log before the conversion turns a free change into a migration over data I care about.
+  That ordering is the entire reason units came before TestFlight — say so if I ask to skip ahead.
+- **The App Store Connect app record does not exist yet**, so nothing can be uploaded even though
+  the build is ready. Only I can create it. Ask before running any upload; it is outward-facing.
 - **The template editor has still never been looked at by anyone.** It is the last completely
   unseen screen — and it no longer needs your hands: point
   `MCPStrengthUITests/WarmupRampWalkthroughTests` at it and read the screenshots.
@@ -86,6 +102,21 @@ resolutions. I chose to leave it and note it.
   literal text `0.4` and failed a worker that had written `40 / 100` — same behaviour, wasted retry.
 - Run areas worth copying rather than rewriting: `~/ringer/run-areas/mcpstrength-transport/`,
   `mcpstrength-lww/`, `mcpstrength-warmup/`, `mcpstrength-equipment/`.
+
+## Reading Apple's signing output — wrong twice in one session
+
+Full version in `04-status.md` § "Shipping to a device". The three that cost the time:
+
+- **`security find-identity` shows the certificate's common name, and the value in parentheses on
+  an Apple Development certificate is NOT the team.** Read `OU` via
+  `openssl x509 -noout -subject`. I built a whole false diagnosis on the display name.
+- **A 7-day provisioning profile does not mean a free account**; a year-long one is what proves the
+  membership is live.
+- **Certificates and profiles are different objects.** Every failure was a stale profile while the
+  certificates were fine, and "doesn't include signing certificate" means exactly that — the
+  profile predates the certificate.
+
+Apple limits recalled from memory were wrong too. Check the portal.
 
 ## Two reading habits that would have saved a day
 
