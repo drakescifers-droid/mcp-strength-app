@@ -112,6 +112,55 @@ final class WarmupRampWalkthroughTests: XCTestCase {
         attach(named: "04-after-retyping-135", app)
     }
 
+    /// The Previous column against history that CONTAINS warm-ups.
+    ///
+    /// Fixtures are ON here, and that is the point rather than a shortcut:
+    /// `UIPreviewFixtures` installs a COMPLETED Bench Press workout whose first
+    /// two sets are warm-ups at 95x10 and 135x5, with working sets at 185.
+    /// Nothing else in the app can produce that history without logging and
+    /// finishing a whole workout first.
+    ///
+    /// The ramp generated here is still generated — it is a NEW workout, and
+    /// the fixture's own warm-ups are history rather than rows on this screen.
+    /// Worth saying because reading a fixture's ramp as the generator's output
+    /// is exactly the mistake that built this feature twice (docs/04-status.md).
+    ///
+    /// Expected, with a 200 lb working set (ramp 100 / 120 / 150):
+    ///
+    ///     W  100   <- 95 lb x 10 (W)     last time's first warm-up
+    ///     W  120   <- 135 lb x 5 (W)     last time's second warm-up
+    ///     W  150   <- "—"                there was no third warm-up
+    ///     1  200   <- 185 lb x 8         last time's first WORKING set
+    @MainActor
+    func testWarmupRowsReadLastTimesWarmups() throws {
+        continueAfterFailure = false
+
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiPreview", "1", "-uiPreviewFixtures", "1", "-uiPreviewTab", "start"]
+        app.launch()
+
+        let start = app.buttons["Start an Empty Workout"]
+        XCTAssertTrue(start.waitForExistence(timeout: 20), tree(app))
+        start.tap()
+
+        let addExercises = app.buttons["Add Exercises"]
+        XCTAssertTrue(addExercises.waitForExistence(timeout: 10), tree(app))
+        addExercises.tap()
+
+        let bench = app.buttons.containing(
+            NSPredicate(format: "label CONTAINS[c] %@", "Bench Press (Barbell)")
+        ).firstMatch
+        XCTAssertTrue(bench.waitForExistence(timeout: 10), tree(app))
+        bench.tap()
+
+        try type("200", intoTextFieldAt: 0, of: app)
+        try type("5", intoTextFieldAt: 1, of: app)
+        attach(named: "05-working-set-200x5-with-warmup-history", app)
+
+        try chooseWarmupSets(in: app)
+        attach(named: "06-previous-column-against-warmup-history", app)
+    }
+
     // MARK: - Helpers
 
     /// The `⋯` menu carries an accessibility label; the item is plain text.

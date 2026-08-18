@@ -328,9 +328,9 @@ struct TemplateEditorScreen: View {
         // consume a number, so lettered types are skipped and normal numbering
         // continues past them (docs/01-data-model.md § SetType).
         let workingNumbers = SetNumbering.workingNumbers(for: draft.sets.map(\.setType))
-        // Warm-ups do not read history — the editor has `Add Warm-up Sets` too,
-        // so the same shift would happen here.
-        let previousPositions = SetNumbering.positionsIgnoringWarmups(for: draft.sets.map(\.setType))
+        // Counted within kind, because the editor has `Add Warm-up Sets` too and
+        // the same shift would happen here.
+        let previousPositions = SetNumbering.positionsWithinKind(for: draft.sets.map(\.setType))
 
         VStack(alignment: .leading, spacing: Spacing.comfortable) {
             HStack(spacing: Spacing.compact) {
@@ -358,7 +358,7 @@ struct TemplateEditorScreen: View {
                     SetRow(
                         setType: bindingForSetType(exercise: index, set: setIndex),
                         setNumber: workingNumbers[setIndex],
-                        previousText: previousText(for: draft.exercise, at: previousPositions[setIndex]),
+                        previousText: previousText(for: draft.exercise, at: previousPositions[setIndex], like: set.setType),
                         weight: bindingForWeight(exercise: index, set: setIndex),
                         prescription: bindingForPrescription(exercise: index, set: setIndex),
                         allowRange: true,
@@ -432,11 +432,11 @@ struct TemplateEditorScreen: View {
 
     // Reuses WorkoutHistory exactly as the workout screen does — the template's
     // exercises are the same Exercise records, so prior performances match.
-    private func previousText(for exercise: Exercise, at position: Int?) -> String {
-        guard let position else { return "—" }
+    private func previousText(for exercise: Exercise, at position: Int, like setType: SetType) -> String {
         let prev = WorkoutHistory.previousSet(
             for: exercise,
             at: position,
+            like: setType,
             in: allWorkouts
         )
         return PreviousText.format(prev)

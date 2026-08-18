@@ -43,8 +43,27 @@ enum UIPreviewFixtures {
         guard let library = try? context.fetch(FetchDescriptor<Exercise>()),
               !library.isEmpty else { return }
 
+        // EXACT, full-name match, and the exactness is the point.
+        //
+        // This was `localizedCaseInsensitiveContains`, over a fetch with no
+        // sort descriptor — so it returned whichever matching row SwiftData
+        // happened to hand back first. "Bench Press" matched **Incline Bench
+        // Press (Dumbbell)** and "Pull Up" matched **Assisted Pull Up**, which
+        // meant the fixture hung 95 lb and 135 lb warm-ups and 185 lb working
+        // sets off a DUMBBELL incline press. Nothing failed; the screens just
+        // quietly showed nonsense, in the one tool this project uses to judge
+        // whether a screen is right (docs/04-status.md).
+        //
+        // A miss now trips an assertion rather than skipping the block. The
+        // silent `if let` meant renaming a seeded exercise would thin the
+        // fixtures out instead of saying so, and an emptier preview is exactly
+        // the thing nobody notices.
         func exercise(_ name: String) -> Exercise? {
-            library.first { $0.name.localizedCaseInsensitiveContains(name) }
+            let match = library.first {
+                $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame
+            }
+            assert(match != nil, "UIPreviewFixtures: no seeded exercise named \(name)")
+            return match
         }
 
         let workout = Workout(
@@ -66,7 +85,7 @@ enum UIPreviewFixtures {
 
         // A loaded barbell movement: warm-ups, working sets, a drop set, RPE,
         // and one skipped set — every badge and both text colours in one block.
-        if let bench = exercise("Bench Press") {
+        if let bench = exercise("Bench Press (Barbell)") {
             let block = WorkoutExercise(
                 order: 0,
                 note: "Elbows tucked, pause on the chest.",
@@ -107,7 +126,7 @@ enum UIPreviewFixtures {
 
         // High reps: above the Brzycki/Epley crossover, so the estimate comes
         // from the other formula. Worth having one visible.
-        if let curl = exercise("Bicep Curl") {
+        if let curl = exercise("Bicep Curl (Dumbbell)") {
             let block = WorkoutExercise(
                 order: 2,
                 stickyNote: "Slow negatives.",

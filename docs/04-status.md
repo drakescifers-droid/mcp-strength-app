@@ -151,22 +151,43 @@ displayed against a 45 lb warm-up, and the working set — now row 4, where last
 showed "—". The number you need in order to pick today's load was simultaneously missing from the
 row that needs it and misleading on a row the app filled in for you.
 
-Fixed by excluding warm-ups from BOTH sides of the match: `SetNumbering.positionsIgnoringWarmups`
-on the display side, a filter in `WorkoutHistory.previousSet` on the history side. A warm-up row now
-reads "—" always, which is honest — the app chose that load from the working weight, so it has
-nothing to report about it. **Drake decided this**, over the alternative of matching warm-ups to
-last time's warm-ups; that would have put a permanent "(W)" on every warm-up row.
+Fixed by counting **within a KIND** on both sides — warm-ups match warm-ups, everything else
+matches the working sequence: `SetNumbering.positionsWithinKind` on the display side, a filter in
+`WorkoutHistory.previousSet` on the history side. Both halves have to agree or the column just lies
+differently.
 
-> **The shape to remember: two rules that skip rows, skipping DIFFERENT rows.** Working-set
-> numbering skips every lettered type, because a drop set is not "set 3". Previous skips only
-> warm-ups, because a drop set IS a performance at that point in the sequence. They look like the
-> same rule and a later tidy-up would collapse them; `numberingAndPreviousPositionsDisagreeOnDropSets`
-> exists to fail when somebody does.
+> **This was decided twice, and the second answer came from the reference.** The first fix showed
+> "—" on every warm-up row, on the reasoning that the app picks warm-up loads from the working
+> weight so it has nothing to report. Then `Workout screen/editing weight by plate.PNG` turned out
+> to show the reference app doing the opposite — `90 lb × 10 (W)` and `140 lb × 5 (W)` against its
+> warm-up rows. Drake chose to match it. **Check the reference before diverging from it**, which is
+> already a rule in `AGENTS.md` and was not followed here until after the fact.
+
+> **The shape to remember: two rules that walk the same list and do different things.** Working-set
+> numbering skips every lettered type and returns nil for it, because a drop set is not "set 3".
+> Previous skips nothing and gives warm-ups their own sequence, because a drop set IS a performance
+> at that point and a warm-up is a warm-up. They look like the same rule and a later tidy-up would
+> collapse them; `numberingAndPreviousPositionsDisagreeOnDropSets` exists to fail when somebody does.
 
 **Why no test saw it.** Both halves were internally consistent and agreed with each other — they
 just pointed at the wrong row. Every existing test used a set list with no warm-ups in it, where
 raw position and working position are the same number. The feature that broke the assumption is the
 feature that generates warm-ups, and it was tested for what it inserts, not for what it displaces.
+
+**The second bug, found while proving the first fix: the preview fixtures were wired to the wrong
+exercises.** `UIPreviewFixtures` looked its exercises up with `localizedCaseInsensitiveContains`
+over a fetch with no sort descriptor, so it got whichever matching row SwiftData handed back first.
+`"Bench Press"` matched **Incline Bench Press (Dumbbell)** and `"Pull Up"` matched **Assisted Pull
+Up** — so the block explicitly commented as "a loaded barbell movement", carrying 95 lb and 135 lb
+warm-ups and 185 lb working sets, hung off a dumbbell incline press. Nothing failed and nothing
+looked broken; the numbers were simply nonsense, **in the one tool this project uses to judge
+whether a screen is right.** Now an exact full-name match, and a miss trips an assertion instead of
+silently skipping the block.
+
+> **The fixtures are idempotent on a marker workout named "Preview Session", so an existing
+> simulator store keeps the OLD, wrongly-wired data.** Delete that workout, or use a device with no
+> store, to see the corrected fixtures. This was verified on a fresh `iPhone 17 Pro` rather than by
+> erasing the iPhone 17's store.
 
 **The tooling: `WarmupRampWalkthroughTests`.** The documented way to drive the simulator —
 computer-use taps on the Simulator window — **no longer works.** The clicks land (macOS hit-testing
@@ -176,8 +197,9 @@ iOS Simulator MCP is still crash-looping.
 
 So the walkthrough is an XCUITest instead: it starts an empty workout, adds Bench Press, types a
 working weight, opens the `⋯` menu, taps `Add Warm-up Sets` three times under different conditions,
-and attaches a screenshot at each step. It asserts almost nothing on purpose — **it is a camera, not
-a test.** Extract the pictures and look at them:
+and attaches a screenshot at each step. A second test does the same against history that CONTAINS
+warm-ups, which only the fixtures can produce. Both assert almost nothing on purpose — **they are
+cameras, not tests.** Extract the pictures and look at them:
 
 ```
 xcodebuild test -project MCPStrength/MCPStrength.xcodeproj -scheme MCPStrength \

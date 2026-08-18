@@ -674,10 +674,10 @@ private struct ExerciseBlock: View {
     // Working-set numbers parallel to `sortedSets`: only `.normal` sets consume
     // a number, so warm-ups / drop sets / failure sets render a letter and the
     // numbering of normal sets continues past them (docs/01-data-model.md § SetType).
-    /// Which row the Previous column reads history from. Warm-ups are nil —
-    /// see `SetNumbering.positionsIgnoringWarmups`.
-    private var previousPositions: [Int?] {
-        SetNumbering.positionsIgnoringWarmups(for: sortedSets.map(\.setType))
+    /// Which row the Previous column reads history from. Warm-ups count in
+    /// their own sequence — see `SetNumbering.positionsWithinKind`.
+    private var previousPositions: [Int] {
+        SetNumbering.positionsWithinKind(for: sortedSets.map(\.setType))
     }
 
     private var workingNumbers: [Int?] {
@@ -731,14 +731,14 @@ private struct ExerciseBlock: View {
 
     // MARK: - Previous
 
-    /// `position` is nil for a warm-up row, which shows "—": the app chose that
-    /// load from the working weight, so there is nothing it can honestly report
-    /// about what the user did there last time.
-    private func previousText(for set: WorkoutSet, position: Int?) -> String {
-        guard let position, let exercise = workoutExercise.exercise else { return "—" }
+    /// `position` is this row's index WITHIN ITS KIND, so a warm-up reads last
+    /// time's warm-ups and a working row reads last time's working sets.
+    private func previousText(for set: WorkoutSet, position: Int) -> String {
+        guard let exercise = workoutExercise.exercise else { return "—" }
         let prev = WorkoutHistory.previousSet(
             for: exercise,
             at: position,
+            like: set.setType,
             in: allWorkouts,
             excluding: inProgressWorkout
         )
