@@ -108,4 +108,59 @@ struct WarmupSetsTests {
         #expect(plan.map(\.reps) == [5, 5, 3])
         #expect(plan.map(\.weight) == [115, 135, 170])
     }
+
+    // MARK: - Bar-weight floor
+
+    // 65 × 0.50 / 0.60 / 0.75 = 32.5 / 39 / 48.75 → 35 / 40 / 50. On a
+    // 45 lb bar the first two cannot be loaded. Raised: 35→45, 40→45
+    // (duplicate, dropped by the existing strictly-increasing rule), 50
+    // stays. Empty bar + 50, then work at 65.
+    @Test func stepsBelowTheBarAreRaisedToTheBar() {
+        let plan = WarmupSets.plan(forWorkingWeight: 65, barWeight: 45)
+        #expect(plan.map(\.weight) == [45, 50])
+        #expect(plan.map(\.reps) == [5, 3])
+        #expect(plan.allSatisfy { $0.setType == .warmup })
+    }
+
+    // The 90 lb reference case with the Olympic bar supplied. 45 is equal
+    // to the bar, not below it, so the floor does not touch the first
+    // step. The measured ramp must not move just because a caller now
+    // knows which bar is on the pins.
+    @Test func aStepEqualToTheBarIsKept() {
+        let plan = WarmupSets.plan(forWorkingWeight: 90, barWeight: 45)
+        #expect(plan.map(\.weight) == [45, 55, 70])
+        #expect(plan.map(\.reps) == [5, 5, 3])
+    }
+
+    @Test func aNilBarWeightIsIdenticalToOmittingTheFloor() {
+        let omitted = WarmupSets.plan(forWorkingWeight: 90)
+        let explicitNil = WarmupSets.plan(forWorkingWeight: 90, barWeight: nil)
+        #expect(explicitNil == omitted)
+        #expect(explicitNil.map(\.weight) == [45, 55, 70])
+
+        // 65 is the case the floor actually changes. nil must reproduce
+        // today's unfloored 35 / 40 / 50, including the unloadable steps
+        // — "no floor" is not "a floor of zero".
+        let unfloored = WarmupSets.plan(forWorkingWeight: 65, barWeight: nil)
+        #expect(unfloored.map(\.weight) == [35, 40, 50])
+        #expect(unfloored == WarmupSets.plan(forWorkingWeight: 65))
+    }
+
+    // BarType.dumbbell.weight and .other.weight are 0. A caller that
+    // forwards `exercise.barType?.weight` will pass 0, not nil. That 0
+    // must not become a floor.
+    @Test func aZeroBarWeightIsNotAFloor() {
+        let plan = WarmupSets.plan(forWorkingWeight: 65, barWeight: 0)
+        #expect(plan.map(\.weight) == [35, 40, 50])
+        #expect(plan == WarmupSets.plan(forWorkingWeight: 65))
+    }
+
+    // Bar at or above the work: every raised step fails
+    // `rounded < workingWeight`. Nothing honest remains — same shape as
+    // fivePoundsCollapsesToNothing, and not a list of unloadable plates.
+    @Test func aBarHeavierThanTheWorkCollapsesToNothing() {
+        #expect(WarmupSets.plan(forWorkingWeight: 65, barWeight: 65).isEmpty)
+        #expect(WarmupSets.plan(forWorkingWeight: 65, barWeight: 70).isEmpty)
+        #expect(WarmupSets.plan(forWorkingWeight: 45, barWeight: 45).isEmpty)
+    }
 }

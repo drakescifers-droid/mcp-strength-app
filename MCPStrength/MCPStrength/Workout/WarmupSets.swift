@@ -37,6 +37,16 @@
 //    * Two steps that round to the same plate are the same set. The later
 //      one is dropped so the ramp stays strictly increasing. Identical
 //      warm-ups are silly; a heavier-than-work warm-up is wrong.
+//    * A step below the bar cannot be loaded. It is raised to the bar
+//      weight, not dropped. Dropping would throw away the empty-bar set —
+//      the first honest warm-up at light working weights (65 lb on a 45 lb
+//      bar would keep only 50). Raising two steps to the same bar
+//      collapses via the duplicate rule above. A bar at or above the work
+//      still produces nothing: the raised value fails
+//      `rounded < workingWeight`, same as a step that landed on the work.
+//      `nil` is no floor. A non-positive bar is treated as nil, because
+//      `BarType.dumbbell` / `.other` carry weight 0 and that 0 must never
+//      become a floor by accident.
 //
 //  Set type is `.warmup` on every step. SetNumbering only numbers `.normal`
 //  sets; a generated warm-up typed `.normal` would steal 1, 2, 3 from the
@@ -84,18 +94,38 @@ enum WarmupSets {
     ///
     /// Empty means the caller should do nothing — there is no honest ramp
     /// for this working weight. Never a list of zeros.
-    static func plan(forWorkingWeight workingWeight: Double?) -> [Step] {
+    ///
+    /// `barWeight` is a floor, not a default. `nil` means no floor: a
+    /// machine, a cable, a dumbbell, and an exercise with no bar preference
+    /// all pass nil. A non-positive value is treated the same as nil —
+    /// `BarType.dumbbell.weight` is 0, and reading that must not become a
+    /// floor of zero arrived at by accident.
+    static func plan(forWorkingWeight workingWeight: Double?, barWeight: Double? = nil) -> [Step] {
         guard let workingWeight, workingWeight > 0 else { return [] }
+
+        // Only a positive bar is a floor. `barWeight ?? 0` would make
+        // "no bar" and "floor of zero" the same value, and a caller that
+        // forwarded `exercise.barType?.weight` would then floor every
+        // dumbbell / other exercise without meaning to.
+        let floor: Double? = {
+            guard let barWeight, barWeight > 0 else { return nil }
+            return barWeight
+        }()
 
         var steps: [Step] = []
         var lastWeight: Double = 0
 
         for (percent, reps) in zip(Ramp.percentages, Ramp.reps) {
             let unrounded = workingWeight * percent
-            let rounded = roundedToPlate(unrounded)
+            var rounded = roundedToPlate(unrounded)
+            if let floor, rounded < floor {
+                rounded = floor
+            }
             // Strictly increasing, strictly below the work, and a real plate.
             // `lastWeight` starts at 0, so the first comparison also drops
-            // a step that rounded to 0 lb.
+            // a step that rounded to 0 lb. A raised-to-bar value that is
+            // not below the work dies on the second comparison, which is
+            // how a bar at or above the work collapses the whole ramp.
             guard rounded > lastWeight, rounded < workingWeight else { continue }
             steps.append(Step(weight: rounded, reps: reps, setType: .warmup))
             lastWeight = rounded

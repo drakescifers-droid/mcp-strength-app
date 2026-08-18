@@ -1,0 +1,21 @@
+-- ============================================================================
+-- 0008 — hammerStrength on exercise_category
+--
+-- Hammer Strength is plate-loaded machine equipment, extremely common in
+-- gyms, and until this migration has no category of its own. Drake has to
+-- hand-name every one of these exercises. ADD VALUE only — the type is
+-- referenced by a live column on a project that already has rows, so
+-- drop-and-recreate would require rewriting the table and would fail.
+--
+-- The label is camelCase, character-for-character the Swift raw value
+-- (`hammerStrength`). Enum values cross the wire with no mapping table
+-- (docs/05-database.md § Naming). A snake_case spelling here would decode
+-- as unknown on the client.
+--
+-- This file is the ALTER alone. A value added by ADD VALUE cannot be USED
+-- in the same transaction that adds it; any insert that would prove the
+-- value works lives in the test runner, which applies migrations and then
+-- runs tests in a separate invocation.
+-- ============================================================================
+
+alter type public.exercise_category add value if not exists 'hammerStrength';

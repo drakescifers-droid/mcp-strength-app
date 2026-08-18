@@ -42,4 +42,26 @@ extension ExerciseCategory {
         case .duration:            "Duration"
         }
     }
+
+    /// Label for the Postgres `hammerStrength` value. Not a switch case:
+    /// the Swift enum cannot grow that case until `OneRepMax.supportsEstimate`
+    /// is updated (out of scope for this change).
+    static var hammerStrengthDisplayName: String { "Hammer Strength" }
+}
+
+extension BarType {
+    /// `standardBar` and `trapBar` stay as those raw values — they are
+    /// `public.bar_type` on a live column, and Postgres cannot drop an enum
+    /// value. The reference app calls them Short Bar and Hex Bar; that is
+    /// what these labels are for, not a rename of the case.
+    var displayName: String {
+        switch self {
+        case .olympicBar:  "Olympic Bar"
+        case .standardBar: "Short Bar"
+        case .ezBar:       "EZ Bar"
+        case .trapBar:     "Hex Bar"
+        case .dumbbell:    "Dumbbell"
+        case .other:       "Other"
+        }
+    }
 }
