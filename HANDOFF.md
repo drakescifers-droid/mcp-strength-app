@@ -26,10 +26,11 @@ both sides.** Swift suite green, SQL suite green.
 > `Workout.totalVolume`. Never print one without converting it — `PreviousText.weightText` or
 > `WeightUnits.displayed` — and never write one without `WeightUnits.kilograms(from:in:)`.
 
-> ⚠️ **Two things are outstanding on the live project. Run `supabase migration list` first.**
-> `20260818120000_weights_to_kilograms.sql` is applied. `20260818140000_repair_double_converted_weights.sql`
-> may not be — it repairs ten rows that the first one halved, because a client pushed already-
-> converted rows into the five-minute window between the two. `04-status.md` has the full story, including the
+> ✅ **The live project is correct and both migrations are applied** — verified by reading the rows
+> back out, not by trusting `db push`: all eleven weighted rows land on real plate loads
+> (35 / 95 / 135 / 155 / 185 / 225 lb) and the three session volumes read 675, 675 and 6730 lb.
+> `20260818140000` was needed because `20260818120000` halved ten rows that a client had already
+> converted. `04-status.md` has the full story, including the
 > cause: **running the unit suite was syncing to the live project**, because the test bundle is
 > hosted by the app, so `xcodebuild test` launched the real app signed in. Fixed in
 > `Auth/AutomatedLaunch.swift` and pinned by a test.
@@ -62,10 +63,6 @@ both sides.** Swift suite green, SQL suite green.
 
 - **The bar on logging real workouts is LIFTED** — the units conversion has landed, which is the
   only thing it was ever waiting on. What still blocks the phone is the item below.
-- **Apply the repair migration** (`20260818140000`) if `supabase migration list` says it is not
-  there. It rewrites ten rows in `mcp-strength`, so ask me first. The values it restores are all
-  round plate loads from the preview fixtures (95 / 135 / 155 / 185 / 35 lb), which is how they
-  were identified in the first place.
 - **Work out what pushed to the live project on 2026-08-18 at 13:35 CDT.** Nothing in the session
   was meant to sync. The leading hypothesis is that `xcodebuild test` launches the app as its own
   test host, signed in, with no preview flag. If that is right it needs fixing before anyone trains

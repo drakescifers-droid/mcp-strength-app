@@ -65,8 +65,9 @@ and Apple Health.
 > against `mcp-strength`, because rows that were already dirty when the client converted push
 > KILOGRAMS, and a server that has not converted yet converts them a second time. The client ran
 > first, and ten rows on the live project were halved. Repair is
-> `20260818140000_repair_double_converted_weights.sql`; **check `supabase migration list` — it may
-> not be applied yet.**
+> `20260818140000_repair_double_converted_weights.sql`, **applied and verified by reading the rows
+> back**: all eleven weighted rows land on real plate loads and the three session volumes read
+> 675, 675 and 6730 lb.
 >
 > **The reusable part is not the ordering rule, it is that writing a hazard down does not defend
 > against it.** The comment was accurate, prominent, and in the file being applied. What was
