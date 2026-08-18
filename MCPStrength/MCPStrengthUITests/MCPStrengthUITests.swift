@@ -338,3 +338,71 @@ final class SwipeToDeleteSetWalkthroughTests: XCTestCase {
         testCase.add(attachment)
     }
 }
+
+// MARK: - Dragging a template between folders
+
+/// The interaction `docs/04-status.md` claimed was finished and which did not
+/// work on a device.
+///
+/// The cause was that `TemplateCard`'s root was a `Button`, which consumes the
+/// long press `.draggable` needs to begin a drag — so the card was draggable in
+/// the source and immovable in the hand. Nothing threw and nothing logged; the
+/// drop handlers simply never ran.
+///
+/// This test exists because that class of bug is invisible to every other kind
+/// of check. The move rule (`ListOrdering`) is already unit-tested and was
+/// always correct. What was broken was whether a finger could reach it.
+final class TemplateFolderDragTests: XCTestCase {
+
+    @MainActor
+    func testDragATemplateIntoAnotherFolder() throws {
+        continueAfterFailure = false
+
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiPreview", "1", "-uiPreviewFixtures", "1", "-uiPreviewTab", "start"]
+        app.launch()
+
+        // Fixture layout: "Preview Push" has two templates, "Preview Pull" has
+        // one. Counts are in the folder headers, which is what makes a move
+        // between them observable without reading the store.
+        let pushHeader = app.staticTexts["Preview Push (2)"]
+        XCTAssertTrue(
+            pushHeader.waitForExistence(timeout: 20),
+            "Template fixtures missing.\n" + app.debugDescription
+        )
+        XCTAssertTrue(app.staticTexts["Preview Pull (1)"].exists, app.debugDescription)
+
+        let card = app.staticTexts["Preview Shoulder Day"].firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 10), app.debugDescription)
+
+        let target = app.staticTexts["Preview Back Day"].firstMatch
+        XCTAssertTrue(target.waitForExistence(timeout: 10), app.debugDescription)
+
+        shot("01-before-drag", self)
+
+        // A long press to lift, then a slow drag — a flick is not a drag and
+        // will not start one.
+        card.press(forDuration: 1.0, thenDragTo: target, withVelocity: .slow, thenHoldForDuration: 0.8)
+        shot("02-after-drop", self)
+
+        // The assertion. Counts move in opposite directions, which a reorder
+        // WITHIN a folder could not produce.
+        XCTAssertTrue(
+            app.staticTexts["Preview Push (1)"].waitForExistence(timeout: 5),
+            "Source folder count did not drop — the drag never moved the template.\n"
+                + app.debugDescription
+        )
+        XCTAssertTrue(
+            app.staticTexts["Preview Pull (2)"].exists,
+            "Destination folder count did not rise.\n" + app.debugDescription
+        )
+    }
+
+    @MainActor
+    private func shot(_ name: String, _ testCase: XCTestCase) {
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        testCase.add(attachment)
+    }
+}

@@ -156,7 +156,69 @@ enum UIPreviewFixtures {
         }
 
         workout.totalVolume = WorkoutStats.totalVolume(for: workout)
+
+        installTemplates(in: context, library: library, exercise: exercise)
+
         try? context.save()
+    }
+
+    /// Two folders with templates in them, so the Start Workout tab has
+    /// something to look at.
+    ///
+    /// It had NOTHING before — the fixtures built a workout and stopped, so the
+    /// templates tab was empty in the one mode this project uses to judge
+    /// screens, and the only way to see a folder was to make one by hand every
+    /// time. Two folders rather than one on purpose: dragging a template
+    /// BETWEEN folders is the interaction here, and it takes two to have a
+    /// between.
+    ///
+    /// Guarded on its own marker, not the workout's. The workout fixture and
+    /// this one were added in different sessions, so a store that already has
+    /// the first must still be able to receive the second.
+    private static func installTemplates(
+        in context: ModelContext,
+        library: [Exercise],
+        exercise: (String) -> Exercise?
+    ) {
+        let existing = try? context.fetch(
+            FetchDescriptor<TemplateFolder>(predicate: #Predicate { $0.name == "Preview Push" })
+        )
+        guard (existing ?? []).isEmpty else { return }
+
+        let push = TemplateFolder(name: "Preview Push", order: 0)
+        let pull = TemplateFolder(name: "Preview Pull", order: 1)
+        context.insert(push)
+        context.insert(pull)
+
+        func template(_ name: String, in folder: TemplateFolder, order: Int, exercises: [String]) {
+            let template = Template(name: name, order: order, folder: folder)
+            context.insert(template)
+            for (index, exerciseName) in exercises.enumerated() {
+                guard let match = exercise(exerciseName) else { continue }
+                let block = TemplateExercise(
+                    order: index,
+                    defaultRestSeconds: 90,
+                    template: template,
+                    exercise: match
+                )
+                context.insert(block)
+                for setIndex in 0..<3 {
+                    context.insert(TemplateSet(
+                        order: setIndex,
+                        reps: 8,
+                        restSeconds: 90,
+                        templateExercise: block
+                    ))
+                }
+            }
+        }
+
+        // Two in the first folder and one in the second, so a drag between
+        // them changes both counts visibly and cannot be mistaken for a
+        // reorder within one.
+        template("Preview Bench Day", in: push, order: 0, exercises: ["Bench Press (Barbell)"])
+        template("Preview Shoulder Day", in: push, order: 1, exercises: ["Bicep Curl (Dumbbell)"])
+        template("Preview Back Day", in: pull, order: 0, exercises: ["Pull Up"])
     }
 }
 

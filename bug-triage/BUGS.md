@@ -193,7 +193,7 @@ polish — the kind that can only be judged by dragging it, not by a test.
 **Severity guess:** Medium. Reordering WORKS; it is just blind while in
 progress. Annoying with more than three exercises.
 
-## 7. Templates cannot be dragged between folders
+## 7. [FIXED, awaiting confirmation] Templates cannot be dragged between folders
 
 **Screen:** Start Workout tab, template grid.
 
@@ -207,10 +207,30 @@ never worked on a device, or it works only under conditions that are not
 obvious (e.g. the destination folder must be expanded, or the drop must land
 on a CARD rather than on the folder header).
 
-**First step is to reproduce and find out which**, because "documented as
-working" and "does not work in the hand" is exactly the pattern that produced
-the `Add Template` bug recorded in 04-status.md — shipped through a green
-check and 125 green tests while filing nothing.
+**CAUSE FOUND: `TemplateCard`'s root was a `Button`.** A Button consumes the
+long press, and `.draggable` needs the long press to begin a drag — so the card
+was draggable in the source and immovable in the hand. Nothing threw and
+nothing logged; the drag simply never started, so `handleCardDrop` and
+`handleFolderDrop` were never called. The move rule underneath
+(`ListOrdering`) is unit-tested and was always correct: what was broken was
+whether a finger could reach it.
+
+The exercise reorder on the workout screen has always worked because it hangs
+`.draggable` off a plain `Text` with a `contentShape`, never a Button. Same
+idiom now applies to the card; the tap became an explicit `.onTapGesture` and
+the button trait was re-added by hand so VoiceOver still announces it.
+
+Same family as the `.sheet(isPresented:)` trap already in 04-status.md: a
+composition that reads correctly, compiles, passes every structural check, and
+silently swallows the gesture it depends on. That is why the docs could claim
+this feature was done — it was written and reviewed and unreachable.
+
+**Fix is on the phone but NOT independently verified.** A UI test was written
+(`TemplateFolderDragTests`, with new template fixtures so the tab finally has
+content) and could not be run: the XCUITest runner refuses to launch on this
+machine right now, on two different simulators, with no signing error —
+probably a stale runner in the shared DerivedData after many device-signed
+builds. Drake's own test on the device is the verification for now.
 
 **Severity guess:** Medium-high if genuinely broken — folders are the only
 organisation the templates tab has.
@@ -242,7 +262,8 @@ organisation the templates tab has.
     matches how iOS swipe rows behave, so it may be fine. Flagged rather than
     changed.
 - **#5 FIXED.** Every set gets a rest row now, on both screens.
-- **#6, #7 LOGGED** — both are drag-and-drop, both need a real thumb to judge.
+- **#7 CAUSE FOUND AND FIXED** (Button ate the long press); test written but blocked on a runner that will not launch.
+- **#6 LOGGED** — both are drag-and-drop, both need a real thumb to judge.
 - **#3 BUILT.** Local notification, scheduled from the timer's own state
   rather than at each mutation site — `RestNotificationRule` is a pure function
   of (timer, now), so start/pause/resume/adjust/reset/skip are all covered by

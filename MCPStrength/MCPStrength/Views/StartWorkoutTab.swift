@@ -466,43 +466,70 @@ private struct TemplateCard: View {
     var onDuplicate: () -> Void
     var onDelete: () -> Void
 
+    // NOT a Button, and that is the whole bug fix.
+    //
+    // A `Button` consumes the long press, and `.draggable` needs the long press
+    // to begin a drag — so the card was draggable in the source and immovable
+    // in the hand. Nothing failed: the drag simply never started, so
+    // `handleCardDrop` and `handleFolderDrop` were never called and
+    // `04-status.md` went on claiming templates could be dragged between
+    // folders. It was written, reviewed, and unreachable.
+    //
+    // The exercise reorder on the workout screen has always worked because it
+    // hangs `.draggable` off a plain `Text` with a `contentShape`, never a
+    // Button. Same idiom here now.
+    //
+    // The tap becomes an explicit gesture, and the button TRAIT is added back
+    // by hand so VoiceOver still announces a card as something you can
+    // activate — that is the one thing the Button was contributing.
+    //
+    // Same family as the `.sheet(isPresented:)` trap in 04-status.md: a
+    // composition that reads correctly, compiles, passes every structural
+    // check, and silently swallows the gesture it depends on. Neither is
+    // catchable without a thumb.
     var body: some View {
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: Spacing.compact) {
-                HStack(alignment: .top, spacing: Spacing.compact) {
-                    Text(template.name)
-                        .font(Typography.cardTitle)
-                        .foregroundStyle(Theme.textPrimary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.85)
-                        .multilineTextAlignment(.leading)
+        cardBody
+            .contentShape(.rect(cornerRadius: Radius.card))
+            .onTapGesture(perform: onTap)
+            .accessibilityElement(children: .contain)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction(named: "Open Template", onTap)
+    }
 
-                    Spacer(minLength: 0)
-
-                    cardMenu
-                }
-
-                Text(exerciseSummary)
-                    .font(Typography.secondary)
-                    .foregroundStyle(Theme.textSecondary)
-                    .lineLimit(3)
+    private var cardBody: some View {
+        VStack(alignment: .leading, spacing: Spacing.compact) {
+            HStack(alignment: .top, spacing: Spacing.compact) {
+                Text(template.name)
+                    .font(Typography.cardTitle)
+                    .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
                     .multilineTextAlignment(.leading)
 
-                if let lastPerformedAt = template.lastPerformedAt {
-                    HStack(spacing: Spacing.compact / 2) {
-                        Image(systemName: "clock")
-                            .font(Typography.secondary)
-                        Text(RelativeDate.lastPerformed(from: lastPerformedAt))
-                            .font(Typography.secondary)
-                    }
-                    .foregroundStyle(Theme.textSecondary)
-                }
+                Spacer(minLength: 0)
+
+                cardMenu
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(Spacing.comfortable)
-            .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.card))
-        }
-        .buttonStyle(.plain)
+
+            Text(exerciseSummary)
+                .font(Typography.secondary)
+                .foregroundStyle(Theme.textSecondary)
+                .lineLimit(3)
+                .multilineTextAlignment(.leading)
+
+            if let lastPerformedAt = template.lastPerformedAt {
+                HStack(spacing: Spacing.compact / 2) {
+                    Image(systemName: "clock")
+                        .font(Typography.secondary)
+                    Text(RelativeDate.lastPerformed(from: lastPerformedAt))
+                        .font(Typography.secondary)
+                }
+                .foregroundStyle(Theme.textSecondary)
+            }
+            }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Spacing.comfortable)
+        .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.card))
     }
 
     // Trailing Menu — same idiom as folderMenu: the glyph is the menu's
