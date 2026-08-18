@@ -125,6 +125,43 @@ fields, the set-type badge menu).
 an accidental "+ Add Set" is to leave it blank and let Finish silently drop
 it (workout screen only; templates have no such discard). Worth building.
 
+## 5. No rest divider after the final set of an exercise
+
+**Screen:** Active workout.
+
+**Report (Drake's words):** "Timer doesn't show after the final set when the
+final set is incomplete, but if the final set is completed the timer starts."
+
+**Confirmed, and it is intentional today.** `ExerciseBlock` renders a divider
+between sets only (`if index < sortedSets.count - 1`); for the LAST set it
+renders the running progress bar and nothing else. So an unfinished last set
+shows no rest row at all, and ticking it makes the bar appear. That is exactly
+what was reported.
+
+**But the reference app agrees with the current behaviour**, which is why this
+is logged as a decision rather than fixed on sight. `Workout screen/bottom of
+workout buttons and options.PNG` shows two exercises, and BOTH end with a set
+followed immediately by "+ Add Set" — no dangling divider after the last set
+in either. AGENTS.md says to check the reference before diverging, and here it
+sides with what we already do.
+
+**So the question is what problem it is actually causing.** Two readings, and
+they want different fixes:
+
+1. **"I can't see/edit the last set's rest."** Mostly solved by #1 already:
+   every set now shares the exercise's rest, and "+ Add Set (1:30)" displays
+   it. The gap left is that tapping to EDIT still requires a divider, and the
+   last set has none.
+2. **"It looks inconsistent."** Every set has a rest row except the last one,
+   which only grows one while resting. If that is the complaint, the fix is to
+   always render the divider after the last set — a deliberate divergence from
+   the reference, and a small one.
+
+**NEEDS DRAKE'S CALL** — reference says leave it, request says change it.
+
+**Severity guess:** Low. Nothing is broken or lost; it is a question of whether
+the last row should carry a rest control.
+
 ---
 
 # Status
@@ -151,6 +188,7 @@ it (workout screen only; templates have no such discard). Worth building.
     two things you would want while deciding whether to delete that set. This
     matches how iOS swipe rows behave, so it may be fine. Flagged rather than
     changed.
+- **#5 LOGGED, needs a decision** — reference and request disagree.
 - **#3 NOT STARTED** — the local notification. Largest of the four: needs a
   permission prompt, scheduling, and cancel/reschedule rules on pause, edit,
   skip and finish.
