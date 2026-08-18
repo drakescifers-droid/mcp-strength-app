@@ -104,13 +104,26 @@ struct RestTimerSheet: View {
     /// edits the first, tapping a divider edits the second, and telling a user
     /// "new sets will use this" while editing an existing set is simply false.
     enum Scope {
-        case newSets(exerciseName: String)
+        /// Every set in the exercise — the ones already there and the ones
+        /// added later.
+        ///
+        /// > **This used to mean NEW SETS ONLY, and the change was Drake's
+        /// > call after using it.** The old split was defensible on paper —
+        /// > the menu set what new sets inherit, tapping a divider set one
+        /// > set's own rest — and in the gym it read as broken: you change the
+        /// > exercise's rest timer, look at the sets you already have, and
+        /// > nothing moved. Nobody adds an exercise, sets three sets, and then
+        /// > wants the rest they just chose to apply only to a fourth.
+        /// >
+        /// > The per-set override survives untouched: tapping a divider still
+        /// > edits that one set. This is the broad brush, that is the fine one.
+        case wholeExercise(exerciseName: String)
         case oneSet
 
         var explanation: String {
             switch self {
-            case .newSets(let name):
-                "New sets in \(name) will use this."
+            case .wholeExercise(let name):
+                "Every set in \(name) will use this."
             case .oneSet:
                 "Sets the rest after this set. Other sets keep theirs."
             }
@@ -194,7 +207,7 @@ struct RestTimerSheet: View {
 
 #Preview("Rest — new sets") {
     RestTimerSheet(
-        scope: .newSets(exerciseName: "Bench Press (Barbell)"),
+        scope: .wholeExercise(exerciseName: "Bench Press (Barbell)"),
         current: 90,
         onSelect: { _ in }
     )

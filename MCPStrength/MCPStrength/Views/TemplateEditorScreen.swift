@@ -190,9 +190,19 @@ struct TemplateEditorScreen: View {
 
             case .rest:
                 RestTimerSheet(
-                    scope: .newSets(exerciseName: draft.exercise.name),
+                    scope: .wholeExercise(exerciseName: draft.exercise.name),
                     current: draft.defaultRestSeconds
-                ) { exercises[option.index].defaultRestSeconds = $0 }
+                ) { seconds in
+                    // Same rule as the workout screen: the exercise default AND
+                    // every set already drafted. These are value types, so the
+                    // sets are rewritten in place and nothing is persisted
+                    // until Save — TemplateSaveDiff sees them as ordinary
+                    // field changes on KEPT rows.
+                    exercises[option.index].defaultRestSeconds = seconds
+                    for i in exercises[option.index].sets.indices {
+                        exercises[option.index].sets[i].restSeconds = seconds
+                    }
+                }
 
             case .setRest(let setIndex):
                 if draft.sets.indices.contains(setIndex) {
@@ -383,7 +393,8 @@ struct TemplateEditorScreen: View {
                         prescription: bindingForPrescription(exercise: index, set: setIndex),
                         allowRange: true,
                         rpe: bindingForRPE(exercise: index, set: setIndex),
-                        trailing: .locked
+                        trailing: .locked,
+                        onDelete: { deleteSet(at: setIndex, in: index) }
                     )
 
                     if setIndex < draft.sets.count - 1 {
@@ -547,6 +558,27 @@ struct TemplateEditorScreen: View {
                 ]
             )
         )
+    }
+
+    /// Drop one drafted set, from the swipe affordance on its row.
+    ///
+    /// No tombstone here and that is not an oversight: these are value-type
+    /// DRAFTS and nothing is persisted until Save. `TemplateSaveDiff` compares
+    /// ids at save time and writes the tombstone for any row that has
+    /// disappeared — exactly what it already does for warm-ups replaced by a
+    /// regenerated ramp. Writing one here would tombstone a row the user might
+    /// still discard by closing without saving.
+    ///
+    /// `order` is rewritten so the remaining sets stay dense, matching the
+    /// warm-up path in this file.
+    private func deleteSet(at setIndex: Int, in exerciseIndex: Int) {
+        guard exercises.indices.contains(exerciseIndex),
+              exercises[exerciseIndex].sets.indices.contains(setIndex)
+        else { return }
+        exercises[exerciseIndex].sets.remove(at: setIndex)
+        for i in exercises[exerciseIndex].sets.indices {
+            exercises[exerciseIndex].sets[i].order = i
+        }
     }
 
     private func addSet(to exerciseIndex: Int) {

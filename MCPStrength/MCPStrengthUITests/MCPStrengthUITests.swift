@@ -253,3 +253,88 @@ final class WarmupRampWalkthroughTests: XCTestCase {
         app.debugDescription
     }
 }
+
+// MARK: - Swipe to delete a set
+
+/// A camera, like `WarmupRampWalkthroughTests`. It asserts the one thing a
+/// screenshot cannot show — that the set count actually dropped — and
+/// photographs everything else so a human can judge whether the affordance
+/// looks right.
+///
+/// Worth driving rather than reasoning about, because the gesture is
+/// hand-built. `.swipeActions` only exists on `List` rows and this app has no
+/// `List`, so `SetRow` implements the drag itself, and the risk is not that
+/// deletion fails — it is that the row fights the ScrollView and the screen
+/// stops scrolling where the sets are.
+final class SwipeToDeleteSetWalkthroughTests: XCTestCase {
+
+    @MainActor
+    func testSwipeASetAwayAndPhotographIt() throws {
+        continueAfterFailure = false
+
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiPreview", "1", "-uiPreviewTab", "start"]
+        app.launch()
+
+        let start = app.buttons["Start an Empty Workout"]
+        XCTAssertTrue(start.waitForExistence(timeout: 20), app.debugDescription)
+        start.tap()
+
+        let addExercises = app.buttons["Add Exercises"]
+        XCTAssertTrue(addExercises.waitForExistence(timeout: 10), app.debugDescription)
+        addExercises.tap()
+
+        let bench = app.buttons.containing(
+            NSPredicate(format: "label CONTAINS[c] %@", "Bench Press (Barbell)")
+        ).firstMatch
+        XCTAssertTrue(bench.waitForExistence(timeout: 10), app.debugDescription)
+        bench.tap()
+
+        // Three sets, so there is something to delete from the MIDDLE — the
+        // case that proves the survivors renumber rather than leave a hole.
+        let addSet = app.buttons.containing(
+            NSPredicate(format: "label BEGINSWITH %@", "+ Add Set")
+        ).firstMatch
+        XCTAssertTrue(addSet.waitForExistence(timeout: 10), app.debugDescription)
+        addSet.tap()
+        addSet.tap()
+
+        let before = app.textFields.count
+        shot("01-three-sets-before", self)
+
+        // Half-open, to photograph the affordance mid-reveal rather than only
+        // its end state. `press(forDuration:thenDragTo:)` keeps the drag slow
+        // enough to be a drag rather than a flick.
+        let firstField = app.textFields.element(boundBy: 0)
+        XCTAssertTrue(firstField.exists, app.debugDescription)
+
+        let rowStart = firstField.coordinate(withNormalizedOffset: CGVector(dx: -0.6, dy: 0.5))
+        let rowEnd = rowStart.withOffset(CGVector(dx: -110, dy: 0))
+        rowStart.press(forDuration: 0.15, thenDragTo: rowEnd)
+        shot("02-swiped-open", self)
+
+        // The delete button should now be reachable.
+        let deleteButton = app.buttons["Delete"].firstMatch
+        XCTAssertTrue(
+            deleteButton.waitForExistence(timeout: 5),
+            "No Delete button after swiping left.\n" + app.debugDescription
+        )
+        deleteButton.tap()
+        shot("03-after-delete", self)
+
+        // The assertion a picture cannot make. Two text fields per set (weight
+        // and reps), so one fewer set is two fewer fields.
+        XCTAssertLessThan(
+            app.textFields.count, before,
+            "Set count did not drop after tapping Delete."
+        )
+    }
+
+    @MainActor
+    private func shot(_ name: String, _ testCase: XCTestCase) {
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        testCase.add(attachment)
+    }
+}

@@ -478,11 +478,22 @@ struct ActiveWorkoutScreen: View {
             }
         case .rest:
             RestTimerSheet(
-                scope: .newSets(exerciseName: name),
+                scope: .wholeExercise(exerciseName: name),
                 current: exercise.defaultRestSeconds
-            ) {
-                exercise.defaultRestSeconds = $0
+            ) { seconds in
+                // BOTH halves, and the second one is the fix. Writing only the
+                // exercise default changed what a FUTURE set would inherit and
+                // left every set already on screen alone, which reads as the
+                // control doing nothing.
+                exercise.defaultRestSeconds = seconds
                 exercise.markEdited()
+                for set in exercise.liveSets {
+                    guard set.restSeconds != seconds else { continue }
+                    set.restSeconds = seconds
+                    // Every row whose value actually moved, or it silently
+                    // stops syncing — AGENTS.md rule 3.
+                    set.markEdited()
+                }
             }
         case .replace:
             ExercisesScreen(onSelect: { picked in
@@ -679,7 +690,8 @@ private struct ExerciseBlock: View {
                             trailing: .completion(
                                 isCompleted: set.isCompleted,
                                 onToggle: { toggleComplete(set) }
-                            )
+                            ),
+                            onDelete: { deleteSet(set) }
                         )
 
                         if index < sortedSets.count - 1 {
@@ -720,10 +732,18 @@ private struct ExerciseBlock: View {
         SetNumbering.workingNumbers(for: sortedSets.map(\.setType))
     }
 
+    /// The rest a newly added set inherits, and what the Add Set button
+    /// advertises.
+    ///
+    /// > **This was hardcoded to `90` and that was the whole bug on this
+    /// > screen.** The options menu wrote `defaultRestSeconds` on the exercise
+    /// > and this read a literal, so the two were never connected: the button
+    /// > always said 1:30 and always appended a 90-second set no matter what
+    /// > the user chose. It looked like the menu was being ignored because it
+    /// > was. The 90 still exists as the MODEL's declaration default, which is
+    /// > where a default belongs.
     private var defaultRestSeconds: Int {
-        // The model default a fresh set gets (90s). Shown on the button and
-        // applied to the appended set.
-        90
+        workoutExercise.defaultRestSeconds
     }
 
     // MARK: - Rest divider / progress bar
@@ -779,6 +799,31 @@ private struct ExerciseBlock: View {
             excluding: inProgressWorkout
         )
         return PreviousText.format(prev, in: displayUnit)
+    }
+
+    /// Remove one set, from the swipe affordance on its row.
+    ///
+    /// **A TOMBSTONE, not a real delete** — AGENTS.md rule 1. This screen is
+    /// reachable on a workout that was finished and reopened, so the row may
+    /// already exist on the server, and a hard delete could never reach a
+    /// device that was offline when it happened. The one deliberate hard
+    /// delete in this app is discarding unticked sets at Finish, and that is
+    /// safe only because an unfinished workout is ineligible to push
+    /// (`PushFilter`); this action has no such guarantee.
+    ///
+    /// The survivors are renumbered so `order` stays dense. `liveSets` sorts
+    /// on it, and leaving a hole is harmless today but makes every later
+    /// insert reason about gaps.
+    private func deleteSet(_ set: WorkoutSet) {
+        let exercise = set.workoutExercise
+        set.markDeleted()
+        guard let exercise else { return }
+        for (index, survivor) in exercise.liveSets.enumerated() {
+            guard survivor.order != index else { continue }
+            survivor.order = index
+            survivor.markEdited()
+        }
+        exercise.markEdited()
     }
 
     private func addSet() {
@@ -899,7 +944,7 @@ private func formatTime(_ total: Int) -> String {
 // MARK: - RestProgressBar
 
 /// Replaces a set's rest divider while that set's rest countdown is running:
-/// a full-width accent bar that depletes left-to-right as time runs out, with
+/// a full-width accent bar that drains right-to-left as time runs out, with
 /// the remaining time centred on it in `m:ss`. A thin light border outlines
 /// it. Tapping the bar presents the timer controls.
 private struct RestProgressBar: View {
@@ -914,16 +959,23 @@ private struct RestProgressBar: View {
     var body: some View {
         GeometryReader { proxy in
             let progress = timer.progress(at: now)
-            ZStack {
+            // `.leading` is load-bearing, not tidiness. A ZStack centers its
+            // children by default, so shrinking the fill's width took the same
+            // amount off BOTH edges and the bar closed toward the middle like
+            // a pair of curtains instead of draining. Anchoring it left makes
+            // the right edge the only one that moves, which is what a
+            // depleting bar has to look like to be read as one.
+            ZStack(alignment: .leading) {
                 // Track
                 Rectangle()
                     .fill(Theme.fieldFill)
-                // Accent fill depletes from the left as time runs out.
+                // Accent fill retreats right-to-left as time runs out.
                 Rectangle()
                     .fill(Theme.accent)
                     .frame(width: proxy.size.width * progress)
                     .animation(.linear(duration: 1), value: progress)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .overlay {
                 Text(formatTime(remainingSeconds))
                     .font(Typography.body.weight(.semibold))

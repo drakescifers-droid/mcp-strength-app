@@ -1,0 +1,156 @@
+# Bug log — found by using the app on a real device
+
+Not fixed yet. Logging as found, triaging as a batch. Each entry: what's wrong,
+where it likely lives in code, and a severity guess (to be revised at triage).
+
+---
+
+## 1. [FIXED] "Update Rest Timers" only affects new sets, not existing ones
+
+**Screen:** Template editor, exercise options menu ("Assisted Dip" example)
+
+**Expected:** Changing the rest timer for an exercise updates every set under
+it, including sets that already exist.
+
+**Actual:** Only new sets added via "+ Add Set" pick up the new default. Sets
+already in the list keep their old rest time.
+
+**Likely cause:** The options menu is probably writing `defaultRestSeconds` on
+the exercise (which only seeds *new* sets going forward) without also looping
+over the exercise's existing sets and updating each `restSeconds`.
+
+**Severity guess:** Medium — confusing but not data-destructive. Worth
+confirming whether this is template-editor-only or also present on the live
+workout screen (same shared menu component).
+
+**Related — the label lies too.** After changing the rest timer, "+ Add Set"
+shows the NEW time in its own label (e.g. "1:00") but the set it actually
+inserts carries the OLD time (e.g. 2:00 rest). So the button is reading a
+different value than the one it writes — two places compute or cache
+"default rest" and they've gone out of sync. This is a second symptom of the
+same underlying miss, not a separate root cause, but worth confirming once
+the fix for #1 is in: does fixing where existing sets get updated also fix
+what a NEW set inherits, or are there really two write sites.
+
+## 2. [FIXED] Rest timer progress bar shrinks from both sides instead of right-to-left
+
+**Screen:** Active workout, the blue rest bar that replaces a set's divider
+while resting.
+
+**Expected:** The bar should look like a progress/depletion bar — full width
+at the start of rest, shrinking from the right edge only, so it reads as
+draining away.
+
+**Actual:** It shrinks from both ends toward the center simultaneously.
+
+**Confirmed root cause** (read the code, not a guess): `RestProgressBar` in
+`Views/ActiveWorkoutScreen.swift`. The accent-fill `Rectangle` sits in a
+`ZStack` with no alignment specified, so SwiftUI centers it by default.
+Shrinking `.frame(width:)` on a centered view removes width from both edges
+equally — that's the "converging to the center" look.
+
+**Fix shape (not yet applied):** anchor the fill to the leading edge, e.g.
+`ZStack(alignment: .leading) { ... }` on the outer ZStack, or an explicit
+`.frame(width: ..., alignment: .leading)` and top-level `HStack` in place of
+the ZStack. Purely a layout fix — the underlying `progress` value and timing
+are correct, only the anchor is missing.
+
+**Severity guess:** Low-medium — cosmetic, but the rest timer is looked at on
+every set of every workout, so it's a high-visibility polish item.
+
+## 3. No notification when the rest timer finishes
+
+**Screen:** Active workout, rest timer.
+
+**Report (Drake's words):** "There is no notification when the timer is
+done — we'll need a push notification for that."
+
+**Confirmed:** Checked the whole codebase — there is genuinely nothing.
+`RestTimer.isFinished(at:)` exists and is correct, but nothing observes it to
+fire a sound, haptic, or notification. When rest ends, the progress bar
+(bug #2's bar) just stops being shown; that's the entire signal today. If your
+phone is in your pocket or the screen is off, you have no way to know rest is
+over except checking.
+
+**One correction on the ask: this wants a LOCAL notification, not a push
+one**, and the distinction matters for scope. A push notification requires a
+server round-trip (APNs, a device token, something on `mcp-strength` to send
+it) — none of that exists and none of it is needed here. A LOCAL notification
+is scheduled by the app itself for a future time ("fire in 90 seconds") and
+needs no server, no entitlement beyond notification permission, and no
+network. Also checked: no entitlements file and no background modes are
+configured yet, so this is a from-scratch feature, not a tweak — first
+launch would need to ask permission (`UNUserNotificationCenter` authorization
+request), and the timer would need to schedule/reschedule a local
+notification whenever rest starts, pauses, or the duration is edited.
+
+**Severity guess:** High-value, not urgent — nobody is blocked by it, but
+it's core to actually training with the app instead of watching a screen.
+Bigger than #1/#2: this is new capability (permission flow + scheduling),
+not a fix to existing behavior. Worth a design pass rather than a quick
+patch — e.g., should pausing cancel the pending notification, should editing
+the rest time reschedule it, does Finishing early cancel it.
+
+## 4. [BUILT] No way to delete a single set — add swipe-to-delete on set rows
+
+**Screens:** Both the active workout screen and the template editor (shared
+`SetRow` component).
+
+**Request (Drake's words):** Swipe right-to-left on a set row to reveal a
+delete option. Sets only — NOT on exercise rows (deleting an exercise already
+has its own path via the exercise's `⋯` menu, "Remove Exercise").
+
+**Confirmed:** Checked both screens — there is currently NO way to delete a
+single set at all, by any gesture or menu. The only code that ever calls
+`markDeleted()` on a `WorkoutSet` is warm-up regeneration replacing its own
+generated rows; a normal set, once added, cannot be removed except by
+discarding it unticked at Finish. This is a new capability, not a second
+path alongside an existing delete.
+
+**Scope note:** two screens, two different delete mechanics.
+- **Workout screen** — a real, synced `WorkoutSet`. Per AGENTS.md rule 1, this
+  MUST be a soft delete (`markDeleted()`), never `context.delete`, so the
+  removal can reach a device that was offline when it happened.
+- **Template editor** — value-type `DraftSet` drafts, nothing persisted until
+  Save (same shape as the warm-up regeneration in that file). Removal there
+  is just dropping it from the local array; `TemplateSaveDiff` works out the
+  tombstone on Save, same as it does for warm-ups today.
+
+Also: sets are reordered by drag-to-move on this screen already (title-drag
+collapses the list) — need to confirm a leading/trailing swipe gesture
+doesn't fight with anything else attached to the row (tap-to-edit weight/reps
+fields, the set-type badge menu).
+
+**Severity guess:** Genuine feature gap — right now the only way to walk back
+an accidental "+ Add Set" is to leave it blank and let Finish silently drop
+it (workout screen only; templates have no such discard). Worth building.
+
+---
+
+# Status
+
+- **#1 FIXED.** Two separate causes, not one. The template editor wrote the
+  exercise default without touching existing sets. The workout screen was
+  worse: `defaultRestSeconds` was HARDCODED to `90`, so the menu was ignored
+  entirely there — the Add Set button always said 1:30 and always appended a
+  90-second set. Both now write the default AND rewrite every set under the
+  exercise. The sheet's wording changed to match ("Every set in X will use
+  this"), and the scope case was renamed `.wholeExercise` so the type says what
+  it does.
+  - The "added a set and it had 2:00" symptom was a THIRD thing and is now
+    moot: the divider *below* a set shows that set's rest, so adding a set
+    revealed a new divider carrying the PREVIOUS set's old value. Nothing was
+    wrong with the new set. With every set sharing one rest, it cannot recur.
+- **#2 FIXED.** One word: `ZStack(alignment: .leading)`.
+- **#4 BUILT**, and verified by driving it —
+  `SwipeToDeleteSetWalkthroughTests` swipes a row open, taps Delete, and
+  asserts the set count dropped. Hand-built gesture because `.swipeActions`
+  needs a `List` and this app has none.
+  - **Open question for Drake:** the row slides 88pt to expose Delete, which
+    clips the set number and the Previous column off the leading edge — the
+    two things you would want while deciding whether to delete that set. This
+    matches how iOS swipe rows behave, so it may be fine. Flagged rather than
+    changed.
+- **#3 NOT STARTED** — the local notification. Largest of the four: needs a
+  permission prompt, scheduling, and cancel/reschedule rules on pause, edit,
+  skip and finish.

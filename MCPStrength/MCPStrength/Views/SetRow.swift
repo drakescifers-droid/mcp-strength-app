@@ -63,17 +63,133 @@ struct SetRow: View {
     /// `WeightUnits.displayUnit(override:global:)`, because the override is
     /// per-exercise and the row does not know which exercise it belongs to.
     let unit: WeightUnit
+
     @Binding var prescription: RepRange?
     let allowRange: Bool
     @Binding var rpe: Double?
     let trailing: SetRowTrailing
+
+    /// Delete this set. `nil` means the row does not swipe at all — no
+    /// gesture is attached and nothing moves.
+    ///
+    /// Optional rather than always-on so the gesture is opt-in per caller, and
+    /// so a row rendered somewhere read-only can never be dragged open. Last
+    /// in the property list because the memberwise initialiser follows
+    /// declaration order, and a trailing optional is where a caller expects to
+    /// pass it.
+    ///
+    /// The row does NOT perform the delete: the workout screen has to
+    /// tombstone (AGENTS.md rule 1) and the template editor just drops a
+    /// draft, and this file knows about neither. Same split as the completion
+    /// toggle.
+    var onDelete: (() -> Void)?
 
     @State private var weightText: String = ""
     @State private var repsText: String = ""
     @State private var repsValid: Bool = true
     @State private var didSync: Bool = false
 
+    /// How far the row is currently dragged left, 0 ... `revealWidth`.
+    @State private var revealed: CGFloat = 0
+    /// The offset when the current drag began, so a drag that starts on an
+    /// already-open row continues from there rather than jumping.
+    @State private var revealedAtDragStart: CGFloat = 0
+
+    /// Width of the delete affordance behind the row. 88pt so the button
+    /// comfortably clears the 44pt minimum target with room for a label.
+    private var revealWidth: CGFloat { 88 }
+
     var body: some View {
+        // No swipe requested: render exactly as before, with no gesture and no
+        // extra layers. A row that cannot be deleted should not pay for the
+        // machinery, and should not be draggable by accident.
+        if onDelete == nil {
+            rowContent
+        } else {
+            swipeableRow
+        }
+    }
+
+    // MARK: - Swipe to delete
+
+    // Built by hand rather than with `.swipeActions`, which only exists on
+    // `List` rows — and there is no `List` anywhere in this app. Both logging
+    // screens are a ScrollView of VStacks, chosen so an exercise block can lay
+    // out its own header, dividers and rest bars; moving the sets into a List
+    // to buy one gesture would rewrite both screens' layout.
+    private var swipeableRow: some View {
+        ZStack(alignment: .trailing) {
+            deleteAffordance
+            rowContent
+                .background(Theme.surface)
+                .offset(x: -revealed)
+                .gesture(swipeGesture)
+        }
+        // Keeps the delete button from painting outside the row while the
+        // spring settles.
+        .clipShape(.rect(cornerRadius: Radius.chip))
+        // The gesture is not the only way in. VoiceOver cannot drag, and this
+        // is the sole route to removing a set.
+        .accessibilityAction(named: "Delete Set") { performDelete() }
+    }
+
+    private var deleteAffordance: some View {
+        Button(role: .destructive) {
+            performDelete()
+        } label: {
+            VStack(spacing: 2) {
+                Image(systemName: "trash.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                Text("Delete")
+                    .font(Typography.secondary)
+            }
+            .foregroundStyle(.white)
+            .frame(width: revealWidth)
+            .frame(maxHeight: .infinity)
+            .background(Theme.destructive)
+        }
+        .buttonStyle(.plain)
+        // Unreachable until the row is dragged clear of it, so a stray tap on
+        // a closed row cannot delete a set.
+        .opacity(revealed > 0 ? 1 : 0)
+    }
+
+    private var swipeGesture: some Gesture {
+        DragGesture(minimumDistance: 12, coordinateSpace: .local)
+            .onChanged { value in
+                // Horizontal intent only. Without this the row fights the
+                // ScrollView for every vertical drag that happens to start on
+                // a set, and the list stops scrolling where the sets are —
+                // which is most of the screen.
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                let proposed = revealedAtDragStart - value.translation.width
+                revealed = min(max(proposed, 0), revealWidth)
+            }
+            .onEnded { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else {
+                    revealed = revealedAtDragStart
+                    return
+                }
+                // Past halfway stays open, otherwise it springs shut. Snapping
+                // to one of two positions rather than resting wherever the
+                // thumb stopped is what makes it feel like a control instead
+                // of a loose panel.
+                withAnimation(.snappy(duration: 0.2)) {
+                    revealed = revealed > revealWidth / 2 ? revealWidth : 0
+                }
+                revealedAtDragStart = revealed
+            }
+    }
+
+    private func performDelete() {
+        withAnimation(.snappy(duration: 0.2)) {
+            revealed = 0
+        }
+        revealedAtDragStart = 0
+        onDelete?()
+    }
+
+    private var rowContent: some View {
         HStack(spacing: Spacing.compact) {
             setTypeMenu
                 .frame(width: 28)
