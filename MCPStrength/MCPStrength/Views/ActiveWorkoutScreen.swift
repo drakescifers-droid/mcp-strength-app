@@ -389,7 +389,10 @@ struct ActiveWorkoutScreen: View {
         let working = live.first { $0.setType != .warmup && $0.weight != nil }
         let plan = WarmupSets.plan(
             forWorkingWeight: working?.weight,
-            barWeight: exercise.exercise?.barType?.weight
+            // `.lbs` explicitly, and it is a marker rather than a choice: the
+            // ramp still works in pounds because stored weights still are.
+            // This reads the user's display unit once AppSettings is wired in.
+            barWeight: exercise.exercise?.barType?.weight(in: .lbs)
         )
         guard !plan.isEmpty else { return }
 

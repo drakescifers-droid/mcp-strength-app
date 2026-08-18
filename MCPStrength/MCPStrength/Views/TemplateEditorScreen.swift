@@ -256,7 +256,9 @@ struct TemplateEditorScreen: View {
         let working = sets.first { $0.setType != .warmup && $0.weight != nil }
         let plan = WarmupSets.plan(
             forWorkingWeight: working?.weight,
-            barWeight: exercises[index].exercise.barType?.weight
+            // See the workout screen's copy: `.lbs` is a marker for the unit
+            // plumbing, not a decision about bars.
+            barWeight: exercises[index].exercise.barType?.weight(in: .lbs)
         )
         guard !plan.isEmpty else { return }
 

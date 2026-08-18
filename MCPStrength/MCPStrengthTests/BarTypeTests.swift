@@ -13,12 +13,40 @@ import Testing
 struct BarTypeTests {
 
     @Test func referenceWeightsArePinnedByCase() {
-        #expect(BarType.olympicBar.weight == 45)
-        #expect(BarType.standardBar.weight == 33)
-        #expect(BarType.ezBar.weight == 20)
-        #expect(BarType.trapBar.weight == 75)
-        #expect(BarType.dumbbell.weight == 0)
-        #expect(BarType.other.weight == 0)
+        #expect(BarType.olympicBar.weight(in: .lbs) == 45)
+        #expect(BarType.standardBar.weight(in: .lbs) == 33)
+        #expect(BarType.ezBar.weight(in: .lbs) == 20)
+        #expect(BarType.trapBar.weight(in: .lbs) == 75)
+        #expect(BarType.dumbbell.weight(in: .lbs) == 0)
+        #expect(BarType.other.weight(in: .lbs) == 0)
+    }
+
+    // The metric values are gym standards, NOT conversions of the pounds ones.
+    // A bar is a physical object made to one standard or the other.
+    @Test func metricWeightsAreStandardsRatherThanConversions() {
+        #expect(BarType.olympicBar.weight(in: .kg) == 20)
+        #expect(BarType.standardBar.weight(in: .kg) == 15)
+        #expect(BarType.ezBar.weight(in: .kg) == 10)
+        #expect(BarType.trapBar.weight(in: .kg) == 34)
+    }
+
+    // The load-bearing assertion of the pair: converting one into the other
+    // gives the WRONG bar, which is why there are two constants and not one
+    // number with a conversion in front of it. 45 lb is 20.41 kg and no gym
+    // owns that bar.
+    @Test func convertingPoundsToKilogramsWouldGiveTheWrongBar() {
+        let converted = BarType.olympicBar.weight(in: .lbs) * 0.45359237
+        #expect(converted != BarType.olympicBar.weight(in: .kg))
+        #expect(abs(converted - 20.41) < 0.01)
+    }
+
+    // No bar means no bar in either unit — and 0 must stay 0 rather than
+    // becoming a floor of zero by accident. `WarmupSets.plan` depends on it.
+    @Test func barlessCasesAreZeroInEveryUnit() {
+        for unit in WeightUnit.allCases {
+            #expect(BarType.dumbbell.weight(in: unit) == 0)
+            #expect(BarType.other.weight(in: unit) == 0)
+        }
     }
 
     @Test func theSixLivePostgresCasesAreUnchanged() {

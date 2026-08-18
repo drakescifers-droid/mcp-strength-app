@@ -35,23 +35,38 @@ enum WeightUnit: String, Codable, CaseIterable, Sendable {
 enum BarType: String, Codable, CaseIterable, Sendable {
     case olympicBar, standardBar, ezBar, trapBar, dumbbell, other
 
-    /// Empty-bar weight in pounds.
+    /// Empty-bar weight, in the unit asked for.
     ///
-    /// Pounds, not kilograms: the app is lbs-first and canonical units are
-    /// later work. A kg user will eventually want 20 kg for `olympicBar`
-    /// rather than 45 lb, and this property is where that conversion will
-    /// have to happen — a caller reading `weight` today is reading pounds.
+    /// **Two real-world constants per bar, NOT one number converted**, and that
+    /// is the whole point of the signature. An Olympic bar is 45 lb in a pounds
+    /// gym and 20 kg in a metric one. Those are different masses — 45 lb is
+    /// 20.41 kg — and both are right, because they are different bars made to
+    /// different standards, not two spellings of one bar. Store one and convert
+    /// and somebody always gets the wrong answer: a metric lifter told to load a
+    /// 20.41 kg bar, or a pounds lifter told 44.09.
     ///
-    /// `dumbbell` and `other` are 0 because there is no bar. A warm-up
-    /// floor must treat 0 as "no floor", the same as a missing preference;
-    /// `WarmupSets.plan` does that. Do not rename these cases: they are
-    /// values of the live Postgres enum `public.bar_type`.
-    var weight: Double {
+    /// This is why the units decision in `01-data-model.md` explicitly carves
+    /// bars out. Canonical storage converts the numbers a user TYPED; it must
+    /// not convert the constants the app supplies on their behalf.
+    ///
+    /// The kg values for `olympicBar` and `standardBar` are the actual gym
+    /// standards (20 kg, 15 kg). `ezBar` at 10 kg likewise. **`trapBar` at 34 kg
+    /// is the metric counterpart of the reference app's 75 lb, not a surveyed
+    /// standard** — hex bars genuinely vary from about 45 to 75 lb, so this is a
+    /// default to be edited rather than a fact.
+    ///
+    /// `dumbbell` and `other` are 0 in every unit because there is no bar. A
+    /// warm-up floor must treat 0 as "no floor", the same as a missing
+    /// preference; `WarmupSets.plan` does that.
+    ///
+    /// Do not rename these cases: they are values of the live Postgres enum
+    /// `public.bar_type`.
+    func weight(in unit: WeightUnit) -> Double {
         switch self {
-        case .olympicBar:  45
-        case .standardBar: 33
-        case .ezBar:       20
-        case .trapBar:     75
+        case .olympicBar:  unit == .kg ? 20 : 45
+        case .standardBar: unit == .kg ? 15 : 33
+        case .ezBar:       unit == .kg ? 10 : 20
+        case .trapBar:     unit == .kg ? 34 : 75
         case .dumbbell:    0
         case .other:       0
         }
