@@ -22,17 +22,23 @@
 //
 //  ## What is deliberately absent
 //
-//  Two of the eight items from the reference app are not here yet, and their
-//  absence is a decision rather than an oversight:
+//  ONE of the eight items from the reference app is still absent, and that is
+//  a decision rather than an oversight:
 //
-//    * **Update Warm-up Sets** needs a stored, editable global config
-//      (percentages, rounding). There is no settings model yet.
-//    * **Preferences** edits the four per-exercise user fields that live in the
-//      `exercise_preferences` table — which has no SwiftData model, because
-//      until now nothing produced or consumed it.
+//    * **Preferences** edits the per-exercise Weight Unit and Bar Type. Those
+//      fields exist on `Exercise` today but are moving to their own
+//      `ExercisePreference` model first — see docs/06-sync.md § "Per-exercise
+//      preferences get their own local model" for why the sync does not work
+//      without that split.
 //
-//  Showing them disabled would be worse than omitting them: a permanently grey
-//  row reads as a broken feature. They arrive with the settings model.
+//  Showing it disabled would be worse than omitting it: a permanently grey row
+//  reads as a broken feature.
+//
+//  **Add Warm-up Sets** is here now. It was previously blocked on "a settings
+//  model for percentages and rounding", which turned out not to exist as a
+//  requirement at all: the reference app offers no way to adjust them. You
+//  generate the sets and edit the SETS. So the ramp is hard-coded in
+//  `WarmupSets` and the whole settings model evaporated.
 //
 
 import SwiftUI
@@ -43,6 +49,7 @@ import SwiftUI
 enum ExerciseOption: Equatable, Sendable {
     case addNote
     case addStickyNote
+    case addWarmupSets
     case updateRestTimers
     case replaceExercise
     case createSuperset
@@ -75,6 +82,18 @@ struct ExerciseOptionsMenu: View {
                     hasStickyNote ? "Edit Sticky Note" : "Add Sticky Note",
                     systemImage: "pin"
                 )
+            }
+
+            // "Add", not "Update", even though a second tap REPLACES the
+            // warm-ups already there. The neighbouring "Update Rest Timers"
+            // made "Update Warm-up Sets" look like the parallel name, and it
+            // is not what the reference app calls it — the user is adding
+            // warm-up sets to an exercise, and the replacement is how a second
+            // tap corrects a working weight typed after the first one.
+            Button {
+                onSelect(.addWarmupSets)
+            } label: {
+                Label("Add Warm-up Sets", systemImage: "flame")
             }
 
             Button {

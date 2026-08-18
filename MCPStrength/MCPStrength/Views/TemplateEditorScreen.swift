@@ -228,10 +228,57 @@ struct TemplateEditorScreen: View {
             activeOption = ActiveOption(index: index, kind: .rest)
         case .replaceExercise:
             activeOption = ActiveOption(index: index, kind: .replace)
+        case .addWarmupSets:
+            addWarmupSets(at: index)
         case .createSuperset:
             toggleSuperset(at: index)
         case .removeExercise:
             exercises.remove(at: index)
+        }
+    }
+
+    /// Replace this exercise's warm-up drafts with a freshly generated ramp.
+    ///
+    /// Same rule as the live workout screen — regenerate from the current
+    /// working weight rather than appending — but the mechanics are far
+    /// simpler here, and that difference is the reason the two screens answer
+    /// this menu separately. These are value-type DRAFTS: dropping a warm-up
+    /// is `removeAll`, with no tombstone to write, because nothing is
+    /// persisted until Save. `TemplateSaveDiff` then works out which real rows
+    /// disappeared and tombstones exactly those.
+    ///
+    /// A template's working weight is a PRESCRIPTION and is often blank —
+    /// `TemplateSet.weight` is optional and plenty of templates carry only rep
+    /// ranges. No weight means no ramp, which `WarmupSets` already returns as
+    /// an empty plan.
+    private func addWarmupSets(at index: Int) {
+        let sets = exercises[index].sets
+        let working = sets.first { $0.setType != .warmup && $0.weight != nil }
+        let plan = WarmupSets.plan(
+            forWorkingWeight: working?.weight,
+            barWeight: exercises[index].exercise.barType?.weight
+        )
+        guard !plan.isEmpty else { return }
+
+        let rest = exercises[index].defaultRestSeconds
+        let warmups = plan.enumerated().map { offset, step in
+            DraftSet(
+                id: UUID(),
+                order: offset,
+                setType: step.setType,
+                weight: step.weight,
+                reps: step.reps,
+                restSeconds: rest
+            )
+        }
+        // A fresh UUID per generated set is correct here: these are NEW rows,
+        // and loadDraft's ids exist so SURVIVING rows can be matched. A warm-up
+        // that was just replaced is gone, and its draft id with it.
+        let survivors = sets.filter { $0.setType != .warmup }
+        exercises[index].sets = (warmups + survivors).enumerated().map { offset, set in
+            var renumbered = set
+            renumbered.order = offset
+            return renumbered
         }
     }
 

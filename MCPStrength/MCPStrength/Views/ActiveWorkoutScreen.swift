@@ -352,6 +352,8 @@ struct ActiveWorkoutScreen: View {
             activeOption = ActiveOption(exercise: exercise, kind: .rest)
         case .replaceExercise:
             activeOption = ActiveOption(exercise: exercise, kind: .replace)
+        case .addWarmupSets:
+            addWarmupSets(to: exercise)
         case .createSuperset:
             toggleSuperset(for: exercise)
         case .removeExercise:
@@ -360,6 +362,63 @@ struct ActiveWorkoutScreen: View {
             // cascade to its sets has to propagate either way.
             SoftDelete.workoutExercise(exercise)
         }
+    }
+
+    /// Generate the warm-up ramp for this exercise, REPLACING whatever
+    /// warm-ups are already there.
+    ///
+    /// Replace, not append, and that is the decision rather than a shortcut.
+    /// The second tap is almost always somebody who typed the working weight
+    /// AFTER adding the exercise and wants the ramp recalculated; appending
+    /// would give them six warm-up sets to delete. Drake was explicit that
+    /// this overwrites even warm-ups he had adjusted by hand — it is the
+    /// standard calculation, applied fresh.
+    ///
+    /// The working weight is the first live set that is NOT a warm-up and has
+    /// a weight typed in. No such set means no ramp: `WarmupSets` returns an
+    /// empty plan and this does nothing, rather than inventing 0 lb warm-ups
+    /// (AGENTS.md rule 4).
+    ///
+    /// Replaced warm-ups are TOMBSTONED, not deleted. The hard delete at
+    /// Finish is safe only because an unfinished workout can never have been
+    /// pushed; this action is reachable on a workout that was finished and
+    /// reopened, exactly like `removeExercise` above, so the delete has to be
+    /// able to travel.
+    private func addWarmupSets(to exercise: WorkoutExercise) {
+        let live = exercise.liveSets
+        let working = live.first { $0.setType != .warmup && $0.weight != nil }
+        let plan = WarmupSets.plan(
+            forWorkingWeight: working?.weight,
+            barWeight: exercise.exercise?.barType?.weight
+        )
+        guard !plan.isEmpty else { return }
+
+        for set in live where set.setType == .warmup {
+            set.markDeleted()
+        }
+
+        // Warm-ups occupy the first slots and the survivors shift down, because
+        // `liveSets` sorts on `order` and a ramp after the working sets is not
+        // a ramp. Every survivor whose number actually moves is marked — the
+        // reorder loops on this screen learned that the hard way.
+        for (index, step) in plan.enumerated() {
+            let warmup = WorkoutSet(
+                order: index,
+                setType: step.setType,
+                weight: step.weight,
+                reps: step.reps,
+                restSeconds: exercise.defaultRestSeconds
+            )
+            warmup.workoutExercise = exercise
+            context.insert(warmup)
+        }
+        for (offset, set) in live.filter({ $0.setType != .warmup }).enumerated() {
+            let newOrder = plan.count + offset
+            guard set.order != newOrder else { continue }
+            set.order = newOrder
+            set.markEdited()
+        }
+        exercise.markEdited()
     }
 
     /// Pair with the exercise ABOVE, or leave the current group. See the
