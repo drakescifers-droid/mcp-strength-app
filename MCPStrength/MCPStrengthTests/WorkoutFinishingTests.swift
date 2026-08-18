@@ -25,6 +25,7 @@ struct WorkoutFinishingTests {
             TemplateExercise.self, TemplateSet.self, ProgramDay.self,
             Workout.self, WorkoutExercise.self, WorkoutSet.self,
             MeasurementType.self, MeasurementEntry.self,
+            AppSettings.self,
         ])
         return ModelContext(try ModelContainer(
             for: schema,

@@ -174,10 +174,14 @@ Two more absences worth stating so they are not re-added by reflex:
 
 ## What is not here yet
 
-- **Settings.** `01-data-model.md` lists the fields but the units decision inside it is still open,
-  and there is no SwiftData model. Building the table now would be guessing at a shape — the
-  Archive precedent: design it, then build it. The Program exception does not apply, because there
-  the design was settled and only the UI was deferred.
+- **Settings — the Postgres half.** No longer guessing at a shape: the units decision landed
+  (`01-data-model.md`, 2026-08-18) and `AppSettings` exists locally with the full field list, so the
+  Program exception now DOES apply — the design is settled and only the UI is deferred. What is
+  missing is the table, its RLS policies and triggers, and the engine wiring; `AppSettings`
+  deliberately does not conform to `Syncable` until they exist.
+  > **One row per user means the key is `user_id`, not `id`** — the same per-entity conflict-target
+  > problem `06-sync.md` already works through for `exercise_preferences`. Do it once for both. Until
+  > then settings are local-only, so a second device silently shows pounds to a kg lifter.
 - **Canonical units.** Set `weight`/`distance` carry no unit, matching the app, which means they are
   implicitly in the user's global unit — a setting that does not exist yet. `01-data-model.md`
   recommends canonical storage with unit as a display preference. **That decision has to land before

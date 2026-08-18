@@ -25,6 +25,7 @@ struct MCPStrengthTests {
             WorkoutSet.self,
             MeasurementType.self,
             MeasurementEntry.self,
+            AppSettings.self,
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [config])

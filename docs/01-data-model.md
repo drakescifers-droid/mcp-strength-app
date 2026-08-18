@@ -324,11 +324,27 @@ tagged so they can be skipped on import, or every write echoes back as a duplica
 Global: rest timer defaults, warm-up calculator config, `previousSetBehavior`, language,
 measurement weight unit, weight unit, distance unit, size unit, week start day, theme.
 
-**Units decision (needs your call):** store canonically (kg, meters, seconds) and convert at
-the display layer, or store as-entered with the unit attached? Canonical is cleaner for
-aggregation and for MCP consumers doing math. Storing as-entered avoids float drift on values
-the user typed. Recommendation: **canonical storage, unit as a display preference** — an AI
-computing total volume across a year of workouts should never have to unit-convert first.
+**Units decision — DECIDED 2026-08-18: canonical KILOGRAMS, unit as a display preference.**
+The alternative considered was storing as-entered with the unit attached, which avoids rounding
+values the user typed but makes every consumer convert before it can add anything up — and *"an AI
+computing total volume across a year of workouts should never have to unit-convert first"* was the
+point of having a canonical form at all. kg over lb because it is what HealthKit speaks, and
+HealthKit is the next item in Phase 2.
+
+The cost is accepted rather than avoided: 135 lb is 61.23496995 kg, so a typed value round-trips
+through a conversion. Display rounds to the unit's own plate increment, which is coarse enough
+(2.5 lb / 1.25 kg) that a typed 135 reads back as 135.
+
+> **Bar weights are the exception, and they are not a units problem.** `BarType.weight` cannot be
+> one canonical number: 45 lb converts to 20.41 kg and a metric lifter wants a **20 kg** bar, while
+> 20 kg converts to 44.09 lb and a pounds lifter wants **45**. Both values are real-world constants
+> and both are correct; neither is a conversion of the other. So `BarType` carries a weight PER
+> UNIT. Recorded here because it reads like rounding and is not.
+
+The global unit lives on `AppSettings` (`MCPStrength/Models/Settings.swift`), which carries this
+whole section's field list rather than only the units — see that file for why the fields with no
+screen are there anyway, and why `theme` and `previousSetBehavior` are deliberately `String?`
+instead of enums.
 
 ---
 

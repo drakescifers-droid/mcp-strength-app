@@ -23,6 +23,7 @@ struct MCPStrengthApp: App {
             WorkoutSet.self,
             MeasurementType.self,
             MeasurementEntry.self,
+            AppSettings.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
