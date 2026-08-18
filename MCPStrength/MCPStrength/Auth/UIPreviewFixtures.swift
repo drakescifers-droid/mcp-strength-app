@@ -58,6 +58,19 @@ enum UIPreviewFixtures {
         // silent `if let` meant renaming a seeded exercise would thin the
         // fixtures out instead of saying so, and an emptier preview is exactly
         // the thing nobody notices.
+        // Fixture weights are written as POUNDS and converted on the way in,
+        // because storage is canonical kilograms and a fixture is not exempt
+        // from that. Writing `84` would make the file unreadable — the numbers
+        // are chosen to be recognisable barbell loads (a 185 lb bench, a 45 lb
+        // bar) and that is what makes a screenshot judgeable at a glance.
+        //
+        // These do NOT go through `WeightUnitMigration`: it runs at container
+        // creation and has already marked the store converted by the time this
+        // installs. Anything inserted here has to arrive in kilograms itself.
+        func kg(_ pounds: Double) -> Double {
+            WeightUnits.kilograms(from: pounds, in: .lbs)
+        }
+
         func exercise(_ name: String) -> Exercise? {
             let match = library.first {
                 $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame
@@ -104,7 +117,7 @@ enum UIPreviewFixtures {
             ]
             for (i, s) in sets.enumerated() {
                 context.insert(WorkoutSet(
-                    order: i, setType: s.0, weight: s.1, reps: s.2, rpe: s.3,
+                    order: i, setType: s.0, weight: kg(s.1), reps: s.2, rpe: s.3,
                     restSeconds: 120, isCompleted: s.4,
                     completedAt: s.4 ? .now : nil, workoutExercise: block
                 ))
@@ -136,7 +149,7 @@ enum UIPreviewFixtures {
             context.insert(block)
             for (i, reps) in [15, 13, 12].enumerated() {
                 context.insert(WorkoutSet(
-                    order: i, weight: 35, reps: reps, restSeconds: 60,
+                    order: i, weight: kg(35), reps: reps, restSeconds: 60,
                     isCompleted: true, workoutExercise: block
                 ))
             }

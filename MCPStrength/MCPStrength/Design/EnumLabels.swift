@@ -65,3 +65,39 @@ extension BarType {
         }
     }
 }
+
+extension WeightUnit {
+    /// The full name, for a picker row. Not used yet — the settings screen that
+    /// needs it is the next piece of work after canonical units.
+    var displayName: String {
+        switch self {
+        case .lbs: "Pounds"
+        case .kg:  "Kilograms"
+        }
+    }
+
+    /// The suffix on a rendered weight: `135 lb × 5`, `61.2 kg × 5`.
+    ///
+    /// Singular "lb" rather than "lbs" because it follows a number, which is
+    /// what the reference app does and what every call site here already
+    /// hard-coded before the unit became a variable.
+    var abbreviation: String {
+        switch self {
+        case .lbs: "lb"
+        case .kg:  "kg"
+        }
+    }
+
+    /// The weight column's header on a set row.
+    ///
+    /// Deliberately NOT `abbreviation`: the reference labels that column "lbs",
+    /// plural, because it heads a column rather than trailing a number. The two
+    /// spellings are a real difference in the design, not an inconsistency to
+    /// tidy away.
+    var columnHeader: String {
+        switch self {
+        case .lbs: "lbs"
+        case .kg:  "kg"
+        }
+    }
+}

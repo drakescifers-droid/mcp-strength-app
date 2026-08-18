@@ -82,6 +82,13 @@ enum OneRepMax {
     /// Estimated one-rep max in the same unit as `weight`, or nil when no
     /// honest estimate exists.
     ///
+    /// **Pass a weight in the unit it will be DISPLAYED in, not stored
+    /// kilograms** — `estimate(for:category:in:)` below is the call that gets
+    /// that right. The rounding is why: this rounds to a whole unit, so
+    /// estimating in kilograms and converting afterwards gives a different
+    /// number from estimating in pounds, and only one of them matches the
+    /// reference app that the formula and its rounding rule were fitted to.
+    ///
     /// Rounded to the nearest whole unit — the input is a rough model, and
     /// decimals on it would imply a precision that is not there.
     ///
@@ -100,8 +107,19 @@ enum OneRepMax {
     }
 
     /// Convenience for a performed set, applying the category rule as well.
-    static func estimate(for set: WorkoutSet, category: ExerciseCategory?) -> Double? {
+    ///
+    /// Takes the set's stored kilograms into `unit` first, so the estimate is
+    /// computed and rounded in the unit it will be shown in. The returned value
+    /// is therefore ALREADY in `unit` and must not be converted again.
+    static func estimate(
+        for set: WorkoutSet,
+        category: ExerciseCategory?,
+        in unit: WeightUnit
+    ) -> Double? {
         guard let category, supportsEstimate(category) else { return nil }
-        return estimate(weight: set.weight, reps: set.reps)
+        return estimate(
+            weight: set.weight.map { WeightUnits.displayed(from: $0, in: unit) },
+            reps: set.reps
+        )
     }
 }

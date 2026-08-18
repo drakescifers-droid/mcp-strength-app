@@ -127,24 +127,53 @@ struct OneRepMaxTests {
 
     // MARK: - The per-set convenience
 
+    // A stored set carries KILOGRAMS, so these build one from the pounds it
+    // represents and ask for the estimate back in pounds. The expected numbers
+    // are unchanged from when storage was pounds, which is the assertion that
+    // matters: the reference app's 1RM column did not move.
+    private func poundsSet(_ pounds: Double, reps: Int) -> WorkoutSet {
+        WorkoutSet(
+            order: 0,
+            weight: WeightUnits.kilograms(from: pounds, in: .lbs),
+            reps: reps
+        )
+    }
+
     @Test func aWeightedBodyweightSetGetsNothingEvenWithGoodNumbers() {
         // The trap this exists for: the numbers alone look perfectly
         // estimable, and only the category knows they are not.
-        let set = WorkoutSet(order: 0, weight: 230, reps: 9)
+        let set = poundsSet(230, reps: 9)
         #expect(OneRepMax.estimate(weight: 230, reps: 9) != nil, "numbers alone would estimate")
-        #expect(OneRepMax.estimate(for: set, category: .weightedBodyweight) == nil)
+        #expect(OneRepMax.estimate(for: set, category: .weightedBodyweight, in: .lbs) == nil)
     }
 
     @Test func aBarbellSetGetsAnEstimate() {
-        let set = WorkoutSet(order: 0, weight: 135, reps: 10)
-        #expect(OneRepMax.estimate(for: set, category: .barbell) == 180)
+        let set = poundsSet(135, reps: 10)
+        #expect(OneRepMax.estimate(for: set, category: .barbell, in: .lbs) == 180)
     }
 
     @Test func anUnknownExerciseGetsNothing() {
         // exercise is optional on WorkoutExercise; a nil category must not be
         // treated as "sure, estimate it".
-        let set = WorkoutSet(order: 0, weight: 135, reps: 10)
-        #expect(OneRepMax.estimate(for: set, category: nil) == nil)
+        let set = poundsSet(135, reps: 10)
+        #expect(OneRepMax.estimate(for: set, category: nil, in: .lbs) == nil)
+    }
+
+    // THE REASON THE ESTIMATE TAKES A UNIT. It rounds to a whole unit, so
+    // rounding in kilograms and converting afterwards is not the same number as
+    // rounding in pounds — and only the pounds one matches the reference app
+    // the formula was fitted to.
+    @Test func theEstimateIsRoundedInTheUnitItIsShownIn() {
+        let set = poundsSet(135, reps: 10)
+
+        let inPounds = OneRepMax.estimate(for: set, category: .barbell, in: .lbs)
+        #expect(inPounds == 180)
+
+        // The same set asked for in kilograms: estimated from 61.23 kg, so it
+        // rounds to a whole KILOGRAM (82), not to 180 lb converted (81.65).
+        let inKilograms = OneRepMax.estimate(for: set, category: .barbell, in: .kg)
+        #expect(inKilograms == 82)
+        #expect(inKilograms != WeightUnits.kilograms(from: 180, in: .lbs))
     }
 
     // MARK: - Presentation

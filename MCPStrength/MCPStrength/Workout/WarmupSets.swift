@@ -19,9 +19,26 @@
 //  Drake asked for defaults rather than a settings screen. In the app this
 //  one is modelled on, you generate the sets and then edit the SETS if you
 //  want something different. A config struct the caller must supply, or a
-//  UserDefaults read, would pretend that choice is still open. The three
-//  knobs (percentages, reps, plate increment) live in `Ramp` so a later
-//  change is a five-second find, not a hunt through a loop.
+//  UserDefaults read, would pretend that choice is still open. The two
+//  knobs (percentages, reps) live in `Ramp` so a later change is a
+//  five-second find, not a hunt through a loop.
+//
+//  ## Why this works in the DISPLAY unit, not in storage
+//
+//  Every other weight in the app is stored and reasoned about in kilograms.
+//  This one is not, and the exception is the whole reason `plan` takes a unit.
+//
+//  A warm-up is a load the app INVENTS, so it has to land on plates that exist
+//  in the user's gym — 5 lb jumps in a pounds gym, 2.5 kg in a metric one, and
+//  neither is a conversion of the other (`WeightUnits.plateIncrement`). Ramp in
+//  kilograms and convert at the end and a pounds lifter is told to load
+//  49.6 lb: arithmetically faithful to the ramp and impossible to put on a bar.
+//  So the whole calculation happens in the unit the user reads, and the CALLER
+//  converts each step back to kilograms as it writes it.
+//
+//  The bar floor is the same argument one level down: `BarType.weight(in:)`
+//  already returns a real bar per unit rather than one number converted, and
+//  it is passed in already in that unit.
 //
 //  ## What this refuses to emit
 //
@@ -31,7 +48,7 @@
 //      0 lb warm-ups would read as "warm up with nothing" — a fabricated
 //      zero (docs/04-status.md). A bodyweight or reps-only set, or a
 //      working set the user has not typed into yet, is absence, not data.
-//    * A step that rounds to 0 lb is the same fabricated zero and is dropped.
+//    * A step that rounds to zero is the same fabricated zero and is dropped.
 //    * A step at or above the working weight is not a warm-up. At light
 //      loads the 80% step can land on the work itself after rounding.
 //    * Two steps that round to the same plate are the same set. The later
@@ -80,7 +97,6 @@ enum WarmupSets {
         /// exactly like a generated one.
         static let percentages: [Double] = [0.5, 0.6, 0.75]
         static let reps: [Int] = [5, 5, 3]
-        static let roundingIncrement: Double = 5
     }
 
     /// One generated warm-up. Weight is already a plate load.
@@ -100,7 +116,16 @@ enum WarmupSets {
     /// all pass nil. A non-positive value is treated the same as nil —
     /// `BarType.dumbbell.weight` is 0, and reading that must not become a
     /// floor of zero arrived at by accident.
-    static func plan(forWorkingWeight workingWeight: Double?, barWeight: Double? = nil) -> [Step] {
+    ///
+    /// **`workingWeight`, `barWeight` and every returned step are all in
+    /// `unit`, not in stored kilograms.** See the file comment for why the ramp
+    /// is the one calculation in the app that leaves canonical storage: the
+    /// plate increment is a fact about a gym, not a quantity to convert.
+    static func plan(
+        forWorkingWeight workingWeight: Double?,
+        barWeight: Double? = nil,
+        in unit: WeightUnit
+    ) -> [Step] {
         guard let workingWeight, workingWeight > 0 else { return [] }
 
         // Only a positive bar is a floor. `barWeight ?? 0` would make
@@ -117,7 +142,7 @@ enum WarmupSets {
 
         for (percent, reps) in zip(Ramp.percentages, Ramp.reps) {
             let unrounded = workingWeight * percent
-            var rounded = roundedToPlate(unrounded)
+            var rounded = roundedToPlate(unrounded, in: unit)
             if let floor, rounded < floor {
                 rounded = floor
             }
@@ -133,7 +158,11 @@ enum WarmupSets {
         return steps
     }
 
-    /// Nearest `Ramp.roundingIncrement`, ties to the heavier plate.
+    /// Nearest loadable plate in `unit`, ties to the heavier plate.
+    ///
+    /// The increment comes from `WeightUnits.plateIncrement` — 5 lb or 2.5 kg,
+    /// two stocking conventions rather than two spellings of one number. It
+    /// used to be a constant on `Ramp` because there was only one unit.
     ///
     /// `.toNearestOrAwayFromZero` is named on purpose. Swift's default
     /// `rounded()` happens to be the same rule, and `.toNearestOrEven`
@@ -141,8 +170,7 @@ enum WarmupSets {
     /// send 62.5 to 60. A warm-up on the fence loads the heavier plate:
     /// 2.5 lb more still prepares you, and "nearest 5 lb" with a gym
     /// bar in mind means take the extra plate, not banker's rounding.
-    private static func roundedToPlate(_ weight: Double) -> Double {
-        let increment = Ramp.roundingIncrement
-        return (weight / increment).rounded(.toNearestOrAwayFromZero) * increment
+    private static func roundedToPlate(_ weight: Double, in unit: WeightUnit) -> Double {
+        WeightUnits.round(weight, toNearest: WeightUnits.plateIncrement(for: unit))
     }
 }

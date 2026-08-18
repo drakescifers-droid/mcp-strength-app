@@ -36,8 +36,9 @@ and a five-tab shell.
 true today — with the standing caveat that it should **not** hold real training data until Phase 2
 provides sync and backup, because a local-only store has no recovery story.
 
-**Phase 2 — in progress. Sync is PROVEN against the real project.** What remains is per-exercise
-Preferences, canonical units, and Apple Health.
+**Phase 2 — in progress. Sync is PROVEN against the real project, and storage is canonical
+kilograms.** What remains is per-exercise Preferences, the settings screen, syncing `AppSettings`,
+and Apple Health.
 
 > **The settings model that used to be item 2 on this list no longer exists as a requirement.** It
 > was there to hold editable warm-up percentages — and the reference app offers no way to adjust
@@ -45,13 +46,25 @@ Preferences, canonical units, and Apple Health.
 > `Workout/WarmupSets.swift` and the whole model evaporated. Worth remembering as a shape: a
 > requirement inherited from "surely the reference app has a screen for this" that it does not have.
 
-> **START HERE IN A NEW SESSION.** The one-line state: **sync works, end to end, proven against the
-> real project.** A workout logged on a simulator (Bench Press 135×5) reached `mcp-strength` with
-> its exercise and set, correctly owned; 43 global library rows came down the other way; the cursor
-> advances; the seeded library stays global. Read out of the database, not inferred from the UI.
+> **START HERE IN A NEW SESSION.** The one-line state: **sync works end to end against the real
+> project, and every stored weight is now KILOGRAMS.** A workout logged on a simulator (Bench Press
+> 135×5) reached `mcp-strength` with its exercise and set, correctly owned; 43 global library rows
+> came down the other way; the cursor advances; the seeded library stays global. Read out of the
+> database, not inferred from the UI.
 >
 > **The round trip found four real bugs that 350 green tests did not**, which is the single most
 > useful thing this document can tell you — see "What running it for real found" below.
+>
+> **The bar on logging real workouts is LIFTED.** It existed only until the units conversion landed,
+> and it has: nothing about the local store is waiting on a migration any more. What is still true
+> is that there is **no App Store Connect app record**, so the build cannot be uploaded — see
+> "Shipping to a device".
+>
+> ⚠️ **One ordering rule survives, and only for the live project.** Migration
+> `20260818120000_weights_to_kilograms.sql` must be applied BEFORE a build of this client runs
+> against `mcp-strength`. Run `supabase migration list` and check it is there. The client converts
+> its own store without dirtying rows, so it will not re-push what it converted — except rows that
+> were ALREADY dirty, which push kilograms. A server that has not converted yet would halve those.
 
 ### Landed
 
@@ -99,11 +112,20 @@ Preferences, canonical units, and Apple Health.
   below came from — see "What looking at the warm-up ramp found".
 - **Bar types carry a weight PER UNIT** (`BarType.weight(in:)`), and a `hammerStrength` exercise
   category exists in the app and in the live database.
-- **The units foundation, with nothing switched over to it yet.** `AppSettings` (the whole settings
-  field list, one row, `current(in:)`), and `WeightUnits` — the pure kg↔display conversion. Stored
-  weights are STILL POUNDS: none of this is wired to a screen, so the app behaves exactly as before.
-  Deliberate, so the conversion can be wrong on its own rather than inside the change that also
-  rewires six screens and migrates two databases. See "Canonical units" under what is left.
+- **CANONICAL KILOGRAMS, both halves, in one change.** `AppSettings` and `WeightUnits` landed first
+  with nothing wired to them; this closed it. Every read and write of a weight now goes through
+  `WeightUnits` — the entry chips, `PreviousText`, history volume and best set, `OneRepMax`, the
+  warm-up ramp — and the pounds already stored were converted on both sides:
+  `WeightUnitMigration` on the client and migration `0009` in Postgres.
+  > **The local conversion is guarded by a marker IN THE STORE** (`StoreMigrations`), not in
+  > UserDefaults and not on `AppSettings`. Not UserDefaults because this project swaps store files
+  > around to test SwiftData migrations, and a defaults dictionary that says "converted" over a
+  > restored older store is the silent halving the guard exists to prevent. Not `AppSettings`
+  > because that is about to become a synced table keyed by `user_id`, and a second device pulling
+  > `didConvert = true` would skip its own conversion. Off `Syncable` makes that structural rather
+  > than a comment somebody has to honour.
+  > **The rows and the marker are written in ONE save**, so a crash between them cannot produce a
+  > converted store that is marked unconverted.
 - **UI preview mode** — see below. This is the single most useful thing to know about.
 
 ### THE LOOP THAT WAS MISSING FOR A DAY: seeing the app
@@ -224,36 +246,32 @@ as a generated one.
 
 ### What is left, in order
 
-1. **Canonical units — HALF LANDED, and the half that remains is one change, not two.** The
-   decision is made (kg, `01-data-model.md`) and the foundation is committed. What is left:
-   - **Rewire every read and write of a weight** through `WeightUnits` — `SetRow`'s entry fields,
-     `PreviousText`, history volume and best set, `OneRepMax`, and the warm-up ramp. The ramp should
-     work in the user's DISPLAY unit and convert once at the end, because `plateIncrement` is per
-     unit: an lb lifter must get 45/55/70, not the kg ramp converted into fractions.
-   - **Convert the data that already exists**, in the simulator store AND in the live Supabase
-     project, `× 0.45359237`. Local needs a guard so it runs exactly once — a second pass would
-     convert kg to kg and quietly halve every lift ever logged.
-
-   > **These two must land TOGETHER.** Rewire without converting and every stored weight is read as
-   > kilograms, so 135 lb reads as 298. Convert without rewiring and the reverse. There is no safe
-   > intermediate commit, which is exactly why the foundation was split out first.
-
-   > **DO NOT LOG REAL WORKOUTS UNTIL THIS IS DONE.** The whole reason units came before TestFlight
-   > is that the conversion is free while the only data is test data. Drake's developer account is
-   > live and a store-signed build already exists, so the temptation is real and the window is open.
-
-2. **Per-exercise Preferences.** Design decided and approved: `docs/06-sync.md` § "Per-exercise
+1. **Per-exercise Preferences.** Design decided and approved: `docs/06-sync.md` § "Per-exercise
    preferences get their own local model". The sheet is two rows — Weight Unit and Bar Type — not
    four; `focusMetric` and `notes` are not edited there. The *Default* option in its weight-unit row
-   is what item 1 unblocks, and `AppSettings` is what it defers to.
-3. **Settings screen, units rows only**, off the profile page — reference screenshots are in
+   now has something to defer to.
+   > **The display side is already built and is waiting for it.** Every screen resolves its unit
+   > through `WeightUnits.displayUnit(override:global:)` and passes `exercise.weightUnitOverride`
+   > as the override — which is always nil, because nothing writes it. When the four fields move to
+   > `ExercisePreference`, the change is what those four call sites PASS, not a hunt for screens
+   > that resolved the unit their own way. They are: `ExerciseBlock.displayUnit` (workout screen),
+   > `TemplateEditorScreen.displayUnit(for:)`, `ExerciseDetailBlock.displayUnit` (history detail),
+   > and the best-set row in `WorkoutHistoryCard`.
+2. **Settings screen, units rows only**, off the profile page — reference screenshots are in
    `Settings accessed from profile page/`. This is what makes canonical storage visible: without it
-   nobody can change the unit, so the conversion is only ever exercised in one direction.
-4. **Sync `AppSettings`.** It carries the sync columns and deliberately does NOT conform to
+   nobody can change the unit, **so the conversion is still only ever exercised in one direction.**
+   Every weight is stored in kilograms today and every screen renders pounds; the kg path is covered
+   by tests and has never been seen on a screen. `SetRow` already reacts to a unit change
+   (`.onChange(of: unit)`), and this screen is what proves that works.
+3. **Sync `AppSettings`.** It carries the sync columns and deliberately does NOT conform to
    `Syncable` — there is no Postgres table yet (`05-database.md`). One row per user means the key is
    `user_id`, which is the same per-entity conflict-target work `06-sync.md` specifies for
    `exercise_preferences`; do it once for both.
-5. **Apple Health.** The last item in Phase 2, and no longer blocked — see the signing note below.
+   > **`StoreMigrations` must NOT be swept up in this.** It sits next to `AppSettings` and looks
+   > like more of the same. It is the opposite: a device-local record of which data migrations this
+   > STORE has run. Syncing it would let one device tell another that its weights are already
+   > converted.
+4. **Apple Health.** The last item in Phase 2, and no longer blocked — see the signing note below.
 
 > **`Add Warm-up Sets` has now been looked at and is off this list.** It found one real bug, which
 > is recorded below rather than here because the shape of it is the reusable part.

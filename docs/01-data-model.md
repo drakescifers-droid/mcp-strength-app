@@ -332,8 +332,27 @@ point of having a canonical form at all. kg over lb because it is what HealthKit
 HealthKit is the next item in Phase 2.
 
 The cost is accepted rather than avoided: 135 lb is 61.23496995 kg, so a typed value round-trips
-through a conversion. Display rounds to the unit's own plate increment, which is coarse enough
-(2.5 lb / 1.25 kg) that a typed 135 reads back as 135.
+through a conversion. Display rounds to `WeightUnits.displayPrecision` — **0.01, which is
+deliberately FINE and is not a plate size.** An earlier version of this paragraph said display
+rounded to the plate increment; that is the trap rather than the fix, because rounding a typed 138
+to the nearest 2.5 lb silently edits what the user entered. Two different jobs:
+
+| Rounding | Increment | Applies to |
+|---|---|---|
+| **Display precision** — so a typed value survives the round trip | 0.01, both units | Every weight read back out of storage |
+| **Plate increment** — so a load the app invents is loadable | 5 lb / 2.5 kg | Only values the app generates, i.e. the warm-up ramp |
+
+**LANDED 2026-08-18, both halves in one change.** Every read and write goes through `WeightUnits`,
+and the pounds already in the local store and the live project were converted — `WeightUnitMigration`
+on the client (guarded so it cannot run twice) and migration `0009` in Postgres. Neither half is
+safe alone: rewiring without converting reads 135 lb as 298, converting without rewiring reads it as
+61. There is no correct intermediate commit, which is why `WeightUnits` and `AppSettings` were landed
+first — those two are safe alone because nothing called them.
+
+> **The warm-up ramp is the one calculation that leaves canonical storage**, and it does so on
+> purpose: it works entirely in the user's display unit and converts each step back on the way into
+> the store. A plate increment is a fact about a gym, not a quantity to convert — ramping in
+> kilograms and converting at the end tells a pounds lifter to load 49.6 lb.
 
 > **Bar weights are the exception, and they are not a units problem.** `BarType.weight` cannot be
 > one canonical number: 45 lb converts to 20.41 kg and a metric lifter wants a **20 kg** bar, while

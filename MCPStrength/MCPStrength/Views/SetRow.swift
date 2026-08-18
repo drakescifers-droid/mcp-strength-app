@@ -32,7 +32,13 @@ enum SetRowTrailing {
 /// One editable set row: badge, previous, weight chip, reps chip, RPE chip,
 /// trailing.
 ///
-/// Weight is passed as a binding to `Double?`. Reps is passed as a binding to a
+/// Weight is passed as a binding to `Double?` in **stored kilograms**, and the
+/// row converts in both directions: the chip shows `unit`, and what the user
+/// types in `unit` is converted back before it is written. `unit` is therefore
+/// not decoration — get it wrong and the row silently rewrites the weight every
+/// time it is touched.
+///
+/// Reps is passed as a binding to a
 /// `RepRange?` prescription: the template screen may carry a range ("6-8") or a
 /// fixed target ("8"); the workout screen carries only a fixed number. The
 /// `allowRange` flag controls whether a dashed form is accepted — the workout
@@ -51,7 +57,12 @@ struct SetRow: View {
     @Binding var setType: SetType
     let setNumber: Int?
     let previousText: String
+    /// Stored KILOGRAMS. Displayed and typed in `unit`.
     @Binding var weight: Double?
+    /// The unit this row reads and writes in. Resolved by the caller via
+    /// `WeightUnits.displayUnit(override:global:)`, because the override is
+    /// per-exercise and the row does not know which exercise it belongs to.
+    let unit: WeightUnit
     @Binding var prescription: RepRange?
     let allowRange: Bool
     @Binding var rpe: Double?
@@ -93,6 +104,14 @@ struct SetRow: View {
         .padding(.vertical, Spacing.compact)
         .background(rowTint, in: .rect(cornerRadius: Radius.chip))
         .onAppear { syncFromModel() }
+        // Changing the unit in Settings must not leave a chip showing the old
+        // number under the new label. `didSync` deliberately makes the first
+        // sync one-shot so typing is never interrupted; a unit change is the
+        // one event that has to override it, and it cannot happen mid-keystroke.
+        .onChange(of: unit) { _, _ in
+            didSync = false
+            syncFromModel()
+        }
     }
 
     // MARK: - Set-type menu
@@ -226,7 +245,9 @@ struct SetRow: View {
         guard !didSync else { return }
         didSync = true
         if let w = weight {
-            weightText = PreviousText.formatWeight(w)
+            weightText = PreviousText.formatWeight(
+                PreviousText.displayValue(kilograms: w, in: unit)
+            )
         }
         if let p = prescription {
             repsText = RepRangeParser.format(p)
@@ -239,7 +260,9 @@ struct SetRow: View {
         if trimmed.isEmpty {
             weight = nil
         } else if let value = Double(trimmed) {
-            weight = value
+            // What the user typed is in `unit`; what is stored is kilograms.
+            // This is the only write of a weight on either logging screen.
+            weight = WeightUnits.kilograms(from: value, in: unit)
         }
         // Unparseable input (e.g. "85.") is left as-is locally without writing,
         // so the user can finish typing the decimal.
@@ -267,9 +290,13 @@ struct SetRow: View {
 
 /// The `Set | Previous | lbs | Reps | RPE | <trailing>` column header shared by
 /// both screens. Only the trailing glyph differs — `checkmark` for the workout,
-/// a lock for the template — so the column widths stay identical.
+/// a lock for the template — so the column widths stay identical. The weight
+/// column's label follows the user's unit.
 struct SetRowColumnHeader: View {
     let trailingIcon: String
+    /// Labels the weight column. `lbs` / `kg` — see `WeightUnit.columnHeader`
+    /// for why this is not the same spelling as the suffix on a value.
+    let unit: WeightUnit
 
     var body: some View {
         HStack(spacing: Spacing.compact) {
@@ -277,7 +304,7 @@ struct SetRowColumnHeader: View {
                 .frame(width: 28, alignment: .leading)
             Text("Previous")
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Text("lbs")
+            Text(unit.columnHeader)
                 .frame(width: 56, alignment: .center)
             Text("Reps")
                 .frame(width: 52, alignment: .center)

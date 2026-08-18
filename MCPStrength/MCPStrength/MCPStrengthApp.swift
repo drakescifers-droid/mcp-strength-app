@@ -24,6 +24,7 @@ struct MCPStrengthApp: App {
             MeasurementType.self,
             MeasurementEntry.self,
             AppSettings.self,
+            StoreMigrations.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -57,6 +58,43 @@ struct MCPStrengthApp: App {
                 try MeasurementSeedImporter.loadBundledSeed(into: ModelContext(container))
             } catch {
                 assertionFailure("Measurement seed import failed: \(error)")
+            }
+
+            // Canonical units. Two jobs, one context, in this order:
+            //
+            //   1. Make sure the settings row exists, because `ContentView`
+            //      READS it to publish the display unit and a view must not
+            //      insert a row while rendering. `current(in:)` creates it on
+            //      first ask and is a no-op afterwards.
+            //   2. Convert any pounds already in this store to kilograms,
+            //      exactly once. See WeightUnitMigration for why running twice
+            //      is the thing to be afraid of.
+            //
+            // BEFORE ANY VIEW EXISTS, deliberately. The screens now divide a
+            // stored weight by 0.45359237 to display it, so a frame rendered
+            // between launch and conversion would show every lift at 2.2× —
+            // briefly, plausibly, and long enough to be typed over.
+            //
+            // A failure here is fatal in DEBUG and survivable in release, which
+            // is the opposite call from the seed importers above and the
+            // opposite for a reason: a partial library is a short exercise
+            // list, whereas a store this could not convert is a store whose
+            // numbers do not mean what the screens will claim. It is left
+            // UNCONVERTED rather than half-converted (one save, see the file),
+            // so the next launch retries — which is the best available outcome
+            // and still not a good one.
+            do {
+                let context = ModelContext(container)
+                _ = AppSettings.current(in: context)
+                try WeightUnitMigration.run(in: context)
+                // The migration commits its own work in one save and returns
+                // early once the store is already converted — which is every
+                // launch after the first. This save is what persists a
+                // newly-created settings row on that path, and a no-op on the
+                // other.
+                try context.save()
+            } catch {
+                assertionFailure("Weight unit migration failed: \(error)")
             }
 
             return container

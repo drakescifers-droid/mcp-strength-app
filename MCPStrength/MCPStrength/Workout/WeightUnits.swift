@@ -102,3 +102,27 @@ enum WeightUnits {
         return (value / increment).rounded(.toNearestOrAwayFromZero) * increment
     }
 }
+
+// MARK: - Which unit to display in
+
+extension WeightUnits {
+
+    /// The unit a weight should be shown in.
+    ///
+    /// Two inputs, and the precedence is the whole rule: a per-exercise
+    /// override wins, and `nil` means "follow the global setting". That `nil`
+    /// is not an absence to paper over — it IS the *Default* option in the
+    /// reference app's three-way Weight Unit row (Default / Metric / Imperial),
+    /// which `docs/06-sync.md` notes `weightUnitOverride: WeightUnit?` already
+    /// expresses exactly.
+    ///
+    /// > **Every display site calls this rather than reading a setting
+    /// > directly**, so that when the four preference fields move off
+    /// > `Exercise` onto `ExercisePreference` (`06-sync.md`, the next piece of
+    /// > work) the change is what each caller PASSES, not a hunt for screens
+    /// > that resolved the unit their own way. Nothing writes the override
+    /// > today, so it is always nil and the global setting always wins.
+    static func displayUnit(override: WeightUnit?, global: WeightUnit) -> WeightUnit {
+        override ?? global
+    }
+}

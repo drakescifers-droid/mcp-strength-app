@@ -59,6 +59,10 @@ struct TemplateEditorScreen: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
+    /// The user's global weight unit, published by `ContentView` and inherited
+    /// through the sheet this screen is presented in.
+    @Environment(\.weightUnit) private var globalWeightUnit
+
     /// The template being edited. `nil` means a brand-new template (the + path);
     /// Save creates it, ✕ leaves the store untouched.
     let template: Template?
@@ -254,11 +258,17 @@ struct TemplateEditorScreen: View {
     private func addWarmupSets(at index: Int) {
         let sets = exercises[index].sets
         let working = sets.first { $0.setType != .warmup && $0.weight != nil }
+
+        // Ramps in the user's unit and converts each step back on the way into
+        // the draft — see the workout screen's copy, and `WarmupSets` for why
+        // this calculation is the one that leaves canonical kilograms.
+        let unit = displayUnit(for: exercises[index].exercise)
         let plan = WarmupSets.plan(
-            forWorkingWeight: working?.weight,
-            // See the workout screen's copy: `.lbs` is a marker for the unit
-            // plumbing, not a decision about bars.
-            barWeight: exercises[index].exercise.barType?.weight(in: .lbs)
+            forWorkingWeight: working?.weight.map {
+                WeightUnits.displayed(from: $0, in: unit)
+            },
+            barWeight: exercises[index].exercise.barType?.weight(in: unit),
+            in: unit
         )
         guard !plan.isEmpty else { return }
 
@@ -268,7 +278,7 @@ struct TemplateEditorScreen: View {
                 id: UUID(),
                 order: offset,
                 setType: step.setType,
-                weight: step.weight,
+                weight: WeightUnits.kilograms(from: step.weight, in: unit),
                 reps: step.reps,
                 restSeconds: rest
             )
@@ -353,15 +363,23 @@ struct TemplateEditorScreen: View {
                 ExpandableNote(text: sticky, kind: .exercise, tint: Theme.warmup)
             }
 
-            SetRowColumnHeader(trailingIcon: "lock.fill")
+            SetRowColumnHeader(
+                trailingIcon: "lock.fill",
+                unit: displayUnit(for: draft.exercise)
+            )
 
             VStack(spacing: 0) {
                 ForEach(Array(draft.sets.enumerated()), id: \.element.id) { setIndex, set in
                     SetRow(
                         setType: bindingForSetType(exercise: index, set: setIndex),
                         setNumber: workingNumbers[setIndex],
-                        previousText: previousText(for: draft.exercise, at: previousPositions[setIndex], like: set.setType),
+                        previousText: previousText(
+                            for: draft.exercise,
+                            at: previousPositions[setIndex],
+                            like: set.setType
+                        ),
                         weight: bindingForWeight(exercise: index, set: setIndex),
+                        unit: displayUnit(for: draft.exercise),
                         prescription: bindingForPrescription(exercise: index, set: setIndex),
                         allowRange: true,
                         rpe: bindingForRPE(exercise: index, set: setIndex),
@@ -441,7 +459,22 @@ struct TemplateEditorScreen: View {
             like: setType,
             in: allWorkouts
         )
-        return PreviousText.format(prev)
+        return PreviousText.format(prev, in: displayUnit(for: exercise))
+    }
+
+    // MARK: - Units
+
+    /// The unit this exercise's weights are read and written in.
+    ///
+    /// Per exercise rather than per screen, because the override is a property
+    /// of the lift. Same resolution as the live workout screen's
+    /// `ExerciseBlock.displayUnit`, and both become a lookup on
+    /// `ExercisePreference` when those fields move (docs/06-sync.md).
+    private func displayUnit(for exercise: Exercise) -> WeightUnit {
+        WeightUnits.displayUnit(
+            override: exercise.weightUnitOverride,
+            global: globalWeightUnit
+        )
     }
 
     // MARK: - Bottom action
@@ -733,8 +766,8 @@ struct TemplateEditorScreen: View {
     context.insert(template)
     let tx = TemplateExercise(order: 0, defaultRestSeconds: 180, template: template, exercise: exercise)
     context.insert(tx)
-    context.insert(TemplateSet(order: 0, weight: 225, reps: 5, restSeconds: 180, templateExercise: tx))
-    context.insert(TemplateSet(order: 1, weight: 245, reps: 5, restSeconds: 180, templateExercise: tx))
+    context.insert(TemplateSet(order: 0, weight: WeightUnits.kilograms(from: 225, in: .lbs), reps: 5, restSeconds: 180, templateExercise: tx))
+    context.insert(TemplateSet(order: 1, weight: WeightUnits.kilograms(from: 245, in: .lbs), reps: 5, restSeconds: 180, templateExercise: tx))
 
     return TemplateEditorScreen(template: template)
         .modelContainer(container)

@@ -184,14 +184,78 @@ struct ActiveWorkoutTests {
 
     // MARK: - PreviousText formatting
 
+    // Weights here are STORED KILOGRAMS, written as the pounds they represent
+    // so the expected strings stay readable. That is the whole shape of the
+    // change: the same lift, the same string, and a completely different
+    // number in the column.
     @Test func previousTextFormatsWeightAndReps() {
-        #expect(PreviousText.format(nil) == "—")
-        #expect(PreviousText.format(.init(weight: 85, reps: 5)) == "85 lb × 5")
-        #expect(PreviousText.format(.init(weight: 82.5, reps: 8)) == "82.5 lb × 8")
+        func kg(_ pounds: Double) -> Double {
+            WeightUnits.kilograms(from: pounds, in: .lbs)
+        }
+        #expect(PreviousText.format(nil, in: .lbs) == "—")
+        #expect(PreviousText.format(.init(weight: kg(85), reps: 5), in: .lbs) == "85 lb × 5")
+        #expect(PreviousText.format(.init(weight: kg(82.5), reps: 8), in: .lbs) == "82.5 lb × 8")
         // A set recorded with no values still reads as em dash, not " lb × ".
-        #expect(PreviousText.format(.init(weight: nil, reps: nil)) == "—")
-        #expect(PreviousText.format(.init(weight: 100, reps: nil)) == "100 lb")
-        #expect(PreviousText.format(.init(weight: nil, reps: 12)) == "× 12")
+        #expect(PreviousText.format(.init(weight: nil, reps: nil), in: .lbs) == "—")
+        #expect(PreviousText.format(.init(weight: kg(100), reps: nil), in: .lbs) == "100 lb")
+        #expect(PreviousText.format(.init(weight: nil, reps: 12), in: .lbs) == "× 12")
+    }
+
+    // The same stored numbers read to a metric lifter. Nothing about the row
+    // changes except the two facts the unit decides.
+    @Test func previousTextRendersTheSameStoredWeightInKilograms() {
+        // 100 kg stored, which is what a metric lifter typed.
+        #expect(PreviousText.format(.init(weight: 100, reps: 5), in: .kg) == "100 kg × 5")
+        // 135 lb stored is 61.23496995 kg, shown to two decimals.
+        let benchInKilograms = WeightUnits.kilograms(from: 135, in: .lbs)
+        #expect(PreviousText.format(.init(weight: benchInKilograms, reps: 5), in: .kg)
+                == "61.23 kg × 5")
+        #expect(PreviousText.format(.init(weight: benchInKilograms, reps: 5), in: .lbs)
+                == "135 lb × 5")
+    }
+
+    // A drop set keeps its letter in both units — the suffix is about the set
+    // type and must not be disturbed by the unit label sitting next to it.
+    @Test func theSetTypeLetterSurvivesTheUnitLabel() {
+        #expect(PreviousText.format(.init(weight: 60, reps: 8, setType: .dropSet), in: .kg)
+                == "60 kg × 8 (D)")
+        #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .warmup), in: .kg)
+                == "—", "no load recorded must not render a lone (W)")
+    }
+
+    // The formatter has to absorb the float noise a conversion round trip
+    // leaves behind, because `String(Double)` does not. 135 lb stored is
+    // 61.23496995 kg, and rounding that to two decimals lands on
+    // 61.230000000000004 — 0.01 has no exact binary form. That reached the
+    // screen verbatim before the formatter counted in hundredths.
+    @Test func formatWeightDoesNotLeakFloatNoise() {
+        let bench = WeightUnits.displayed(
+            from: WeightUnits.kilograms(from: 135, in: .lbs),
+            in: .kg
+        )
+        #expect(bench != 61.23, "precondition: the rounded value is not exactly 61.23")
+        #expect(PreviousText.formatWeight(bench) == "61.23")
+
+        // Every 2.5 lb step from an empty bar to a heavy deadlift, read in
+        // kilograms. None may render more than two decimals.
+        for pounds in stride(from: 2.5, through: 600, by: 2.5) {
+            let text = PreviousText.formatWeight(
+                WeightUnits.displayed(from: WeightUnits.kilograms(from: pounds, in: .lbs), in: .kg)
+            )
+            let decimals = text.split(separator: ".").last.map { $0.count } ?? 0
+            #expect(text.contains(".") ? decimals <= 2 : true,
+                    "\(pounds) lb rendered as \(text)")
+        }
+    }
+
+    // Whole numbers lose the ".0", halves keep one decimal, and neither gains a
+    // trailing zero. A session volume must not be truncated either.
+    @Test func formatWeightKeepsTheShortestHonestForm() {
+        #expect(PreviousText.formatWeight(135) == "135")
+        #expect(PreviousText.formatWeight(82.5) == "82.5")
+        #expect(PreviousText.formatWeight(61.23) == "61.23")
+        #expect(PreviousText.formatWeight(0) == "0")
+        #expect(PreviousText.formatWeight(12345.67) == "12345.67")
     }
 
     // MARK: - Helpers mirroring the screen's mutation logic

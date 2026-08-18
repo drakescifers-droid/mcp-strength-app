@@ -148,9 +148,9 @@ struct TemplateOverviewSheet: View {
     context.insert(template)
     let tx = TemplateExercise(order: 0, template: template, exercise: raise)
     context.insert(tx)
-    context.insert(TemplateSet(order: 0, weight: 20, reps: 12, restSeconds: 90, templateExercise: tx))
-    context.insert(TemplateSet(order: 1, weight: 20, reps: 12, restSeconds: 90, templateExercise: tx))
-    context.insert(TemplateSet(order: 2, weight: 20, reps: 12, restSeconds: 90, templateExercise: tx))
+    context.insert(TemplateSet(order: 0, weight: WeightUnits.kilograms(from: 20, in: .lbs), reps: 12, restSeconds: 90, templateExercise: tx))
+    context.insert(TemplateSet(order: 1, weight: WeightUnits.kilograms(from: 20, in: .lbs), reps: 12, restSeconds: 90, templateExercise: tx))
+    context.insert(TemplateSet(order: 2, weight: WeightUnits.kilograms(from: 20, in: .lbs), reps: 12, restSeconds: 90, templateExercise: tx))
 
     return TemplateOverviewSheet(template: template, onStart: { _ in })
         .modelContainer(container)

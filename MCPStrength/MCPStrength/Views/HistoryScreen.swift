@@ -152,6 +152,13 @@ struct HistoryScreen: View {
 private struct WorkoutHistoryCard: View {
     let workout: Workout
 
+    /// The user's global weight unit, published by `ContentView`.
+    ///
+    /// The card resolves the unit PER ROW of the best-set table, because a
+    /// per-exercise override is a property of the lift; the session volume in
+    /// the stats row has no exercise and uses the global unit.
+    @Environment(\.weightUnit) private var globalWeightUnit
+
     private var sortedExercises: [WorkoutExercise] {
         workout.liveExercises
     }
@@ -230,7 +237,7 @@ private struct WorkoutHistoryCard: View {
     }
 
     private var volumeText: String {
-        "\(PreviousText.formatWeight(workout.totalVolume)) lb"
+        PreviousText.weightText(kilograms: workout.totalVolume, in: globalWeightUnit)
     }
 
     // MARK: - Best set table
@@ -243,7 +250,17 @@ private struct WorkoutHistoryCard: View {
         // exercise reads "8 reps" rather than vanishing.
         let rows = sortedExercises.compactMap { exercise -> (exercise: WorkoutExercise, best: String)? in
             if let best = WorkoutStats.bestSet(for: exercise) {
-                return (exercise, PreviousText.format(.init(weight: best.weight, reps: best.reps)))
+                let unit = WeightUnits.displayUnit(
+                    override: exercise.exercise?.weightUnitOverride,
+                    global: globalWeightUnit
+                )
+                return (
+                    exercise,
+                    PreviousText.format(
+                        .init(weight: best.weight, reps: best.reps),
+                        in: unit
+                    )
+                )
             }
             if let reps = WorkoutStats.bestRepCount(for: exercise) {
                 return (exercise, reps == 1 ? "1 rep" : "\(reps) reps")

@@ -18,32 +18,38 @@ I'm not a developer — explain things in plain English. Code, commits and docs 
 state, the traps, the decisions and the reasoning behind them. Don't re-derive from the code what
 those files already explain, and don't duplicate them into new files.
 
-The one-line state: **sync is proven end to end, and canonical units are half done — the decision
-and the foundation are in, the rewiring and the data conversion are not.** 395 Swift tests green,
-SQL suite green, all 8 migrations applied and verified remote == local.
+The one-line state: **sync is proven end to end, and canonical units are DONE — storage is
+kilograms, every screen converts, and the pounds that were already stored have been converted on
+both sides.** Swift suite green, SQL suite green.
 
-> **Weights are still stored in POUNDS.** `AppSettings` and `WeightUnits` exist and nothing is wired
-> to them, on purpose. Do not assume a stored weight is kilograms until the item below is finished.
+> **Every stored weight is now KILOGRAMS.** `WorkoutSet.weight`, `TemplateSet.weight` and
+> `Workout.totalVolume`. Never print one without converting it — `PreviousText.weightText` or
+> `WeightUnits.displayed` — and never write one without `WeightUnits.kilograms(from:in:)`.
+
+> ⚠️ **One thing is outstanding and it is mine, not yours.** Migration
+> `20260818120000_weights_to_kilograms.sql` may not be applied to the live project yet. **Run
+> `supabase migration list` and check before running any build against `mcp-strength`** — the
+> client will not re-push what it converted, except rows that were already dirty, and a server that
+> has not converted yet would halve those.
 
 ## Next piece of work, in order
 
-1. **Finish canonical units — and it is ONE change, not two.** Read `04-status.md` § "What is left"
-   first; it spells out both halves. Rewire every weight read/write through `WeightUnits`, AND
-   convert the existing data in the simulator store and the live Supabase project, in the same
-   change. Doing either alone leaves every weight in the app wrong by a factor of 2.2 — there is no
-   safe intermediate commit, which is why the foundation was landed separately first.
-   > **The local conversion needs a run-exactly-once guard.** A second pass converts kg to kg and
-   > quietly halves every lift ever logged.
-2. **Per-exercise Preferences.** Design decided and approved — read `docs/06-sync.md` §
+1. **Per-exercise Preferences.** Design decided and approved — read `docs/06-sync.md` §
    "Per-exercise preferences get their own local model" before writing any of it. The four fields
    move off `Exercise` into their own `ExercisePreference` model, which is how the server already
    stores them and dissolves three of the four sync problems rather than working around them. The
    sheet is two rows (Weight Unit, Bar Type), not four.
-3. **The settings screen's units rows**, off the profile page. Until these exist the unit can never
-   be changed, so the conversion is only ever exercised in one direction.
-4. **Sync `AppSettings`** — no Postgres table yet, and one row per user means the key is `user_id`.
+   > **The display half is already built.** Four call sites pass `exercise.weightUnitOverride` into
+   > `WeightUnits.displayUnit(override:global:)`; `04-status.md` names all four. Changing what they
+   > pass is the whole wiring job.
+2. **The settings screen's units rows**, off the profile page. Until these exist the unit can never
+   be changed, **so the kilogram display path has never been seen on a screen** — it is covered by
+   tests and nothing else.
+3. **Sync `AppSettings`** — no Postgres table yet, and one row per user means the key is `user_id`.
    Same per-entity conflict-target work `06-sync.md` already specifies for `exercise_preferences`.
-5. **Apple Health.** Last thing in Phase 2, and no longer blocked — the developer account is live.
+   > **Do not sweep `StoreMigrations` into it.** It sits next to `AppSettings` and is the opposite
+   > kind of thing: a device-local record of which data migrations this store has run.
+4. **Apple Health.** Last thing in Phase 2, and no longer blocked — the developer account is live.
    Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
 
 > **`Add Warm-up Sets` has been looked at and is done.** It found one real bug — the Previous
@@ -52,10 +58,11 @@ SQL suite green, all 8 migrations applied and verified remote == local.
 
 ## Waiting on me
 
-- **DO NOT let me start logging real workouts until item 1 is finished.** My developer account is
-  live and a store-signed build already exists, so the app is one upload away from my phone. Every
-  workout I log before the conversion turns a free change into a migration over data I care about.
-  That ordering is the entire reason units came before TestFlight — say so if I ask to skip ahead.
+- **The bar on logging real workouts is LIFTED** — the units conversion has landed, which is the
+  only thing it was ever waiting on. What still blocks the phone is the item below.
+- **Apply the weights migration to the live project**, if `supabase migration list` says it is not
+  there. That is data in `mcp-strength` being rewritten, so ask me first — and check that no build
+  of the new client has been pointed at the project in the meantime.
 - **The App Store Connect app record does not exist yet**, so nothing can be uploaded even though
   the build is ready. Only I can create it. Ask before running any upload; it is outward-facing.
 - **The template editor has still never been looked at by anyone.** It is the last completely

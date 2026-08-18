@@ -32,6 +32,22 @@ struct ContentView: View {
     // screenshotting a screen does not depend on driving taps by coordinate.
     @State private var selectedTab = UIPreviewMode.initialTab ?? 2
 
+    /// The settings row, so the user's weight unit can be published into the
+    /// environment for every screen below. See `Views/DisplayUnit.swift` for
+    /// why this is read HERE and not on each screen that shows a weight.
+    ///
+    /// Sorted and taken first for the same reason `AppSettings.current(in:)`
+    /// sorts: "the oldest live row wins" has to be the answer everywhere, or
+    /// two readers can disagree about which row is authoritative. A query
+    /// rather than that call because a view must not insert a row while
+    /// rendering; `MCPStrengthApp` guarantees one exists before this runs.
+    @Query(
+        filter: #Predicate<AppSettings> { $0.deletedAt == nil },
+        sort: \AppSettings.createdAt,
+        order: .forward
+    )
+    private var settings: [AppSettings]
+
     var body: some View {
         ZStack {
             tabView
@@ -49,6 +65,13 @@ struct ContentView: View {
             }
         }
         .animation(.default, value: activeWorkout != nil)
+        // Both branches of the ZStack, so the overlaid workout screen reads the
+        // same unit as the tabs underneath it. The fallback is unreachable in
+        // practice — `MCPStrengthApp` creates the row before any view exists —
+        // and matches both `AppSettings.weightUnit` and the environment key's
+        // own default, because three places disagreeing about "what does a bare
+        // number mean" is the failure this whole change is removing.
+        .environment(\.weightUnit, settings.first?.weightUnit ?? .lbs)
     }
 
     /// The third sync trigger, alongside launch and foreground in

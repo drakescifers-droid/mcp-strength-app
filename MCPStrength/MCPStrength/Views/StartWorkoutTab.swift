@@ -556,7 +556,7 @@ private struct TemplateCard: View {
     context.insert(legDay)
     let tx = TemplateExercise(order: 0, template: legDay, exercise: squat)
     context.insert(tx)
-    context.insert(TemplateSet(order: 0, weight: 225, reps: 5, restSeconds: 180, templateExercise: tx))
+    context.insert(TemplateSet(order: 0, weight: WeightUnits.kilograms(from: 225, in: .lbs), reps: 5, restSeconds: 180, templateExercise: tx))
 
     let pushDay = Template(name: "Push Day", order: 1)
     context.insert(pushDay)

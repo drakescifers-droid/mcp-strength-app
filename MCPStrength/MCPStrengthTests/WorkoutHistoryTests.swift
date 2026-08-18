@@ -352,7 +352,10 @@ struct WorkoutHistoryTests {
         let first = WorkoutHistory.previousSet(for: exercise, at: 0, like: .warmup, in: workouts)
         #expect(first?.weight == 45)
         #expect(first?.setType == .warmup)
-        #expect(PreviousText.format(first) == "45 lb × 5 (W)")
+        // Rendered in KILOGRAMS, because the fixture stores 45 and storage is
+        // canonical kilograms. Rendering it as pounds here would make the test
+        // agree with a screen that had converted twice.
+        #expect(PreviousText.format(first, in: .kg) == "45 kg × 5 (W)")
 
         #expect(WorkoutHistory.previousSet(for: exercise, at: 1, like: .warmup, in: workouts)?.weight == 55)
         // Two warm-ups last time; a third warm-up today has nothing to show.
@@ -404,22 +407,26 @@ struct WorkoutHistoryTests {
     }
 
     // Lettered types get a suffix after the load; `.normal` does not.
+    //
+    // Asserted in KILOGRAMS so the stored numbers and the rendered ones are the
+    // same digits: this test is about the SUFFIX, and a conversion in the
+    // middle of it would only obscure what it is checking.
     @Test func previousTextAppendsSuffixForLetteredTypesOnly() {
-        #expect(PreviousText.format(.init(weight: 135, reps: 8, setType: .warmup)) == "135 lb × 8 (W)")
-        #expect(PreviousText.format(.init(weight: 75, reps: 11, setType: .dropSet)) == "75 lb × 11 (D)")
-        #expect(PreviousText.format(.init(weight: 225, reps: 5, setType: .failure)) == "225 lb × 5 (F)")
-        #expect(PreviousText.format(.init(weight: 225, reps: 5, setType: .normal)) == "225 lb × 5")
-        #expect(PreviousText.format(.init(weight: 225, reps: 5)) == "225 lb × 5")
+        #expect(PreviousText.format(.init(weight: 135, reps: 8, setType: .warmup), in: .kg) == "135 kg × 8 (W)")
+        #expect(PreviousText.format(.init(weight: 75, reps: 11, setType: .dropSet), in: .kg) == "75 kg × 11 (D)")
+        #expect(PreviousText.format(.init(weight: 225, reps: 5, setType: .failure), in: .kg) == "225 kg × 5 (F)")
+        #expect(PreviousText.format(.init(weight: 225, reps: 5, setType: .normal), in: .kg) == "225 kg × 5")
+        #expect(PreviousText.format(.init(weight: 225, reps: 5), in: .kg) == "225 kg × 5")
     }
 
     // No prior set, and a prior set with a type but no load, both stay "—".
     // A bare "(D)" would look like data where there is none.
     @Test func previousTextKeepsEmDashWhenThereIsNoLoad() {
-        #expect(PreviousText.format(nil) == "—")
-        #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .dropSet)) == "—")
-        #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .warmup)) == "—")
-        #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .failure)) == "—")
-        #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .normal)) == "—")
+        #expect(PreviousText.format(nil, in: .kg) == "—")
+        #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .dropSet), in: .kg) == "—")
+        #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .warmup), in: .kg) == "—")
+        #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .failure), in: .kg) == "—")
+        #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .normal), in: .kg) == "—")
     }
 
     // MARK: - Helpers

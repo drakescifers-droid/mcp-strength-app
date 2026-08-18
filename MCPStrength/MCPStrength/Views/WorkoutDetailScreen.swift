@@ -14,6 +14,12 @@ import SwiftUI
 struct WorkoutDetailScreen: View {
     let workout: Workout
 
+    /// The user's global weight unit, published by `ContentView`. The volume in
+    /// the header is a whole-session number and has no exercise to take an
+    /// override from, so it uses the global unit directly — unlike the set
+    /// lines below, which resolve per exercise.
+    @Environment(\.weightUnit) private var globalWeightUnit
+
     private var sortedExercises: [WorkoutExercise] {
         workout.liveExercises
     }
@@ -94,7 +100,11 @@ struct WorkoutDetailScreen: View {
     }
 
     private var volumeText: String {
-        "\(PreviousText.formatWeight(workout.totalVolume)) lb"
+        // `totalVolume` is stored kilogram-volume, converted with the sets it
+        // was computed from (`WeightUnitMigration`). A volume scales linearly,
+        // so converting the total is the same as converting every set and
+        // re-summing.
+        PreviousText.weightText(kilograms: workout.totalVolume, in: globalWeightUnit)
     }
 }
 
@@ -116,6 +126,17 @@ struct WorkoutDetailScreen: View {
 private struct ExerciseDetailBlock: View {
     let workoutExercise: WorkoutExercise
 
+    @Environment(\.weightUnit) private var globalWeightUnit
+
+    /// The unit every weight in this block is shown in. Same resolution as the
+    /// logging screens' blocks — see `Views/DisplayUnit.swift`.
+    private var displayUnit: WeightUnit {
+        WeightUnits.displayUnit(
+            override: workoutExercise.exercise?.weightUnitOverride,
+            global: globalWeightUnit
+        )
+    }
+
     private var sortedSets: [WorkoutSet] {
         workoutExercise.liveSets
     }
@@ -125,7 +146,9 @@ private struct ExerciseDetailBlock: View {
     private var showsOneRepMax: Bool {
         guard let category = workoutExercise.exercise?.category,
               OneRepMax.supportsEstimate(category) else { return false }
-        return sortedSets.contains { OneRepMax.estimate(weight: $0.weight, reps: $0.reps) != nil }
+        return sortedSets.contains {
+            OneRepMax.estimate(for: $0, category: category, in: displayUnit) != nil
+        }
     }
 
     // Warm-ups do not consume a working-set number (docs/01-data-model.md § SetType).
@@ -170,11 +193,14 @@ private struct ExerciseDetailBlock: View {
                         setType: set.setType,
                         setNumber: workingNumbers[index],
                         weight: set.weight,
+                        unit: displayUnit,
                         reps: set.reps,
                         rpe: set.rpe,
                         isCompleted: set.isCompleted,
                         oneRepMax: OneRepMax.estimate(
-                            for: set, category: workoutExercise.exercise?.category
+                            for: set,
+                            category: workoutExercise.exercise?.category,
+                            in: displayUnit
                         )
                     )
                 }
@@ -205,10 +231,17 @@ private struct ExerciseDetailBlock: View {
 private struct CompletedSetLine: View {
     let setType: SetType
     let setNumber: Int?
+    /// Stored KILOGRAMS, converted for display by this view.
     let weight: Double?
+    /// The unit `weight` is rendered in, and the unit `oneRepMax` is ALREADY
+    /// in.
+    let unit: WeightUnit
     let reps: Int?
     let rpe: Double?
     let isCompleted: Bool
+    /// Already in `unit`, not kilograms — the estimate rounds to a whole unit,
+    /// so it can only be computed in the unit it is displayed in. See
+    /// `OneRepMax.estimate(for:category:in:)`.
     let oneRepMax: Double?
 
     /// The line's colour. Set type wins; an incomplete set is muted regardless,
@@ -265,9 +298,9 @@ private struct CompletedSetLine: View {
     private var performanceText: String {
         switch (weight, reps) {
         case let (weight?, reps?):
-            "\(PreviousText.formatWeight(weight)) lb × \(reps)"
+            "\(PreviousText.weightText(kilograms: weight, in: unit)) × \(reps)"
         case let (weight?, nil):
-            "\(PreviousText.formatWeight(weight)) lb"
+            PreviousText.weightText(kilograms: weight, in: unit)
         case let (nil, reps?):
             reps == 1 ? "1 rep" : "\(reps) reps"
         case (nil, nil):
@@ -287,7 +320,9 @@ private struct CompletedSetLine: View {
                 completedAt: Date(),
                 durationSeconds: 3120,
                 note: "Felt strong today",
-                totalVolume: 5400
+                // Stored kilograms, written as the pounds it represents so the
+                // preview still reads as a plausible session.
+                totalVolume: WeightUnits.kilograms(from: 5400, in: .lbs)
             )
         )
     }

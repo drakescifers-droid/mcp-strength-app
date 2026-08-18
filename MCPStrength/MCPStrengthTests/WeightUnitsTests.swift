@@ -137,6 +137,43 @@ struct WeightUnitsTests {
         }
     }
 
+    // MARK: - Which unit to display in
+
+    // The precedence, which is the whole rule: a per-exercise override wins and
+    // nil follows the global setting. `nil` is not a missing value to fall back
+    // from — it IS the reference app's *Default* option.
+    @Test func anOverrideWinsAndNilFollowsTheGlobalSetting() {
+        #expect(WeightUnits.displayUnit(override: .kg, global: .lbs) == .kg)
+        #expect(WeightUnits.displayUnit(override: .lbs, global: .kg) == .lbs)
+        #expect(WeightUnits.displayUnit(override: nil, global: .kg) == .kg)
+        #expect(WeightUnits.displayUnit(override: nil, global: .lbs) == .lbs)
+    }
+
+    // An override that MATCHES the global is still an override, and must not be
+    // quietly treated as absence. It stops following the global setting the
+    // moment that setting changes, which is the difference the user chose.
+    @Test func anOverrideEqualToTheGlobalIsStillAnOverride() {
+        #expect(WeightUnits.displayUnit(override: .kg, global: .kg) == .kg)
+        #expect(WeightUnits.displayUnit(override: .kg, global: .lbs) == .kg,
+                "the same override must not follow the global unit when it moves")
+    }
+
+    // Nothing writes `weightUnitOverride` today, so every screen resolves to
+    // the global setting. Pinned so that stops being true LOUDLY, when the
+    // preferences sheet lands, rather than silently.
+    @Test func todayEveryExerciseFollowsTheGlobalSetting() {
+        let exercise = Exercise(
+            name: "Bench Press (Barbell)",
+            bodyPart: .chest,
+            category: .barbell,
+            focusMetric: .totalVolume
+        )
+        #expect(exercise.weightUnitOverride == nil)
+        #expect(WeightUnits.displayUnit(override: exercise.weightUnitOverride, global: .kg) == .kg)
+    }
+
+    // MARK: - Bars
+
     // The bar weights, through the layer they will be stored with. An lb
     // lifter's 45 lb bar and a kg lifter's 20 kg bar are different masses in
     // storage, and that is correct — see BarType.weight(in:).
