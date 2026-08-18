@@ -168,6 +168,53 @@ set without one had a value that could be displayed but never changed.
 **Severity guess:** was logged Low. Understated — it was hiding an edit
 affordance, not just a line.
 
+## 6. Reordering exercises gives no live feedback about where the drop lands
+
+**Screen:** Active workout, dragging an exercise by its title.
+
+**Report:** The exercises collapse down correctly when a drag starts, but
+nothing moves while dragging. The other exercises do not shift up or open a
+gap, so there is no indication where the dragged exercise will land until it
+is dropped.
+
+**Likely cause (not yet confirmed):** the reorder is built on
+`.draggable` + `.dropDestination`, which is a DROP-based API — it reports a
+drop, not continuous position. `ListOrdering` computes the new order after the
+fact. The insertion point exists only at the moment of the drop, so there is
+nothing driving an in-between layout. The `isTargeted:` callback fires per
+drop target and is currently used only to collapse the list, not to open a
+gap.
+
+**Shape of a fix:** use `isTargeted` to insert a visible gap/placeholder above
+or below the targeted exercise, so the row that is about to move makes room.
+That is a real piece of work rather than a tweak, and it is pure interaction
+polish — the kind that can only be judged by dragging it, not by a test.
+
+**Severity guess:** Medium. Reordering WORKS; it is just blind while in
+progress. Annoying with more than three exercises.
+
+## 7. Templates cannot be dragged between folders
+
+**Screen:** Start Workout tab, template grid.
+
+**Report:** Unable to drag a template from one folder into another.
+
+**Status: contradicts the docs, so it needs confirming before fixing.**
+`docs/04-status.md` claims this is done — "Templates can be dragged between
+folders and reordered within one", with `TemplateOrdering` owning the move
+rule and cards themselves acting as drop targets. Either it regressed, it
+never worked on a device, or it works only under conditions that are not
+obvious (e.g. the destination folder must be expanded, or the drop must land
+on a CARD rather than on the folder header).
+
+**First step is to reproduce and find out which**, because "documented as
+working" and "does not work in the hand" is exactly the pattern that produced
+the `Add Template` bug recorded in 04-status.md — shipped through a green
+check and 125 green tests while filing nothing.
+
+**Severity guess:** Medium-high if genuinely broken — folders are the only
+organisation the templates tab has.
+
 ---
 
 # Status
@@ -195,6 +242,7 @@ affordance, not just a line.
     matches how iOS swipe rows behave, so it may be fine. Flagged rather than
     changed.
 - **#5 FIXED.** Every set gets a rest row now, on both screens.
-- **#3 NOT STARTED** — the local notification. Largest of the four: needs a
+- **#6, #7 LOGGED** — both are drag-and-drop, both need a real thumb to judge.
+- **#3 IN PROGRESS** — the local notification. Largest of the four: needs a
   permission prompt, scheduling, and cancel/reschedule rules on pause, edit,
   skip and finish.

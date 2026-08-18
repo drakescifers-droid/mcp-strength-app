@@ -41,6 +41,18 @@ struct ContentView: View {
     /// two readers can disagree about which row is authoritative. A query
     /// rather than that call because a view must not insert a row while
     /// rendering; `MCPStrengthApp` guarantees one exists before this runs.
+    /// Who schedules the rest alert. A do-nothing implementation under test or
+    /// in UI preview mode: a test host would block on an authorization prompt
+    /// nobody can tap, and a preview launch is for looking at layout, not for
+    /// buzzing the device. Same reasoning as the sync guard in
+    /// `AutomatedLaunch`.
+    private var restNotifications: any RestNotificationScheduling {
+        if AutomatedLaunch.isRunningTests || UIPreviewMode.isEnabled {
+            return NoRestNotifications()
+        }
+        return RestNotifications()
+    }
+
     @Query(
         filter: #Predicate<AppSettings> { $0.deletedAt == nil },
         sort: \AppSettings.createdAt,
@@ -54,6 +66,7 @@ struct ContentView: View {
 
             if let activeWorkout {
                 ActiveWorkoutScreen(
+                    restNotifications: restNotifications,
                     workout: activeWorkout,
                     onFinish: {
                         self.activeWorkout = nil

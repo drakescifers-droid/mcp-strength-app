@@ -56,6 +56,10 @@ struct ActiveWorkoutScreen: View {
     /// the result.
     @Environment(\.weightUnit) private var globalWeightUnit
 
+    /// Schedules the "rest complete" alert. Injected so a test host and UI
+    /// preview mode can supply one that does nothing — see `RestNotifications`.
+    let restNotifications: any RestNotificationScheduling
+
     let workout: Workout
     var onFinish: () -> Void = {}
     var onCancel: () -> Void = {}
@@ -136,6 +140,21 @@ struct ActiveWorkoutScreen: View {
             }
         }
         .background(Theme.surface)
+        // THE ONLY PLACE the rest notification is decided. Every way a rest can
+        // change — start, pause, resume, ±15, reset, skip — changes this value,
+        // so watching the value covers all of them and any that get added
+        // later. See RestNotificationRule for why this is a rule rather than a
+        // call at each mutation site.
+        .onChange(of: restTimer) { _, timer in
+            reconcileRestNotification(timer)
+        }
+        .onDisappear {
+            // Finishing or cancelling leaves a rest armed otherwise, and the
+            // alert would arrive for a workout that is over. NOT tied to
+            // backgrounding: a rest running while the app is in the background
+            // is exactly the case the notification exists for.
+            Task { await restNotifications.cancel() }
+        }
         .sheet(isPresented: $showingExercisePicker) {
             ExercisesScreen(onSelect: { exercise in
                 addExercise(exercise)
@@ -550,6 +569,34 @@ struct ActiveWorkoutScreen: View {
     /// Begin the rest countdown for the set the user just checked complete.
     /// Replaces any rest already in flight (e.g. the user checks a second set
     /// before the first rest finished).
+    /// Bring the pending notification in line with the timer.
+    ///
+    /// Lives on THIS view, not on `ExerciseBlock`: the timer, the resting set
+    /// and the workout are all owned here, and a block only knows about its own
+    /// exercise. (It was written into the block first and did not compile,
+    /// which is the useful kind of mistake — the scope error was the design
+    /// telling me where the state lives.)
+    ///
+    /// The exercise name is resolved here rather than inside the rule, because
+    /// the rule is pure and knows nothing about workouts — it answers "when",
+    /// this answers "about what".
+    private func reconcileRestNotification(_ timer: RestTimer) {
+        let plan = RestNotificationRule.plan(for: timer, at: Date())
+        let name = restingSetID
+            .flatMap { id in
+                workout.liveExercises.first { $0.liveSets.contains { $0.id == id } }
+            }?
+            .exercise?.name
+        Task {
+            switch plan {
+            case .schedule(let date):
+                await restNotifications.schedule(at: date, exerciseName: name)
+            case .cancel:
+                await restNotifications.cancel()
+            }
+        }
+    }
+
     private func startRest(for setID: UUID, seconds: Int) {
         restingSetID = setID
         restTimer = RestTimer()
@@ -1110,6 +1157,7 @@ private struct RestControlsSheet: View {
     context.insert(WorkoutSet(order: 1, weight: WeightUnits.kilograms(from: 185, in: .lbs), reps: 5, restSeconds: 120, workoutExercise: we))
     context.insert(WorkoutSet(order: 2, setType: .warmup, restSeconds: 90, workoutExercise: we))
 
-    return ActiveWorkoutScreen(workout: workout)
+    // A preview must never schedule a real alert — see RestNotifications.
+    return ActiveWorkoutScreen(restNotifications: NoRestNotifications(), workout: workout)
         .modelContainer(container)
 }

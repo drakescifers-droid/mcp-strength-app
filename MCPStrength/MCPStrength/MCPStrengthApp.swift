@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UserNotifications
 
 @main
 struct MCPStrengthApp: App {
@@ -119,6 +120,13 @@ struct MCPStrengthApp: App {
     /// owns this round.
     @State private var engine: SyncEngine?
 
+    /// Presents the rest alert even while the app is frontmost. Held here so
+    /// it outlives every view rebuild — `UNUserNotificationCenter` holds its
+    /// delegate weakly, and a delegate that gets deallocated silently stops
+    /// showing anything, which looks exactly like the notification never
+    /// having been scheduled.
+    @State private var restPresenter = RestNotificationPresenter()
+
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -143,6 +151,14 @@ struct MCPStrengthApp: App {
                     // Idempotent — guarded inside, so the re-run SwiftUI may
                     // perform on reattach cannot start a second observer.
                     auth.start()
+                }
+                .task {
+                    // Without a delegate iOS suppresses a local notification
+                    // whose app is frontmost, which is most of a workout — see
+                    // RestNotificationPresenter. Not set under test: the suite
+                    // schedules nothing, so there is nothing to present.
+                    guard !AutomatedLaunch.isRunningTests else { return }
+                    UNUserNotificationCenter.current().delegate = restPresenter
                 }
                 .task {
                     // Preview launches have no session, so nothing would ever
