@@ -282,6 +282,79 @@ struct WorkoutHistoryTests {
         #expect(prev?.setType == .dropSet)
     }
 
+    // MARK: - Warm-ups do not shift the Previous column
+    //
+    // The load-bearing case. `Add Warm-up Sets` inserts three rows at the top
+    // of the list, and Previous used to match on raw list position — so a
+    // generated ramp moved the previous working load onto a warm-up and left
+    // the working set reading "—". Found by looking at the running app; no
+    // assertion in this file could see it, because both halves were internally
+    // consistent and simply pointed at the wrong row.
+
+    // History side: a ramp logged LAST time must not shift what today's rows
+    // report. Position 0 is the first WORKING set, not the first warm-up.
+    @Test func previousSetSkipsWarmupsInHistory() throws {
+        let context = try makeContainer()
+        let exercise = makeExercise(in: context)
+
+        let completed = Workout(name: "Done", startedAt: Date(timeIntervalSinceNow: -86400))
+        completed.completedAt = Date(timeIntervalSinceNow: -86400)
+        context.insert(completed)
+        let we = WorkoutExercise(order: 0, workout: completed, exercise: exercise)
+        context.insert(we)
+        for (order, type, weight, reps) in [
+            (0, SetType.warmup, 45.0, 5),
+            (1, SetType.warmup, 55.0, 5),
+            (2, SetType.normal, 135.0, 5),
+            (3, SetType.normal, 145.0, 3),
+        ] {
+            context.insert(WorkoutSet(
+                order: order,
+                setType: type,
+                weight: weight,
+                reps: reps,
+                isCompleted: true,
+                completedAt: completed.completedAt!,
+                workoutExercise: we
+            ))
+        }
+
+        let workouts = try context.fetch(FetchDescriptor<Workout>())
+        let first = WorkoutHistory.previousSet(for: exercise, at: 0, in: workouts)
+        #expect(first?.weight == 135)
+        #expect(first?.reps == 5)
+
+        let second = WorkoutHistory.previousSet(for: exercise, at: 1, in: workouts)
+        #expect(second?.weight == 145)
+
+        // Only two working sets existed, so there is no third.
+        #expect(WorkoutHistory.previousSet(for: exercise, at: 2, in: workouts) == nil)
+    }
+
+    // Display side: the positions a caller feeds in. A warm-up row reports
+    // nil (rendered "—"); everything else keeps counting.
+    @Test func previousPositionsSkipWarmupsAndKeepCounting() {
+        #expect(
+            SetNumbering.positionsIgnoringWarmups(for: [.warmup, .warmup, .warmup, .normal])
+            == [nil, nil, nil, 0]
+        )
+        // A drop set is a real performance at that point in the sequence, so
+        // unlike working NUMBERING this rule does not skip it.
+        #expect(
+            SetNumbering.positionsIgnoringWarmups(for: [.warmup, .normal, .dropSet, .failure])
+            == [nil, 0, 1, 2]
+        )
+        #expect(SetNumbering.positionsIgnoringWarmups(for: []) == [])
+    }
+
+    // The two rules are deliberately different and must not be collapsed into
+    // one: numbering skips every lettered type, Previous skips only warm-ups.
+    @Test func numberingAndPreviousPositionsDisagreeOnDropSets() {
+        let types: [SetType] = [.normal, .dropSet, .normal]
+        #expect(SetNumbering.workingNumbers(for: types) == [1, nil, 2])
+        #expect(SetNumbering.positionsIgnoringWarmups(for: types) == [0, 1, 2])
+    }
+
     // Lettered types get a suffix after the load; `.normal` does not.
     @Test func previousTextAppendsSuffixForLetteredTypesOnly() {
         #expect(PreviousText.format(.init(weight: 135, reps: 8, setType: .warmup)) == "135 lb × 8 (W)")

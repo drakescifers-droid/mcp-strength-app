@@ -83,9 +83,14 @@ xcrun simctl launch <device> us.aiagent4.MCPStrength \
 ```
 
 `-uiPreviewTab` exists because the simulator MCP's tap action crash-loops — **do not build a
-workflow on coordinate taps.** It also means the live workout screen and the template editor have
-never been visually verified by an agent. If you are running inside Xcode with a simulator, you can
-reach them, and that is the single most useful thing you can do here that other agents cannot.
+workflow on coordinate taps.** Computer-use taps on the Simulator window no longer work either: the
+clicks land on the window, but nothing becomes a touch.
+
+**To reach a screen a launch argument cannot, drive it from an XCUITest and attach screenshots.**
+`MCPStrengthUITests/WarmupRampWalkthroughTests` is the worked example — it walks into a live
+workout, generates a warm-up ramp, and photographs each step. It asserts almost nothing on purpose:
+it is a camera, so the judgement stays with whoever looks at the pictures. That is how the live
+workout screen was finally verified, and it is how the template editor should be.
 
 ## Build and test
 
@@ -109,8 +114,8 @@ other's context — this file and `docs/` are the only things passing between th
 | If you are… | You can | You cannot |
 |---|---|---|
 | A **Ringer worker** | Typecheck via `verify_compile.sh` | Run `xcodebuild` **at all** — the sandbox forbids it — so you can never run a test or see the app. Green means it compiles. |
-| **Claude Code** (terminal or desktop) | Build and run the full unit suite with `xcodebuild` | Reach the live workout screen or the template editor — preview mode lands on a tab and the tap tooling crash-loops |
-| **Cursor** | Same as Claude Code | Same blind spot |
+| **Claude Code** (terminal or desktop) | Build and run the full unit suite, **and photograph any screen by driving it from an XCUITest** — see `WarmupRampWalkthroughTests` | Tap the simulator directly: the clicks land on the window and never become touches |
+| **Cursor** | Same as Claude Code | Same |
 | **Xcode's agent** | Build, run the tests, **and run the app on a simulator and look at it** | — |
 
 If you are the agent inside Xcode, that last row is the point. Two screens — the live workout screen

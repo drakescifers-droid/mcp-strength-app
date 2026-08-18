@@ -34,9 +34,17 @@ enum WorkoutHistory {
         }
     }
 
-    /// Find the weight × reps for the set at `position` (0-based, in order) of
-    /// `exercise`, taken from the most recent COMPLETED workout that is NOT the
-    /// in-progress one.
+    /// Find the weight × reps for the set at `position` of `exercise`, taken
+    /// from the most recent COMPLETED workout that is NOT the in-progress one.
+    ///
+    /// **`position` counts sets that are not warm-ups, on BOTH sides**, and the
+    /// two halves of that have to agree or the column lies. `SetNumbering
+    /// .positionsIgnoringWarmups` is what a caller uses to derive it; the
+    /// filter below is the other half. Warm-ups are excluded because
+    /// `Add Warm-up Sets` inserts rows at the top of a list, and matching on
+    /// raw position meant a generated ramp took the previous working load off
+    /// the working set and displayed it against a warm-up. The reasoning lives
+    /// with the rule, in `SetNumbering`.
     ///
     /// Returns `nil` when there is no qualifying history or no set at that
     /// position. The in-progress workout is excluded even if it happens to be
@@ -61,7 +69,10 @@ enum WorkoutHistory {
                 .first(where: { $0.exercise?.id == exercise.id })
         else { return nil }
 
-        let sortedSets = workoutExercise.liveSets
+        // The history side of the warm-up exclusion. A ramp logged last time
+        // must not shift what every later row reports, for the same reason a
+        // ramp added today must not.
+        let sortedSets = workoutExercise.liveSets.filter { $0.setType != .warmup }
         guard position >= 0, position < sortedSets.count else { return nil }
         let set = sortedSets[position]
         return PreviousSet(weight: set.weight, reps: set.reps, setType: set.setType)

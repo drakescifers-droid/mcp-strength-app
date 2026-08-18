@@ -623,7 +623,7 @@ private struct ExerciseBlock: View {
                         SetRow(
                             setType: Binding(get: { set.setType }, set: { set.setType = $0; set.markEdited() }),
                             setNumber: workingNumbers[index],
-                            previousText: previousText(for: set, position: index),
+                            previousText: previousText(for: set, position: previousPositions[index]),
                             weight: Binding(get: { set.weight }, set: { set.weight = $0; set.markEdited() }),
                             prescription: Binding(
                                 get: { RepRange.fromWorkout(reps: set.reps) },
@@ -674,6 +674,12 @@ private struct ExerciseBlock: View {
     // Working-set numbers parallel to `sortedSets`: only `.normal` sets consume
     // a number, so warm-ups / drop sets / failure sets render a letter and the
     // numbering of normal sets continues past them (docs/01-data-model.md § SetType).
+    /// Which row the Previous column reads history from. Warm-ups are nil —
+    /// see `SetNumbering.positionsIgnoringWarmups`.
+    private var previousPositions: [Int?] {
+        SetNumbering.positionsIgnoringWarmups(for: sortedSets.map(\.setType))
+    }
+
     private var workingNumbers: [Int?] {
         SetNumbering.workingNumbers(for: sortedSets.map(\.setType))
     }
@@ -725,8 +731,11 @@ private struct ExerciseBlock: View {
 
     // MARK: - Previous
 
-    private func previousText(for set: WorkoutSet, position: Int) -> String {
-        guard let exercise = workoutExercise.exercise else { return "—" }
+    /// `position` is nil for a warm-up row, which shows "—": the app chose that
+    /// load from the working weight, so there is nothing it can honestly report
+    /// about what the user did there last time.
+    private func previousText(for set: WorkoutSet, position: Int?) -> String {
+        guard let position, let exercise = workoutExercise.exercise else { return "—" }
         let prev = WorkoutHistory.previousSet(
             for: exercise,
             at: position,

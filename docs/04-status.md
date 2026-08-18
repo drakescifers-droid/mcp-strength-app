@@ -95,7 +95,8 @@ Preferences, canonical units, and Apple Health.
   only Preferences is still absent, waiting on the `ExercisePreference` split.
 - **The warm-up ramp** (`Workout/WarmupSets.swift`), wired into both screens. Percentages are
   MEASURED from the reference app, not chosen, and bar weight floors it so it cannot propose a load
-  lighter than the bar. **Never yet watched running on a screen.**
+  lighter than the bar. **Now watched running on a screen**, which is where the Previous-column bug
+  below came from — see "What looking at the warm-up ramp found".
 - **Bar types carry weights**, and a `hammerStrength` exercise category exists in the app and in
   the live database.
 - **UI preview mode** — see below. This is the single most useful thing to know about.
@@ -138,18 +139,73 @@ anything else.
 > backfill landed. Harmless (it is test data on a project with no users) and left as the before/after
 > evidence, but a store that already pushed such rows will not re-push them, because they are clean.
 
+### What looking at the warm-up ramp found
+
+**One bug, and the tooling needed to see it at all.** Both are worth keeping: the bug is a shape,
+and the tooling replaces a workflow that no longer works.
+
+**The bug: the Previous column moved onto the warm-ups.** `Previous` tells you what you lifted for
+that set last time, and it matched last time's sets to today's rows by RAW LIST POSITION. Warm-ups
+are inserted at the TOP, so generating a ramp shifted every row down one slot: `135 lb × 5` ended up
+displayed against a 45 lb warm-up, and the working set — now row 4, where last time had no row 4 —
+showed "—". The number you need in order to pick today's load was simultaneously missing from the
+row that needs it and misleading on a row the app filled in for you.
+
+Fixed by excluding warm-ups from BOTH sides of the match: `SetNumbering.positionsIgnoringWarmups`
+on the display side, a filter in `WorkoutHistory.previousSet` on the history side. A warm-up row now
+reads "—" always, which is honest — the app chose that load from the working weight, so it has
+nothing to report about it. **Drake decided this**, over the alternative of matching warm-ups to
+last time's warm-ups; that would have put a permanent "(W)" on every warm-up row.
+
+> **The shape to remember: two rules that skip rows, skipping DIFFERENT rows.** Working-set
+> numbering skips every lettered type, because a drop set is not "set 3". Previous skips only
+> warm-ups, because a drop set IS a performance at that point in the sequence. They look like the
+> same rule and a later tidy-up would collapse them; `numberingAndPreviousPositionsDisagreeOnDropSets`
+> exists to fail when somebody does.
+
+**Why no test saw it.** Both halves were internally consistent and agreed with each other — they
+just pointed at the wrong row. Every existing test used a set list with no warm-ups in it, where
+raw position and working position are the same number. The feature that broke the assumption is the
+feature that generates warm-ups, and it was tested for what it inserts, not for what it displaces.
+
+**The tooling: `WarmupRampWalkthroughTests`.** The documented way to drive the simulator —
+computer-use taps on the Simulator window — **no longer works.** The clicks land (macOS hit-testing
+puts them on the Simulator window, and keyboard shortcuts to the app still work) but they never
+become touches in the device. Quitting the overlay apps named in HANDOFF.md changed nothing. The
+iOS Simulator MCP is still crash-looping.
+
+So the walkthrough is an XCUITest instead: it starts an empty workout, adds Bench Press, types a
+working weight, opens the `⋯` menu, taps `Add Warm-up Sets` three times under different conditions,
+and attaches a screenshot at each step. It asserts almost nothing on purpose — **it is a camera, not
+a test.** Extract the pictures and look at them:
+
+```
+xcodebuild test -project MCPStrength/MCPStrength.xcodeproj -scheme MCPStrength \
+  -destination 'platform=iOS Simulator,name=iPhone 17' -derivedDataPath DerivedData \
+  -only-testing:MCPStrengthUITests/WarmupRampWalkthroughTests -resultBundlePath /tmp/walk.xcresult
+xcrun xcresulttool export attachments --path /tmp/walk.xcresult \
+  --test-id "WarmupRampWalkthroughTests/testWalkAddWarmupSetsAndPhotographIt()" --output-path /tmp/shots
+```
+
+Two failures of the harness itself are worth knowing, because both produced a screenshot that looked
+completely plausible and was of the wrong thing. It addressed the weight field by absolute index,
+which silently became a WARM-UP's field the moment warm-ups existed; and tapping the middle of a
+right-aligned entry chip puts the caret BEFORE the text, so the backspaces deleted nothing and "135"
+was typed in front of "90" — the ramp was then correctly generated from 13590 lb. **A screenshot is
+only evidence if you know what produced it**, which is the same trap as reading a hand-edited ramp
+as a generated one.
+
 ### What is left, in order
 
-1. **LOOK AT `Add Warm-up Sets` ON A REAL SCREEN.** Built, wired into both screens, tested — and
-   never once watched running. A test cannot judge whether the ramp reads correctly in the set
-   list, nor whether a second tap visibly REPLACES the warm-ups rather than appending. Every UI
-   bug in this project was found by looking.
-2. **Per-exercise Preferences.** Design decided and approved: `docs/06-sync.md` § "Per-exercise
+1. **Per-exercise Preferences.** Design decided and approved: `docs/06-sync.md` § "Per-exercise
    preferences get their own local model". The sheet is two rows — Weight Unit and Bar Type — not
    four; `focusMetric` and `notes` are not edited there.
-3. **Canonical units**, before there is real history (`05`). Also unblocks the *Default* option in
+2. **Canonical units**, before there is real history (`05`). Also unblocks the *Default* option in
    the weight-unit picker, and `BarType.weight` is where lb→kg must happen.
-4. **Apple Health.** The last item in Phase 2.
+3. **Apple Health.** The last item in Phase 2.
+
+> **`Add Warm-up Sets` has now been looked at and is off this list.** It found one real bug, which
+> is recorded below rather than here because the shape of it is the reusable part.
 
 ### Traps around the transport
 
@@ -247,8 +303,13 @@ ringer `docs/MODEL-NOTES.md`.
 - **The tappable rest divider has not been used on a real device either.** A hairline is far under
   the 44pt minimum target, so the hit area is expanded and then negated out of layout
   (`RestDivider`) — the divider should look unchanged and be comfortably tappable. Both halves of
-  that are worth confirming with a thumb, and the template editor and live workout screen are still
-  the two screens nothing has ever visually verified.
+  that still want a thumb; a walkthrough test can photograph the divider but cannot judge whether it
+  is comfortable to hit.
+- **The live workout screen has now been SEEN** — the set list, the `⋯` menu, the rest dividers and
+  the warm-up ramp are all in the walkthrough's screenshots. **The template editor still has not
+  been**, and it is now the last completely unseen screen. `WarmupRampWalkthroughTests` is the
+  worked example of how to photograph it; the editor's own `Add Warm-up Sets` path is the obvious
+  thing to point it at next, since that half of the wiring has still only been reasoned about.
 - Creating an account, the confirmation email, and password reset — **email confirmation is
   currently DISABLED on the project** because the confirmation link pointed at `localhost:3000`.
   Must be re-enabled before launch, together with deep links.

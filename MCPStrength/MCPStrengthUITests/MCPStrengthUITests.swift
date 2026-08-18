@@ -41,3 +41,166 @@ final class MCPStrengthUITests: XCTestCase {
         }
     }
 }
+
+// MARK: - Warm-up ramp, driven and photographed
+//
+// A NAVIGATION HARNESS, not an assertion suite. `Add Warm-up Sets` is covered
+// by unit tests already; what no test can judge is whether the generated ramp
+// READS correctly in the set list, and whether a second tap visibly REPLACES
+// the warm-ups rather than piling more on (docs/04-status.md, item 1).
+//
+// This exists because the mouse cannot reach the simulator from here: taps
+// land on the Simulator window and never become touches. XCUITest drives the
+// screen from inside, so the only thing left for a human is LOOKING at the
+// attachments.
+//
+// Fixtures are deliberately OFF. `-uiPreviewFixtures` seeds a demo workout
+// that already contains warm-up sets, and this project has already built the
+// ramp twice because an edited ramp was mistaken for a generated one. Every
+// warm-up in these screenshots was produced by the button.
+
+final class WarmupRampWalkthroughTests: XCTestCase {
+
+    @MainActor
+    func testWalkAddWarmupSetsAndPhotographIt() throws {
+        continueAfterFailure = false
+
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiPreview", "1", "-uiPreviewTab", "start"]
+        app.launch()
+
+        // 1. An empty workout.
+        let start = app.buttons["Start an Empty Workout"]
+        XCTAssertTrue(start.waitForExistence(timeout: 20), tree(app))
+        start.tap()
+
+        // 2. One barbell exercise. The seed carries no barType, so there is no
+        //    bar floor here and the ramp is the plain percentage one.
+        let addExercises = app.buttons["Add Exercises"]
+        XCTAssertTrue(addExercises.waitForExistence(timeout: 10), tree(app))
+        addExercises.tap()
+
+        let bench = app.buttons.containing(
+            NSPredicate(format: "label CONTAINS[c] %@", "Bench Press (Barbell)")
+        ).firstMatch
+        XCTAssertTrue(bench.waitForExistence(timeout: 10), tree(app))
+        bench.tap()
+
+        // 3. A working weight to ramp up to. 90 lb is the weight the reference
+        //    app's ramp was MEASURED from: 45x5, 55x5, 70x3.
+        try type("90", intoTextFieldAt: 0, of: app)
+        try type("5", intoTextFieldAt: 1, of: app)
+        attach(named: "01-working-set-90x5", app)
+
+        // 4. First tap.
+        try chooseWarmupSets(in: app)
+        attach(named: "02-after-first-tap", app)
+
+        // 5. Second tap, same working weight. The ramp must REPLACE, not append:
+        //    three warm-ups here, not six.
+        try chooseWarmupSets(in: app)
+        attach(named: "03-after-second-tap-same-weight", app)
+
+        // 6. Retype the working weight and tap again. This is the case the
+        //    replace behaviour exists for — somebody who typed the weight after
+        //    generating the ramp. 135 lb should give 70x5, 80x5, 100x3.
+        //
+        //    The working set is addressed as the LAST row, not index 0: the
+        //    ramp now occupies the first three rows, which is the whole point.
+        try typeIntoWorkingWeight("135", of: app)
+        try chooseWarmupSets(in: app)
+        attach(named: "04-after-retyping-135", app)
+    }
+
+    // MARK: - Helpers
+
+    /// The `⋯` menu carries an accessibility label; the item is plain text.
+    @MainActor
+    private func chooseWarmupSets(in app: XCUIApplication) throws {
+        let menu = app.buttons["Exercise options"].firstMatch
+        XCTAssertTrue(menu.waitForExistence(timeout: 10), tree(app))
+        menu.tap()
+
+        let item = app.buttons["Add Warm-up Sets"].firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 10), tree(app))
+        item.tap()
+    }
+
+    /// Set rows carry unlabelled TextFields, so they are addressed by order:
+    /// each row contributes weight then reps. Deliberately index-based rather
+    /// than adding accessibility identifiers to the app for a harness's
+    /// convenience.
+    @MainActor
+    private func type(
+        _ text: String,
+        intoTextFieldAt index: Int,
+        of app: XCUIApplication,
+        clearFirst: Bool = false
+    ) throws {
+        let field = app.textFields.element(boundBy: index)
+        XCTAssertTrue(field.waitForExistence(timeout: 10), tree(app))
+        try focus(field, of: app)
+        if clearFirst, let existing = field.value as? String, !existing.isEmpty {
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count))
+            // Asserted, not assumed. A silent failure to clear is what turned
+            // 135 into 13590 last run, and the screenshot still looked sane.
+            XCTAssertEqual(field.value as? String ?? "", "", tree(app))
+        }
+        field.typeText(text)
+    }
+
+    /// The working set's weight field, wherever the ramp has pushed it.
+    ///
+    /// Two fields per row (weight, reps) and the working set is last, so the
+    /// weight field is the second-to-last. An absolute index would silently
+    /// address a warm-up the moment one exists — which is exactly how the
+    /// first run of this harness failed.
+    @MainActor
+    private func typeIntoWorkingWeight(_ text: String, of app: XCUIApplication) throws {
+        let count = app.textFields.count
+        XCTAssertGreaterThanOrEqual(count, 2, tree(app))
+        try type(text, intoTextFieldAt: count - 2, of: app, clearFirst: true)
+    }
+
+    /// Tap until the field actually holds keyboard focus, with the caret at the
+    /// END of the existing text.
+    ///
+    /// Two things learned from earlier runs of this harness, both of which
+    /// produced a plausible-looking screenshot of the wrong thing:
+    ///
+    ///   * `tap()` returning is not the same as the field being focused. Run
+    ///     one typed into a field that had never taken focus and failed with
+    ///     "Neither element nor any descendant has keyboard focus".
+    ///   * Tapping the ELEMENT puts the caret where the tap landed, which for a
+    ///     right-aligned entry chip is before the text. Run two sent backspaces
+    ///     that deleted nothing and then typed 135 in front of 90, so the ramp
+    ///     was generated from 13590 lb. The numbers were all self-consistent
+    ///     and completely wrong — the same trap as reading a hand-edited ramp
+    ///     as a generated one (docs/04-status.md).
+    @MainActor
+    private func focus(_ field: XCUIElement, of app: XCUIApplication) throws {
+        let focused = NSPredicate(format: "hasKeyboardFocus == true")
+        let rightEdge = field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5))
+        for _ in 0..<3 {
+            rightEdge.tap()
+            let check = XCTNSPredicateExpectation(predicate: focused, object: field)
+            if XCTWaiter().wait(for: [check], timeout: 3) == .completed { return }
+        }
+        XCTFail("Field never took keyboard focus.\n" + tree(app))
+    }
+
+    @MainActor
+    private func attach(named name: String, _ app: XCUIApplication) {
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
+    /// Printed into a failure so a missing element is diagnosable without
+    /// another build.
+    @MainActor
+    private func tree(_ app: XCUIApplication) -> String {
+        app.debugDescription
+    }
+}

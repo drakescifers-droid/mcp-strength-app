@@ -24,28 +24,27 @@ remote == local.
 
 ## Next piece of work, in order
 
-1. **LOOK AT `Add Warm-up Sets` ON A REAL SCREEN.** It is built, wired into both the live workout
-   screen and the template editor, and covered by tests — and nobody has ever watched it run. Two
-   things a test cannot judge: whether the generated ramp *looks* right in the set list, and
-   whether a second tap visibly REPLACES the warm-ups rather than piling more on. Every UI bug
-   found in this project so far was found this way.
-2. **Per-exercise Preferences.** The design is decided and approved — read
+1. **Per-exercise Preferences.** The design is decided and approved — read
    `docs/06-sync.md` § "Per-exercise preferences get their own local model" before writing any of
    it. Short version: the four fields move off `Exercise` into their own `ExercisePreference`
    model, which is how the server already stores them and which dissolves three of the four sync
    problems rather than working around them. The sheet itself is only two rows (Weight Unit, Bar
    Type), not four.
-3. **Canonical units**, before there is real history (`05`). Also unblocks the *Default* option in
+2. **Canonical units**, before there is real history (`05`). Also unblocks the *Default* option in
    the weight-unit picker, and `BarType.weight` is where lb→kg has to happen — a kg user wants a
    20 kg Olympic bar, not 45 lb.
-4. **Apple Health.** Last thing in Phase 2. Then Phase 3, the real MCP server, which Drake has
+3. **Apple Health.** Last thing in Phase 2. Then Phase 3, the real MCP server, which Drake has
    confirmed is in scope for v1.
+
+> **`Add Warm-up Sets` has been looked at and is done.** It found one real bug — the Previous
+> column followed row position, so a generated ramp moved your last working set onto a warm-up.
+> Fixed; the reasoning is in `04-status.md` § "What looking at the warm-up ramp found".
 
 ## Waiting on me
 
 - **The template editor has still never been looked at by anyone.** It is the last completely
-  unseen screen. The live workout screen HAS now been driven end to end (add exercise → weight and
-  reps → tick → rest timer → Finish) and behaves.
+  unseen screen — and it no longer needs your hands: point
+  `MCPStrengthUITests/WarmupRampWalkthroughTests` at it and read the screenshots.
 - The tappable rest divider, the per-exercise menu and the sticky notes need a real thumb.
 - **Hammer Strength exercises.** The category is live in the app and the database; the actual
   movements land with the bigger exercise-library refresh I'm doing separately. Don't seed them.
@@ -58,16 +57,20 @@ remote == local.
 **Create Superset writes the data and draws nothing.** Recorded in `04-status.md` with both possible
 resolutions. I chose to leave it and note it.
 
-## Driving the simulator — this cost real time, twice
+## Driving the simulator — this cost real time, three times now
 
-- **The iOS Simulator MCP panel crash-loops and stays dead.** What works: `xcrun simctl` for
-  boot / install / launch / screenshot, plus computer-use for taps.
-- **Taps need the Simulator window frontmost and unobstructed.** They are blocked by any app owning
-  an invisible full-screen overlay (Magnet and Wispr Flow both do — Drake turns them off), and by a
-  fullscreen app on top (Chrome). `simctl io screenshot` still captures the device either way, so
-  you can SEE without being able to TAP.
-- **Type digits as individual `key` presses.** The `type` action is interpreted as press-and-hold
-  and opens the accent picker.
+- **Do not spend a third session on taps. Write an XCUITest.** `WarmupRampWalkthroughTests` is the
+  worked example: it drives the screen from inside the app and attaches a screenshot at each step,
+  so the only thing left for a human is looking. `04-status.md` has the two commands.
+- **The iOS Simulator MCP panel crash-loops and stays dead.** `xcrun simctl` still works for
+  boot / install / launch / screenshot, so you can always SEE.
+- **Computer-use taps no longer land, and quitting the overlay apps does not help.** The click
+  reaches the Simulator WINDOW — macOS hit-testing agrees, the app is frontmost, and keyboard
+  shortcuts to it still work — but it never becomes a touch in the device. Wispr Flow was quit and
+  nothing changed. Diagnosing this is not the fastest route to seeing a screen; the walkthrough
+  test is.
+- **Type digits as individual `key` presses** if you do drive it by hand. The `type` action is
+  interpreted as press-and-hold and opens the accent picker.
 
 ## If you route anything to Ringer
 
