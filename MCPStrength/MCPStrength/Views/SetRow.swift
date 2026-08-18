@@ -448,6 +448,18 @@ struct SetRowColumnHeader: View {
 struct RestDivider: View {
     let restSeconds: Int
 
+    /// Whether the rest this divider describes has been served.
+    ///
+    /// Tints it the same green a completed set row uses, so a glance down the
+    /// exercise reads as one continuous "done" column instead of green rows
+    /// interrupted by blue rules. The rest between two finished sets is as
+    /// much a part of what you did as the sets themselves.
+    ///
+    /// Defaults to false so a caller that has no notion of completion — the
+    /// template editor, where nothing is performed — keeps the accent colour
+    /// without having to say so.
+    var isCompleted: Bool = false
+
     /// Optional so the divider stays usable as pure display. When nil it has no
     /// tap target at all, rather than a dead one.
     var onTap: (() -> Void)?
@@ -478,7 +490,7 @@ struct RestDivider: View {
                 .frame(height: 1)
             Text(formatMinutesSeconds(restSeconds))
                 .font(Typography.secondary)
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(isCompleted ? Theme.success : Theme.accent)
                 .monospacedDigit()
             Rectangle()
                 .fill(Theme.fieldFill)

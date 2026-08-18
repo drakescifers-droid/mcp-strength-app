@@ -152,6 +152,9 @@ final class RestNotificationPresenter: NSObject, UNUserNotificationCenterDelegat
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        [.banner, .sound]
+        // `.list` as well as `.banner`: the banner slides away on its own, and
+        // if it goes while the user is mid-set there is no trace that rest
+        // ended. `.list` leaves it in Notification Centre to be found.
+        [.banner, .list, .sound]
     }
 }

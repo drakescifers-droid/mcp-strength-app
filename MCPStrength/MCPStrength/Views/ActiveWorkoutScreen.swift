@@ -90,6 +90,14 @@ struct ActiveWorkoutScreen: View {
 
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
+    /// Whether the current rest has already buzzed.
+    ///
+    /// The ticker fires every second, and a rest stays `.finished` for every
+    /// second after it ends — so without a latch the phone would vibrate once a
+    /// second until the next set was ticked. Cleared in `startRest`, which is
+    /// the only place a new rest begins.
+    @State private var restCompletionSignalled = false
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -210,7 +218,10 @@ struct ActiveWorkoutScreen: View {
         } message: { summary in
             Text(discardMessage(for: summary))
         }
-        .onReceive(ticker) { now = $0 }
+        .onReceive(ticker) { instant in
+            now = instant
+            signalRestCompletionIfNeeded(at: instant)
+        }
     }
 
     // MARK: - Header
@@ -597,10 +608,32 @@ struct ActiveWorkoutScreen: View {
         }
     }
 
+    /// Buzz once, the moment a rest runs out, while the app is open.
+    ///
+    /// **`status(at:) == .finished`, NOT `isFinished(at:)`** — and the
+    /// difference is the whole behaviour. `isFinished` also reports true for a
+    /// SKIPPED rest, so using it would vibrate at the exact moment the user
+    /// pressed Skip to say they were done resting. `.finished` is only
+    /// reachable by a running countdown reaching zero.
+    ///
+    /// This covers the app-in-front case, which the notification handles
+    /// badly: iOS decides whether a banner vibrates based on the user's own
+    /// settings, and a phone face-down on a bench with the app open is exactly
+    /// when you need to FEEL it rather than see it. The notification still
+    /// covers backgrounded and locked.
+    private func signalRestCompletionIfNeeded(at instant: Date) {
+        guard !restCompletionSignalled else { return }
+        guard restTimer.status(at: instant) == .finished else { return }
+        restCompletionSignalled = true
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
     private func startRest(for setID: UUID, seconds: Int) {
         restingSetID = setID
         restTimer = RestTimer()
         restTimer.start(duration: TimeInterval(max(0, seconds)), at: Date())
+        // Arm the buzz for THIS rest. Every new rest gets one.
+        restCompletionSignalled = false
     }
 
     /// Drop onto an exercise row: insert at that row's position after the
@@ -822,7 +855,13 @@ private struct ExerciseBlock: View {
                 onTap: onOpenRestControls
             )
         } else {
-            RestDivider(restSeconds: set.restSeconds) { onEditRest(set) }
+            // Green once the set above it is ticked — the rest was taken, so it
+            // belongs to the completed run rather than to what is still ahead.
+            RestDivider(
+                restSeconds: set.restSeconds,
+                isCompleted: set.isCompleted,
+                onTap: { onEditRest(set) }
+            )
         }
     }
 
