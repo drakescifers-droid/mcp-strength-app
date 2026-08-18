@@ -26,11 +26,13 @@ both sides.** Swift suite green, SQL suite green.
 > `Workout.totalVolume`. Never print one without converting it — `PreviousText.weightText` or
 > `WeightUnits.displayed` — and never write one without `WeightUnits.kilograms(from:in:)`.
 
-> ⚠️ **One thing is outstanding and it is mine, not yours.** Migration
-> `20260818120000_weights_to_kilograms.sql` may not be applied to the live project yet. **Run
-> `supabase migration list` and check before running any build against `mcp-strength`** — the
-> client will not re-push what it converted, except rows that were already dirty, and a server that
-> has not converted yet would halve those.
+> ⚠️ **Two things are outstanding on the live project. Run `supabase migration list` first.**
+> `20260818120000_weights_to_kilograms.sql` is applied. `20260818140000_repair_double_converted_weights.sql`
+> may not be — it repairs ten rows that the first one halved, because a client pushed already-
+> converted rows into the five-minute window between the two. `04-status.md` has the full story,
+> including the part that is still unexplained: **something pushed to the live project during a
+> session that was only supposed to be running tests and looking at screens.** Until that is
+> settled, do not assume `xcodebuild test` is read-only with respect to `mcp-strength`.
 
 ## Next piece of work, in order
 
@@ -60,9 +62,14 @@ both sides.** Swift suite green, SQL suite green.
 
 - **The bar on logging real workouts is LIFTED** — the units conversion has landed, which is the
   only thing it was ever waiting on. What still blocks the phone is the item below.
-- **Apply the weights migration to the live project**, if `supabase migration list` says it is not
-  there. That is data in `mcp-strength` being rewritten, so ask me first — and check that no build
-  of the new client has been pointed at the project in the meantime.
+- **Apply the repair migration** (`20260818140000`) if `supabase migration list` says it is not
+  there. It rewrites ten rows in `mcp-strength`, so ask me first. The values it restores are all
+  round plate loads from the preview fixtures (95 / 135 / 155 / 185 / 35 lb), which is how they
+  were identified in the first place.
+- **Work out what pushed to the live project on 2026-08-18 at 13:35 CDT.** Nothing in the session
+  was meant to sync. The leading hypothesis is that `xcodebuild test` launches the app as its own
+  test host, signed in, with no preview flag. If that is right it needs fixing before anyone trains
+  on this: running the tests would upload whatever is in the simulator.
 - **The App Store Connect app record does not exist yet**, so nothing can be uploaded even though
   the build is ready. Only I can create it. Ask before running any upload; it is outward-facing.
 - **The template editor has still never been looked at by anyone.** It is the last completely

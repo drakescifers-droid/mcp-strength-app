@@ -60,11 +60,32 @@ and Apple Health.
 > is that there is **no App Store Connect app record**, so the build cannot be uploaded — see
 > "Shipping to a device".
 >
-> ⚠️ **One ordering rule survives, and only for the live project.** Migration
-> `20260818120000_weights_to_kilograms.sql` must be applied BEFORE a build of this client runs
-> against `mcp-strength`. Run `supabase migration list` and check it is there. The client converts
-> its own store without dirtying rows, so it will not re-push what it converted — except rows that
-> were ALREADY dirty, which push kilograms. A server that has not converted yet would halve those.
+> ⚠️ **THE ORDERING RULE WAS BROKEN, BY ME, WITHIN AN HOUR OF WRITING IT DOWN.** Migration
+> `20260818120000_weights_to_kilograms.sql` says: apply it BEFORE running a build of this client
+> against `mcp-strength`, because rows that were already dirty when the client converted push
+> KILOGRAMS, and a server that has not converted yet converts them a second time. The client ran
+> first, and ten rows on the live project were halved. Repair is
+> `20260818140000_repair_double_converted_weights.sql`; **check `supabase migration list` — it may
+> not be applied yet.**
+>
+> **The reusable part is not the ordering rule, it is that writing a hazard down does not defend
+> against it.** The comment was accurate, prominent, and in the file being applied. What was
+> missing was a check that could FAIL — nothing anywhere asks "has a client already pushed
+> converted rows?" before the conversion runs.
+>
+> **And the push that caused it is still unexplained.** Both sync triggers are guarded on
+> `!UIPreviewMode.isEnabled`, and a controlled relaunch in preview mode moved no
+> `server_updated_at` at all. The app's own `lastSyncedAt` still reads the 17th, so whatever
+> pushed never finished a run. **Leading hypothesis: the XCTest host** — `xcodebuild test` launches
+> the app itself, with no `-uiPreview` argument and a real session in the keychain, which would
+> mean *running the unit suite syncs a developer's simulator into the live project.* That is a
+> hypothesis and it is the next thing to settle; until it is, do not assume a test run is
+> read-only.
+>
+> > **A dump diff told me preview mode was the culprit and it was wrong.** `pg_dump --data-only`
+> > does not emit rows in a stable ORDER, so a plain `diff` of two dumps reports changes that did
+> > not happen. Compare parsed rows keyed by id — `server_updated_at` is the field that actually
+> > answers "was this row written".
 
 ### Landed
 
