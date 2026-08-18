@@ -71,6 +71,36 @@ point at a setting that does not exist, and PR counts are absent because a hardc
 
 ---
 
+## DRAKE DOES THE UI TESTING. Build it, put it on his phone, stop there.
+
+**Standing rule, set 2026-08-18 after an afternoon of XCUITest runs cost about
+$10 and settled nothing.** Do not drive the simulator to verify how something
+looks or feels. Build, install to the device, and hand it over — he has the app
+in his hand and answers in seconds what a harness spent an hour failing to
+answer.
+
+```
+xcodebuild build -project MCPStrength/MCPStrength.xcodeproj -scheme MCPStrength \
+  -destination 'platform=iOS,id=6902E742-268A-53A7-98B9-C9A034110AC8' \
+  -derivedDataPath DerivedData DEVELOPMENT_TEAM=ZD2SRFJUPS -allowProvisioningUpdates
+xcrun devicectl device install app --device 6902E742-268A-53A7-98B9-C9A034110AC8 \
+  DerivedData/Build/Products/Debug-iphoneos/MCPStrength.app
+```
+
+That loop takes about a minute and is now the verification path for anything
+visual or gestural. **This does not weaken the unit suite** — pure rules still
+get tests, and `xcodebuild test -only-testing:MCPStrengthTests` still has to be
+green before anything ships. What is retired is using XCUITest as a camera or
+as a way to prove an interaction works.
+
+The evidence, so nobody re-runs the experiment: the runner refused to launch
+across two simulators, a clean `derivedDataPath`, and a full CoreSimulator
+restart. When it did launch, a drag test showed nothing moving — which cannot
+distinguish a broken fix from a gesture XCUITest never started, because
+SwiftUI `.draggable` rides on UIDragInteraction. A control test written to
+separate those two readings could not get past app launch. See
+`bug-triage/BUGS.md`.
+
 ## Look at the running app
 
 Three bugs passed a green suite and were caught only by launching it. Sign-in blocks every screen,
