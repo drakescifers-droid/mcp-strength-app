@@ -173,6 +173,15 @@ Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
   generated a 135 lb ramp in the reference: **55 × 5, 80 × 5, 110 × 3**, where ours said
   70 / 80 / 100. Corrected, both cases pinned in `WarmupSetsTests`, and the ramp on the phone will
   now start lighter and finish heavier than it did.
+- ⚠️ **A CONSEQUENCE OF THE RAMP FIX THAT IS YOUR CALL: the bar floor only applies if the exercise
+  has a BAR TYPE set in Preferences.** `ActiveWorkoutScreen` passes
+  `preference?.barType?.weight(in:)`, so an exercise you have never opened the `⋯` → Preferences
+  sheet for has NO floor — and at 40% a light working weight now proposes a load lighter than the
+  bar. A 90 lb bench with no bar type set generates **35** as its first warm-up, which cannot be
+  loaded on a 45 lb bar. The old (wrong) 50% hid this by landing on 45 exactly.
+  **The reference app appears to always know the bar.** Two ways to match it: default barbell-category
+  exercises to an Olympic bar, or floor at the bar whenever the category is a barbell one. Neither
+  is built — tell me which you want, or whether you would rather set bar types by hand.
 - **Hammer Strength exercises.** The category is live in the app and the database; the actual
   movements land with the bigger exercise-library refresh I'm doing separately. Don't seed them.
 - **Signing out with unpushed changes** (`06-sync.md`, Open question) is still undecided. The
