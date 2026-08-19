@@ -53,10 +53,34 @@ grant usage on schema public to anon, authenticated, service_role;
 grant usage on schema auth   to anon, authenticated, service_role;
 grant execute on function auth.uid() to anon, authenticated, service_role;
 
--- Supabase's default: new tables in public are reachable by both roles until
--- something says otherwise. The RLS migration is what says otherwise.
-alter default privileges in schema public
-  grant all on tables to anon, authenticated, service_role;
+-- DELIBERATELY NOT granting default privileges on tables here, and this is the
+-- most important line in the shim.
+--
+-- It used to say:
+--
+--     alter default privileges in schema public
+--       grant all on tables to anon, authenticated, service_role;
+--
+-- with the comment "Supabase's default: new tables in public are reachable by
+-- both roles until something says otherwise." That handed EVERY table created
+-- by any migration a full set of privileges automatically — and the real
+-- project does not do that.
+--
+-- The consequence was a bug this suite could not see. `20260815120200_rls.sql`
+-- grants `authenticated` with `on all tables in schema public`, which is a
+-- ONE-TIME SNAPSHOT; `app_settings`, created three days later, never got it.
+-- On the live project the first sync died with `permission denied for table
+-- app_settings` and, because that table is first in the push order, the whole
+-- run aborted. In here it passed, because the shim had already granted it.
+--
+-- **A harness that is more permissive than production cannot test
+-- authorization.** So the shim now grants nothing on tables by default, and the
+-- migrations have to say what they mean. `07_grants_test.sql` asserts the
+-- property directly.
+--
+-- `service_role` is created with `bypassrls` above and Supabase grants it
+-- broadly; it is not what this suite is testing, and the RLS tests never assume
+-- it. Nothing here needs it.
 
 
 -- ----------------------------------------------------------------------------
