@@ -567,6 +567,28 @@ ringer `docs/MODEL-NOTES.md`.
   re-labelling the instant you tap Metric reads as responsive or as flicker, and whether a Save
   that deliberately writes nothing feels broken. The second is the sparse-table rule made visible,
   and if it reads as a bug the fix is the wording, not the rule.
+  > **The MIGRATION half is verified, though — the canary was run and it passed.** This change
+  > adds a `@Model` and a relationship to `Exercise`, which is the crash-on-launch class, and the
+  > unit suite cannot see it by construction. So the documented canary was run against a real
+  > old-schema store on `iPhone 17` (`ZEXERCISE` carrying all four columns, no
+  > `ZEXERCISEPREFERENCE`): installed over it, launched with `-uiPreview 1`, and
+  >
+  > * the process stayed alive — no `ModelContainer(for:)` throw;
+  > * the store MIGRATED — `ZEXERCISEPREFERENCE` created, `ZEXERCISE` gained `ZPREFERENCE` and
+  >   lost the four columns;
+  > * the data survived rather than starting over — 3 workouts / 14 sets / 25 exercises before and
+  >   after, with the named canary workout intact;
+  > * and **zero preference rows existed afterwards**, which is the sparse rule holding through a
+  >   real launch that rendered real screens, not just through a unit test.
+  >
+  > **`simctl install` RELOCATED THE DATA CONTAINER**, exactly as this file warns. The first
+  > inspection was of the pre-install path and would have reported on a store the new app never
+  > opened. Re-read `simctl get_app_container … data` AFTER installing, every time.
+  >
+  > **`-uiPreview 1` is what made this safe to do at all**: both sync triggers guard on
+  > `UIPreviewMode.isEnabled`, so a manual launch of the real app in preview mode cannot reach the
+  > live project. A plain launch would have — the keychain session is still there. Same hazard as
+  > the test host, one door over.
 - **The tappable rest divider has not been used on a real device either.** A hairline is far under
   the 44pt minimum target, so the hit area is expanded and then negated out of layout
   (`RestDivider`) — the divider should look unchanged and be comfortably tappable. Both halves of
