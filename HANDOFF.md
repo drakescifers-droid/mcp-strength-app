@@ -19,7 +19,7 @@ state, the traps, the decisions and the reasoning behind them. Don't re-derive f
 those files already explain, and don't duplicate them into new files.
 
 The one-line state: **the app is on Drake's phone, he is training on it, and Phase 2 is down to
-ONE item — the Apple Health MEASUREMENTS half; workouts already go out.** Sync proven end to end IN BOTH DIRECTIONS against the live project,
+ONE item — Apple Health, part done.** Sync proven end to end IN BOTH DIRECTIONS against the live project,
 canonical units done, a round of gym-found bugs fixed,
 per-exercise Preferences — model and sheet — landed, the settings screen makes the global weight
 unit changeable, and **both settings and preferences now SYNC** (table live on the project, client
@@ -51,15 +51,49 @@ conformances on). Swift suite green, SQL suite green.
 
 ## Next piece of work, in order
 
-1. **Apple Health — the MEASUREMENTS half.** Workouts already go out (2026-08-19). What remains is
-   the bidirectional part and its echo-loop trap: write a weight to Health, Health notifies
-   observers, the app re-imports its own write as a new entry, duplicates forever.
-   `MeasurementEntry.source` exists for that guard and `02-architecture.md` says get it right the
-   first time.
+1. **APPLE HEALTH CALORIES — the server column is LIVE and there is NO CLIENT CODE. Start here.**
+   `app_settings.workout_calorie_rate` was applied to the project on 2026-08-19 (migration
+   `20260819180000`) and nothing in the app reads or sends it. **The dangling state is safe** — the
+   column is `not null default 'medium'`, the client never sends it, and an upsert without it takes
+   the default — but it is half a feature and it is the obvious next thing.
+   > **The design is DECIDED, from the reference app's own screens** (Drake sent them; see
+   > `02-architecture.md` § the Health block). A flat rate per hour the user picks: None / Low /
+   > Medium / High / Very High at 0 / 150 / 200 / 250 / 300 kcal per hour, Medium default. No MET
+   > table, no bodyweight maths. A user-chosen rate is NOT the fabricated number this repo keeps
+   > refusing to write — the user is saying "count my lifting at roughly this".
+   > **What is left:** the Swift enum, the `AppSettings` field (declaration-level default — rule 2),
+   > the wire row + mapper + apply + the explicit `encode` line (the CaseIterable completeness test
+   > will fail until that line exists, which is the point of it), the picker screen, and attaching
+   > an `activeEnergyBurned` sample to the `HKWorkoutBuilder`.
+   > ⚠️ **CHECK DOUBLE COUNTING FIRST.** A worn Watch already writes `activeEnergyBurned`
+   > continuously; our sample on top may count twice in the Activity rings. The reference's copy
+   > only claims its setting is ignored when logging VIA its Watch app — it says nothing about
+   > merely wearing one. Not established; check on a device before trusting the number.
+
+2. **The better energy answer, and Drake's stated preference — attach the Watch's EXISTING
+   samples.** `HKWorkoutBuilder.addSamples` documents that samples *"will be saved to the database
+   if they have not already been saved"*, so already-recorded energy can be ASSOCIATED with our
+   workout rather than duplicated: real measured numbers, no estimate, no Watch app. **Two things
+   to settle before building it:** it needs READ permission (so `NSHealthShareUsageDescription` and
+   a non-empty read set, widening today's deliberately write-only entitlement), and **it is NOT
+   established that HealthKit lets an app attach samples ANOTHER SOURCE owns.** Test that on a
+   device first. Drake said the flat rate "is fine for now" and this is where it should end up.
+
+3. **Two more corrections the reference screens forced**, both recorded in `02-architecture.md`:
+   an explicit per-type **toggle** separate from the permission (so `HealthStore.swift`'s
+   "authorization is the only switch" reasoning is wrong — iOS cannot revoke its own permission, so
+   without a toggle there is no way to turn it off from inside the app), and **backfill** ("14
+   workouts without corresponding Health entries. Add?"), which is cheap because the external-uuid
+   lookup that makes writing idempotent is the same query that finds what is missing.
+
+4. **Apple Health — the MEASUREMENTS half.** The genuinely bidirectional part, and the echo-loop
+   trap: write a weight to Health, Health notifies observers, the app re-imports its own write as a
+   new entry, duplicates forever. `MeasurementEntry.source` exists for that guard.
    > **Only 4 of the 18 measurement types exist in HealthKit** — Weight, Body Fat %, Caloric
-   > Intake, Waist. The other fourteen are limb and torso circumferences with no HealthKit type,
-   > so the screen must say which rows can travel rather than implying all of them do.
-   Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
+   > Intake, Waist. The other fourteen are limb and torso circumferences with no HealthKit type, so
+   > the screen must say which rows can travel rather than implying all of them do.
+
+Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
 
 > **Per-exercise Preferences is DONE, and it went through Ringer — which answers the question this
 > file used to ask.** The model split ran as `mcpstrength-per-exercise-preferences` (grok-4.6,
@@ -94,8 +128,15 @@ conformances on). Swift suite green, SQL suite green.
 - **The template editor has still never been looked at by anyone.** It is the last completely
   unseen screen — and it no longer needs your hands: point
   `MCPStrengthUITests/WarmupRampWalkthroughTests` at it and read the screenshots.
-- ⚠️ **SYNC HAS RUN AGAINST THE LIVE PROJECT AND FAILED ONCE, 2026-08-19 — cause found and
-  fixed, but the SUCCESS is still unwitnessed.** `permission denied for table app_settings`: a
+- ✅ **SYNC IS PROVEN IN BOTH DIRECTIONS against the live project** (2026-08-19). A settings
+  change uploaded — `POST /rest/v1/app_settings → 200` — and a full pull of all thirteen tables
+  came back 200. Read out of the project's own request logs, not inferred from the UI.
+- ⚠️ **APPLE HEALTH HAS NEVER WRITTEN A WORKOUT.** The rule is tested and the entitlement is
+  verified in the SIGNED app, but no sample has reached Health — a unit test cannot grant a
+  permission or write one. **Settings → Apple Health → Allow, finish a workout, look in Apple
+  Fitness.** And specifically: finishing the SAME workout twice must produce ONE entry, which is
+  the whole point of the external-uuid lookup.
+- ~~SYNC HAS FAILED ONCE~~ — the 2026-08-19 outage is fixed and explained below. `permission denied for table app_settings`: a
   table created after `grant … on all tables` had never been granted, and because it is first in
   the push order the whole run aborted. Migration `20260819140000` fixes it and is applied.
   **What is still unproven is a run that WORKS** — tap `Back Up Now` on the Profile tab and the
@@ -140,6 +181,24 @@ resolutions. I chose to leave it and note it.
   interpreted as press-and-hold and opens the accent picker.
 
 ## If you route anything to Ringer
+
+> ⚠️ **RUN `~/ringer/scripts/check_selftest.sh` BEFORE EVERY MANIFEST. This is the single most
+> useful thing learned on 2026-08-19.** Three runs in a row were recorded as MODEL FAILURES when
+> the model was right and the CHECK was wrong — including one that was UNSATISFIABLE, because it
+> demanded a conformance on a line that a second script (which the same check ran) required to be
+> unchanged. No implementation could have passed.
+>
+> The cause: self-testing a check by watching it go RED against master proves the gate FIRES. It
+> does not prove the gate can be SATISFIED, and all three bad checks passed that test. The script
+> runs both halves — GREEN first (must pass on a tree that HAS the work), then RED — and refuses to
+> bless a check otherwise. It was verified against the actual bug: restoring the bad assertion makes
+> it print `GREEN FAILED — THE CHECK REJECTS CORRECT CODE. Do not launch.`
+>
+> **Assert the PROPERTY, never the SPELLING.** All three bugs were syntax demands standing in for a
+> behaviour — a parameter's name, a declaration's placement. And the cost is not just a wasted
+> retry: in one run the worker CONTORTED correct code to satisfy the bad regex, because a model
+> optimises against the check rather than the goal.
+
 
 - A green Ringer check means it **compiles**, not that it passes. Set `check_timeout_s` (~300) on
   any task whose check compiles, ~700 if it runs the SQL suite.
