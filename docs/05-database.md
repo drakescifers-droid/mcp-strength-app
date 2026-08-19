@@ -174,6 +174,11 @@ Two more absences worth stating so they are not re-added by reflex:
 
 ## What is not here yet
 
+- ~~**Settings — the Postgres half.**~~ **DONE 2026-08-18**, migration `20260818160000`, applied to
+  the live project and verified by dumping the remote schema back: the table, both new enums with
+  their exact case lists, the owner policy, and BOTH triggers. `supabase/tests/06_app_settings_test.sql`
+  proves the triggers rather than only asserting they are attached. The client half is what remains.
+  The original entry, kept because its reasoning is still the record of why it waited:
 - **Settings — the Postgres half.** No longer guessing at a shape: the units decision landed
   (`01-data-model.md`, 2026-08-18) and `AppSettings` exists locally with the full field list, so the
   Program exception now DOES apply — the design is settled and only the UI is deferred. What is

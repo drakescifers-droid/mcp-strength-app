@@ -134,6 +134,14 @@ syncing `AppSettings` and `ExercisePreference`, and Apple Health.
   verified remote == local by dumping the schema back**, not by trusting `db push`.
   `05-database.md` is the decisions record; `./supabase/tests/run.sh` exercises it against a
   throwaway container.
+  > **`supabase db dump` WRITES `CREATE OR REPLACE TRIGGER` AND `CREATE TABLE IF NOT EXISTS`.**
+  > So grepping a dump for `CREATE TRIGGER` or `CREATE TABLE` returns ZERO and reads as "the
+  > object is missing" — which is a false negative on the exact method this project uses to verify
+  > a remote schema. It happened while verifying `app_settings` on 2026-08-18: the table and policy
+  > matched, the triggers appeared absent, and the triggers were fine. **Before believing an object
+  > is missing from a dump, check whether the dump contains that KIND of object at all** — one
+  > `grep -oE '^CREATE [A-Z ]+' | sort | uniq -c` answers it, and it is the same discipline as
+  > reading `0 passed, 1 failed` correctly.
   > **Two migrations had silently never been pushed**, and one of them was `workouts.summary` — a
   > column `SyncWorkoutRow` sends on every workout, so the first real push would have failed on an
   > unknown column. A note elsewhere claimed it was live. **Run `supabase migration list` before
