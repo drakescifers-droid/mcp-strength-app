@@ -83,6 +83,24 @@ struct StartWorkoutTab: View {
     @State private var targetedFolderID: UUID?
     @State private var targetedTemplateID: UUID?
 
+    /// The template currently held in a drag.
+    ///
+    /// **A drag's payload cannot be read until the drop**, which is the whole
+    /// reason this exists: to show cards moving aside, the view has to know
+    /// which card is in the air BEFORE the drop resolves. `.draggable`'s
+    /// preview closure runs when the lift begins, so `onAppear` there is the
+    /// only honest signal. Same trick the exercise list uses for collapsing.
+    @State private var draggingTemplateID: UUID?
+
+    /// The order to RENDER while a drag hovers — not what is stored.
+    ///
+    /// Nothing is written until the drop. This is a preview: let go somewhere
+    /// else, or cancel, and it is discarded without ever having touched a
+    /// model. Writing `order` on hover would be simpler and would mean a drag
+    /// abandoned mid-air had silently rearranged the folder.
+    @State private var previewOrder: [UUID]?
+    @State private var previewFolderID: UUID?
+
     private let columns = [
         GridItem(.flexible(), spacing: Spacing.comfortable),
         GridItem(.flexible(), spacing: Spacing.comfortable),
@@ -253,7 +271,7 @@ struct StartWorkoutTab: View {
             // old `if !folderTemplates.isEmpty` guard made Save look
             // like a no-op.
             if !folder.isCollapsed {
-                templateGrid(folder.liveTemplates)
+                templateGrid(folder.liveTemplates, in: folder)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -270,8 +288,22 @@ struct StartWorkoutTab: View {
                 )
         )
         .animation(.snappy(duration: 0.15), value: targetedFolderID)
+        // WITHOUT THIS THE SECTION IS STILL ONLY ITS CONTENT.
+        //
+        // A drop destination hit-tests the view's rendered shape, and the
+        // section's background is `.clear` until it is targeted — a clear fill
+        // is not hit-testable, so the "whole folder" target was still only the
+        // header strip and the cards, exactly as before. Which is why making
+        // the section a destination looked right and changed nothing: the
+        // modifier was on a view whose empty space did not exist as far as hit
+        // testing was concerned.
+        //
+        // `.contentShape` says the whole frame counts, including the gaps
+        // between cards and the space under the last row.
+        .contentShape(Rectangle())
         .dropDestination(for: String.self) { items, _ in
             targetedFolderID = nil
+            draggingTemplateID = nil
             return handleFolderDrop(items, onto: folder)
         } isTargeted: { targeted in
             // Latch on entry, and only clear if this section still owns the
@@ -431,9 +463,26 @@ struct StartWorkoutTab: View {
         folderPendingDelete = nil
     }
 
-    private func templateGrid(_ templates: [Template]) -> some View {
+    /// Reorders `templates` to match the live drag preview, when one applies.
+    ///
+    /// Ids the preview does not mention keep their relative position, so a
+    /// stale preview can never drop a card off the screen — worst case it is
+    /// ignored.
+    private func arranged(_ templates: [Template], in folder: TemplateFolder?) -> [Template] {
+        guard let previewOrder, previewFolderID == folder?.id else { return templates }
+        let rank = Dictionary(
+            uniqueKeysWithValues: previewOrder.enumerated().map { ($0.element, $0.offset) }
+        )
+        return templates.enumerated().sorted { lhs, rhs in
+            let l = rank[lhs.element.id] ?? (previewOrder.count + lhs.offset)
+            let r = rank[rhs.element.id] ?? (previewOrder.count + rhs.offset)
+            return l < r
+        }.map(\.element)
+    }
+
+    private func templateGrid(_ templates: [Template], in folder: TemplateFolder? = nil) -> some View {
         LazyVGrid(columns: columns, spacing: Spacing.comfortable) {
-            ForEach(templates, id: \.id) { template in
+            ForEach(arranged(templates, in: folder), id: \.id) { template in
                 TemplateCard(
                     template: template,
                     onTap: {
@@ -450,7 +499,14 @@ struct StartWorkoutTab: View {
                     onDelete: { templatePendingDelete = template }
                 )
                 // Long-press starts the drag; the card's tap still opens overview.
-                .draggable(template.id.uuidString)
+                .draggable(template.id.uuidString) {
+                    // The lift signal. This closure runs when the drag starts,
+                    // which is the earliest the view can know WHICH card is in
+                    // the air — the payload itself is opaque until the drop.
+                    TemplateDragPreview(name: template.name)
+                        .onAppear { draggingTemplateID = template.id }
+                        .onDisappear { endPreview() }
+                }
                 .overlay(
                     // Marks the card the dragged template will land IN FRONT
                     // OF, so a precise reorder is aimed rather than guessed.
@@ -462,18 +518,51 @@ struct StartWorkoutTab: View {
                 )
                 .animation(.snappy(duration: 0.15), value: targetedTemplateID)
                 .dropDestination(for: String.self) { items, _ in
-                    targetedTemplateID = nil
-                    targetedFolderID = nil
-                    return handleCardDrop(items, onto: template)
+                    let moved = handleCardDrop(items, onto: template)
+                    endPreview()
+                    return moved
                 } isTargeted: { targeted in
                     if targeted {
                         targetedTemplateID = template.id
+                        // The cards move aside HERE. Hovering over a card
+                        // computes where everything would sit if the drop
+                        // happened, and the grid re-renders in that order.
+                        beginPreview(dropping: template)
                     } else if targetedTemplateID == template.id {
                         targetedTemplateID = nil
                     }
                 }
             }
         }
+        // Animates the ForEach reordering itself: same ids in a new order, so
+        // SwiftUI moves the existing cards rather than rebuilding them.
+        .animation(.snappy(duration: 0.2), value: previewOrder)
+    }
+
+    /// Compute the order the folder would have if the drop happened here.
+    ///
+    /// Purely visual. `previewOrder` is read by `arranged` and never written
+    /// to a model — the real move still goes through `applyTemplateMove` on
+    /// the drop, so an abandoned drag leaves nothing behind.
+    private func beginPreview(dropping target: Template) {
+        guard let dragged = draggingTemplateID, dragged != target.id else { return }
+        var ids = orderedIDs(in: target.folder)
+        // Coming from another folder: it is not in this list yet, so give it a
+        // place before working out where it lands.
+        if !ids.contains(dragged) { ids.append(dragged) }
+        ids.removeAll { $0 == dragged }
+        guard let index = ids.firstIndex(of: target.id) else { return }
+        ids.insert(dragged, at: index)
+        previewOrder = ids
+        previewFolderID = target.folder?.id
+    }
+
+    private func endPreview() {
+        previewOrder = nil
+        previewFolderID = nil
+        draggingTemplateID = nil
+        targetedTemplateID = nil
+        targetedFolderID = nil
     }
 
     /// Ids of templates in `folder` (nil = unfiled), sorted by per-folder `order`.
@@ -665,4 +754,26 @@ private struct TemplateCard: View {
 
     return StartWorkoutTab()
         .modelContainer(container)
+}
+
+// MARK: - Drag preview
+
+/// What follows the finger while a template card is being dragged.
+///
+/// Exists so `.draggable` has a preview closure to run — that closure is the
+/// only place the view learns which card was lifted, because the drag payload
+/// is opaque until the drop. Kept to the name alone: a full-size copy of the
+/// card under the thumb hides the folder the user is aiming at.
+private struct TemplateDragPreview: View {
+    let name: String
+
+    var body: some View {
+        Text(name)
+            .font(Typography.cardTitle)
+            .foregroundStyle(Theme.textPrimary)
+            .lineLimit(1)
+            .padding(.horizontal, Spacing.comfortable)
+            .padding(.vertical, Spacing.compact)
+            .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.card))
+    }
 }
