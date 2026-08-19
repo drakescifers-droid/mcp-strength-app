@@ -153,8 +153,24 @@ struct ActiveWorkoutScreen: View {
                         // mid-drag, and everything below would shift under the
                         // thumb while the user is aiming at it.
                         .overlay(alignment: .top) {
-                            if dropTargetExerciseID == workoutExercise.id,
-                               draggingExerciseID != workoutExercise.id {
+                            // Deliberately NOT also checking
+                            // `draggingExerciseID != workoutExercise.id`.
+                            //
+                            // That check looks right — do not mark the block
+                            // you are dragging — and it silently suppressed the
+                            // marker on the block you were AIMING at. The
+                            // `isTargeted` handler below sets
+                            // `draggingExerciseID` to whatever it is hovering
+                            // when that value is still nil, because the drag
+                            // payload cannot be read until the drop and any
+                            // non-nil id is enough to collapse the list. So the
+                            // first block hovered became "the one being
+                            // dragged" as far as this condition was concerned,
+                            // and its marker never drew. Dropping a block onto
+                            // itself is already a no-op in
+                            // `handleExerciseDrop`, so there is nothing to
+                            // protect against here.
+                            if dropTargetExerciseID == workoutExercise.id {
                                 Capsule()
                                     .fill(Theme.accent)
                                     .frame(height: 3)
@@ -180,6 +196,8 @@ struct ActiveWorkoutScreen: View {
                             }
                         }
                     }
+
+                    endOfListDropZone
 
                     bottomActions
                 }
@@ -353,6 +371,56 @@ struct ActiveWorkoutScreen: View {
     }
 
     // MARK: - Bottom actions
+
+    /// A drop target after the last exercise, meaning "put it at the end".
+    ///
+    /// **Without this the last position is unreachable.** Dropping onto a block
+    /// inserts BEFORE that block — that is what the insertion rule above it
+    /// means — so every position in the list is expressible except the one
+    /// after the final exercise. You could move anything anywhere except last,
+    /// and nothing on screen explained why the bottom of the list refused to
+    /// light up.
+    ///
+    /// Only present while a drag is in flight. A permanent invisible strip
+    /// under the exercises would eat taps meant for the buttons below it, and
+    /// there is nothing to aim at when nothing is being dragged.
+    ///
+    /// The height is deliberate: 44pt is the minimum comfortable target, and
+    /// this one is aimed at with a card held under the thumb, so it gets the
+    /// same treatment as any other control rather than being a hairline.
+    @ViewBuilder
+    private var endOfListDropZone: some View {
+        if isReordering {
+            ZStack(alignment: .top) {
+                Color.clear
+                if dropTargetExerciseID == Self.endOfListTargetID {
+                    Capsule()
+                        .fill(Theme.accent)
+                        .frame(height: 3)
+                        .padding(.horizontal, Spacing.compact)
+                }
+            }
+            .frame(height: 44)
+            .contentShape(Rectangle())
+            .animation(.snappy(duration: 0.15), value: dropTargetExerciseID)
+            .dropDestination(for: String.self) { items, _ in
+                dropTargetExerciseID = nil
+                return handleExerciseDropAtEnd(items)
+            } isTargeted: { targeted in
+                if targeted {
+                    dropTargetExerciseID = Self.endOfListTargetID
+                } else if dropTargetExerciseID == Self.endOfListTargetID {
+                    dropTargetExerciseID = nil
+                }
+            }
+        }
+    }
+
+    /// Stands in for "past the last exercise" in `dropTargetExerciseID`, which
+    /// otherwise only ever holds a real exercise's id. A sentinel rather than a
+    /// second `@State` flag so the two cannot both be set and disagree about
+    /// where the marker goes.
+    private static let endOfListTargetID = UUID()
 
     private var bottomActions: some View {
         VStack(spacing: Spacing.comfortable) {
@@ -679,6 +747,33 @@ struct ActiveWorkoutScreen: View {
     /// Drop onto an exercise row: insert at that row's position after the
     /// dragged id has been removed (the ListOrdering index convention).
     /// Same-list — source and destination are the workout's ordered ids.
+    /// Move the dragged exercise to the END of the list.
+    ///
+    /// Shares `ListOrdering.move` with the onto-a-block path rather than
+    /// hand-rolling an append, so both routes renumber identically and there is
+    /// one rule for what an order list looks like afterwards.
+    private func handleExerciseDropAtEnd(_ items: [String]) -> Bool {
+        defer { draggingExerciseID = nil }
+        guard let raw = items.first, let id = UUID(uuidString: raw) else { return false }
+
+        let ids = sortedExercises.map(\.id)
+        guard ids.contains(id) else { return false }
+        // Already last: nothing to do, and reporting success stops the drop
+        // reading as a rejection.
+        guard ids.last != id else { return true }
+
+        var dest = ids
+        dest.removeAll { $0 == id }
+        let result = ListOrdering.move(id, from: ids, to: ids, at: dest.count)
+        let byID = Dictionary(uniqueKeysWithValues: workout.liveExercises.map { ($0.id, $0) })
+        for (i, eid) in result.destination.enumerated() {
+            guard byID[eid]?.order != i else { continue }
+            byID[eid]?.order = i
+            byID[eid]?.markEdited()
+        }
+        return true
+    }
+
     private func handleExerciseDrop(_ items: [String], onto target: WorkoutExercise) -> Bool {
         defer { draggingExerciseID = nil }
         guard let raw = items.first, let id = UUID(uuidString: raw) else { return false }
