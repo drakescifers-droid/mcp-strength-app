@@ -33,6 +33,19 @@
 //  asking to READ Health data while never reading it is a permission prompt
 //  that cannot be honestly explained.
 //
+//  ## TWO write types, and they are authorized separately
+//
+//  A workout, and — when the user has chosen a `WorkoutCalorieRate` other than
+//  `none` — an `activeEnergyBurned` sample attached to it. iOS asks about the
+//  two independently and Health lets them be switched independently
+//  afterwards, so "may I write workouts" does NOT answer "may I write energy".
+//
+//  **Both statuses are therefore checked before writing, and energy is
+//  skipped rather than allowed to fail the whole write.** Adding a sample of a
+//  type the app is not permitted to share makes `finishWorkout` throw, which
+//  would lose the WORKOUT because of a permission about its energy — trading a
+//  whole record for an estimate.
+//
 
 import Foundation
 import HealthKit
@@ -56,8 +69,17 @@ protocol HealthWriting: AnyObject {
     /// > different sentences with different next steps.
     var workoutSharingStatus: HealthSharingStatus { get }
 
-    /// Ask for permission to write workouts. Safe to call when already
-    /// authorized; iOS shows the sheet at most once per type.
+    /// Whether the user has allowed ACTIVE ENERGY writing on this device.
+    ///
+    /// Separate from `workoutSharingStatus` because iOS asks about the two
+    /// types separately and Health lets them be turned off separately. A
+    /// settings screen that offers a calorie rate while this is `.denied`
+    /// would be offering a control that cannot do anything — the shape of the
+    /// rest-timer bug from the 2026-08-18 gym session.
+    var activeEnergySharingStatus: HealthSharingStatus { get }
+
+    /// Ask for permission to write workouts and their energy. Safe to call
+    /// when already authorized; iOS shows the sheet at most once per type.
     func requestWorkoutAuthorization() async throws
 
     /// Write this workout, unless Health already has it.
@@ -89,16 +111,25 @@ final class HealthStore: HealthWriting {
 
     private let store = HKHealthStore()
 
-    /// The one type this app writes. Declared once so the authorization
+    /// The two types this app writes. Declared once so the authorization
     /// request and the write cannot drift apart — asking for one set and
     /// writing another is an authorization error at runtime and nowhere else.
     private static let workoutType = HKObjectType.workoutType()
+    private static let activeEnergyType = HKQuantityType(.activeEnergyBurned)
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
     var workoutSharingStatus: HealthSharingStatus {
+        status(of: Self.workoutType)
+    }
+
+    var activeEnergySharingStatus: HealthSharingStatus {
+        status(of: Self.activeEnergyType)
+    }
+
+    private func status(of type: HKObjectType) -> HealthSharingStatus {
         guard isAvailable else { return .unavailable }
-        switch store.authorizationStatus(for: Self.workoutType) {
+        switch store.authorizationStatus(for: type) {
         case .notDetermined:       return .notDetermined
         case .sharingAuthorized:   return .authorized
         case .sharingDenied:       return .denied
@@ -108,8 +139,15 @@ final class HealthStore: HealthWriting {
 
     func requestWorkoutAuthorization() async throws {
         guard isAvailable else { return }
+        // BOTH types in ONE prompt. Asking for energy later, at the moment a
+        // workout is being written, would put a permission sheet on top of the
+        // end of a training session.
+        //
         // Empty read set: this app does not read Health. See the file comment.
-        try await store.requestAuthorization(toShare: [Self.workoutType], read: [])
+        try await store.requestAuthorization(
+            toShare: [Self.workoutType, Self.activeEnergyType],
+            read: []
+        )
     }
 
     @discardableResult
@@ -136,9 +174,31 @@ final class HealthStore: HealthWriting {
         )
 
         try await builder.beginCollection(at: plan.start)
-        // No energy and no distance samples are added, deliberately — see the
-        // note at the bottom of HealthWorkoutRule.swift. A fabricated zero in
-        // Apple Fitness is worse than an honest absence.
+
+        // ENERGY, when the user has asked for it and Health permits it. Both
+        // conditions are real and neither implies the other: `nil` is
+        // `WorkoutCalorieRate.none` (the user's choice), `.denied` is the
+        // permission (the system's). Skipping rather than throwing is the
+        // decision argued in the file comment — losing the workout over its
+        // energy would be trading a record for an estimate.
+        //
+        // No distance sample: nothing here measures distance, and that number
+        // WOULD be invented (AGENTS.md rule 4).
+        if let kilocalories = plan.activeEnergyKilocalories,
+           activeEnergySharingStatus == .authorized {
+            let sample = HKQuantitySample(
+                type: Self.activeEnergyType,
+                quantity: HKQuantity(unit: .kilocalorie(), doubleValue: kilocalories),
+                // Spread across the whole workout rather than stamped at one
+                // instant: Apple Fitness reads energy against the period it was
+                // spent in, and a sample an hour wide that claims one second is
+                // a spike in somebody's day that never happened.
+                start: plan.start,
+                end: plan.end
+            )
+            try await builder.addSamples([sample])
+        }
+
         try await builder.addMetadata([HKMetadataKeyExternalUUID: plan.externalID.uuidString])
         try await builder.endCollection(at: plan.end)
         _ = try await builder.finishWorkout()

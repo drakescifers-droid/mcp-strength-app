@@ -84,6 +84,14 @@ struct SettingsScreen: View {
         settings.first?.weightUnit ?? .lbs
     }
 
+    /// The rate to SHOW. Falls back to `.medium`, which is the model's
+    /// declaration default AND the server column's default — the two have to
+    /// agree or a device that never touched the setting disagrees with the row
+    /// the server hands its next device.
+    private var calorieRate: WorkoutCalorieRate {
+        settings.first?.workoutCalorieRate ?? .medium
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -137,21 +145,33 @@ struct SettingsScreen: View {
 
     // MARK: - Apple Health
     //
-    // ONE ROW, and it is a permission rather than a preference. There is no
-    // stored "write workouts to Health" flag anywhere — HealthKit already keeps
-    // a per-device answer and iOS already owns the UI for changing it, so a
-    // second flag would be a second source of truth that can disagree with the
-    // first (see HealthStore.swift).
+    // TWO ROWS, and they are different kinds of thing. `Workouts` is a
+    // PERMISSION: there is no stored "write workouts to Health" flag anywhere,
+    // because HealthKit already keeps a per-device answer and iOS already owns
+    // the UI for changing it, so a second flag would be a second source of
+    // truth that can disagree with the first (see HealthStore.swift).
+    // `Workout Active Calories Rate` is a PREFERENCE — a number the user
+    // chooses — and it is stored, synced, and defaulted to match the server.
     //
     // The four states are genuinely different sentences with different next
     // steps, which is exactly why `.notDetermined` is not collapsed into
     // "denied": one is a button, the other is an instruction to go somewhere
     // else. Getting that wrong would be a control that looks tappable and
     // cannot work — the rest-timer bug's shape.
+    //
+    // **The rate row appears only once workouts are actually being written**,
+    // and that is the same rule applied to a preference rather than a
+    // permission. Until Health is allowed, nothing reads the rate, so a picker
+    // for it would be a control that changes a value with no consumer — which
+    // is precisely why the other three unit rows are absent from this screen.
+    // The reference app shows its rate row unconditionally; this is a
+    // deliberate divergence, and it costs nothing, because the row appears the
+    // moment the permission it depends on is granted.
 
     @ViewBuilder
     private var healthSection: some View {
         let status = health?.workoutSharingStatus ?? .unavailable
+        let energyStatus = health?.activeEnergySharingStatus ?? .unavailable
 
         VStack(alignment: .leading, spacing: Spacing.compact) {
             Text("APPLE HEALTH")
@@ -182,6 +202,92 @@ struct SettingsScreen: View {
                 .foregroundStyle(Theme.textSecondary)
                 .padding(.horizontal, Spacing.screenMargin)
                 .fixedSize(horizontal: false, vertical: true)
+
+            if status == .authorized {
+                calorieRateRow(energyStatus: energyStatus)
+            }
+        }
+    }
+
+    /// The rate row and the sentence under it.
+    ///
+    /// **Three shapes, because the ENERGY permission has three answers that
+    /// need different controls**, and it is authorized separately from the
+    /// workout one:
+    ///
+    ///   * `.notDetermined` — an **Allow button**, not a picker. This is the
+    ///     UPGRADE PATH and it is the case that is easy to miss: a device that
+    ///     granted workouts BEFORE this build has never been asked about
+    ///     energy, so the Workouts row above is already "On" and cannot ask
+    ///     again. Without this button there would be no way, anywhere in the
+    ///     app, to grant the permission the rate depends on.
+    ///   * `.authorized` — the picker.
+    ///   * `.denied` / `.unavailable` — the value, not tappable, because
+    ///     nothing reads it. Same treatment as the Workouts row for the same
+    ///     reason: a control that cannot do anything is the rest-timer bug.
+    @ViewBuilder
+    private func calorieRateRow(energyStatus: HealthSharingStatus) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.compact) {
+            VStack(spacing: 0) {
+                switch energyStatus {
+                case .notDetermined:
+                    Button {
+                        Task { try? await health?.requestWorkoutAuthorization() }
+                    } label: {
+                        SettingsValueRow(
+                            title: "Workout Active Calories Rate",
+                            value: "Allow"
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                case .authorized:
+                    NavigationLink {
+                        WorkoutCalorieRatePickerScreen(current: calorieRate) { picked in
+                            choose(picked)
+                        }
+                    } label: {
+                        SettingsValueRow(
+                            title: "Workout Active Calories Rate",
+                            value: calorieRate.settingsLabel
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                case .denied, .unavailable:
+                    SettingsValueRow(
+                        title: "Workout Active Calories Rate",
+                        value: "Off"
+                    )
+                }
+            }
+            .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.card))
+            .padding(.horizontal, Spacing.screenMargin)
+
+            Text(calorieExplanation(energyStatus))
+                .font(Typography.secondary)
+                .foregroundStyle(Theme.textSecondary)
+                .padding(.horizontal, Spacing.screenMargin)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, Spacing.compact)
+    }
+
+    private func calorieExplanation(_ energyStatus: HealthSharingStatus) -> String {
+        switch energyStatus {
+        case .authorized:
+            // Says it is an ESTIMATE and whose estimate it is. The app measures
+            // nothing here and must not sound as though it does.
+            return "An estimate you choose, added to each workout so it counts toward your activity. Nothing is measured."
+        case .denied:
+            return "Energy is turned off for MCP Strength in Health, so no calories are added. To allow it, open Health, then Sharing, then Apps."
+        case .notDetermined:
+            // The upgrade path: workouts were allowed before this feature
+            // existed, so Health has never been asked about energy. Say what
+            // tapping does rather than describing a state.
+            return "Allow Active Energy to have an estimate of the calories burned added to each workout."
+        case .unavailable:
+            return "Apple Health is not available on this device."
         }
     }
 
@@ -222,6 +328,13 @@ struct SettingsScreen: View {
         AppSettings.current(in: context).setWeightUnit(unit)
     }
 
+    /// Same shape, same reason: the no-op guard is on the MODEL
+    /// (`AppSettings.setWorkoutCalorieRate`), because re-picking the rate that
+    /// already has the tick must not dirty the row.
+    private func choose(_ rate: WorkoutCalorieRate) {
+        AppSettings.current(in: context).setWorkoutCalorieRate(rate)
+    }
+
     @ViewBuilder
     private func section(
         _ title: String,
@@ -255,13 +368,20 @@ private struct SettingsValueRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.compact) {
+            // Both sides wrap rather than truncate. "Workout Active Calories
+            // Rate" against "Medium (200 kcal per hour)" does not fit one line
+            // on any iPhone, and a truncated VALUE would defeat the entire
+            // point of putting the number on the label.
             Text(title)
                 .font(Typography.body)
                 .foregroundStyle(Theme.textPrimary)
-            Spacer()
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: Spacing.compact)
             Text(value)
                 .font(Typography.body)
                 .foregroundStyle(Theme.accent)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
             Image(systemName: "chevron.right")
                 .font(Typography.secondary.weight(.semibold))
                 .foregroundStyle(Theme.accent)
@@ -339,6 +459,84 @@ struct WeightUnitPickerScreen: View {
     }
 }
 
+/// Picks the rate Apple Health counts a workout at.
+///
+/// Five options, each naming the number it stands for, and picking one applies
+/// it and goes back — the same grammar as `WeightUnitPickerScreen`, and for the
+/// same reason: the write happens on tap, so there is nothing pending and no
+/// Save to offer.
+struct WorkoutCalorieRatePickerScreen: View {
+    let current: WorkoutCalorieRate
+    let onSelect: (WorkoutCalorieRate) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                ForEach(Array(WorkoutCalorieRate.allCases.enumerated()), id: \.element) { index, rate in
+                    Button {
+                        onSelect(rate)
+                        dismiss()
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(rate.displayName)
+                                    .font(Typography.body)
+                                    .foregroundStyle(Theme.textPrimary)
+                                // The rate under the name, because "Medium"
+                                // alone is the app asserting an amount of
+                                // energy without ever saying what it is.
+                                if rate != .none {
+                                    Text("\(Int(rate.kilocaloriesPerHour)) kcal per hour")
+                                        .font(Typography.secondary)
+                                        .foregroundStyle(Theme.textSecondary)
+                                }
+                            }
+                            Spacer()
+                            if rate == current {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(Theme.accent)
+                            }
+                        }
+                        .padding(.vertical, Spacing.comfortable)
+                        .padding(.horizontal, Spacing.screenMargin)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    if index != WorkoutCalorieRate.allCases.count - 1 {
+                        Rectangle()
+                            .fill(Theme.fieldFill)
+                            .frame(height: 1)
+                            .padding(.leading, Spacing.screenMargin)
+                    }
+                }
+            }
+            .padding(.top, Spacing.comfortable)
+        }
+        .background(Theme.surface)
+        .navigationTitle("Workout Calories")
+        .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom) {
+            // WHAT THIS IS, said where it is chosen. Two sentences, and the
+            // second is the one that matters: a Watch worn while lifting is
+            // already recording energy, and whether Apple deduplicates ours
+            // against it in the Activity rings is NOT established
+            // (docs/02-architecture.md). `None` is the honest setting for a
+            // Watch wearer until somebody checks.
+            Text("Lifting energy is estimated from this rate, not measured. If you wear an Apple Watch while training it is already recording energy, and this may be counted on top — pick None if your rings look too high.")
+                .font(Typography.secondary)
+                .foregroundStyle(Theme.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, Spacing.screenMargin)
+                .padding(.vertical, Spacing.comfortable)
+                .background(Theme.surface)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
 #Preview {
     SettingsScreen()
         .modelContainer(for: AppSettings.self, inMemory: true)
@@ -347,6 +545,13 @@ struct WeightUnitPickerScreen: View {
 #Preview("Picker") {
     NavigationStack {
         WeightUnitPickerScreen(current: .lbs) { _ in }
+    }
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Calorie rate picker") {
+    NavigationStack {
+        WorkoutCalorieRatePickerScreen(current: .medium) { _ in }
     }
     .preferredColorScheme(.dark)
 }

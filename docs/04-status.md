@@ -37,27 +37,62 @@ true today — with the standing caveat that it should **not** hold real trainin
 provides sync and backup, because a local-only store has no recovery story.
 
 **Phase 2 — in progress. Sync is PROVEN against the real project, storage is canonical
-kilograms, per-exercise Preferences is DONE, the units setting is REACHABLE, and both of them now
-SYNC.** What remains is Apple Health, and the nil-encoding fix below.
+kilograms, per-exercise Preferences is DONE, the units setting is REACHABLE, both of them SYNC,
+and Apple Health now writes an energy sample at a rate the user picks.** What remains of Phase 2 is
+the measurements half of Health, plus the two corrections the reference screens forced (a per-type
+toggle, and backfill).
 
-> ⚠️ **THE CLAIM BELOW IS PROBABLY WRONG, AND IT WAS USED TO DELETE A REQUIREMENT.** Building the
-> settings screen meant reading the reference's settings screenshots properly, and
-> `Settings accessed from profile page/IMG_2990.PNG` has a **`Warm-up Calculator >`** row under
-> LOG WORKOUT. Its sub-screen is not among the captured screenshots, so what it CONTAINS is still
-> unknown — but "the reference app offers no way to adjust them at all" is not supportable as
-> written. **Do not act on this without looking at that screen in the reference app**; the ramp is
-> shipped, used, and correct, and this is a note about the reasoning, not a bug.
+> ⚠️ **THE CLAIM BELOW IS WRONG, AND THE SUB-SCREEN HAS NOW BEEN LOOKED AT.** It was used to
+> delete a requirement. `Settings accessed from profile page/IMG_2990.PNG` has a
+> **`Warm-up Calculator >`** row under LOG WORKOUT, and **`IMG_3002.PNG` IS that sub-screen** — it
+> was in the captured set all along, unopened. It carries:
 >
-> **The shape worth keeping either way: a requirement was deleted on the strength of an absence,
-> and an absence is only evidence if you looked where it would have been.** The original claim came
-> from the WORKOUT screens, where there is indeed no way to adjust percentages. Nobody had opened
-> the settings screenshots at that point.
+> * a **FORMULA** list — `Default` (40×5 / 60×5 / 80×3), `With Empty Bar`, `Alternative`, and
+>   `Custom`, with `Default` ticked;
+> * a **PLATE ROUNDING** list — `Loose` (10 kg or 20 lbs), `Normal` (5 kg or 10 lbs), `Strict`
+>   (2.5 kg or 5 lbs), with `Strict` ticked.
+>
+> So the reference DOES let you adjust the ramp, with named presets rather than editable
+> percentages, and the settings model that "evaporated" is a real deferred feature rather than a
+> requirement that never existed. It is not scheduled; it is recorded so nobody deletes it twice.
+> `WeightUnits.plateIncrement` (5 lb / 2.5 kg) is already the reference's `Strict`.
+>
+> ⚠️ **AND IT SAYS OUR PERCENTAGES ARE PROBABLY WRONG — 50 / 60 / 75 WHERE THE REFERENCE'S
+> `Default` READS 40 / 60 / 80.** The rep counts (5 / 5 / 3) agree. This is a QUESTION FOR DRAKE,
+> not a fix to apply: the ramp is shipped, used, and the numbers it produces are sane.
+>
+> **The arithmetic reconciles exactly, which is what makes 40 / 60 / 80 the likelier truth.**
+> `WarmupSets.Ramp` was fitted to ONE observation — a 90 lb working set producing 45×5, 55×5, 70×3
+> — and 50 / 60 / 75 reproduces it. So does the reference's own `Default`, once the bar floor and
+> `Strict` rounding this app already implements are applied:
+>
+>     0.40 × 90 = 36  -> 35  -> floored to the 45 lb bar -> 45 × 5
+>     0.60 × 90 = 54  -> 55                              -> 55 × 5
+>     0.80 × 90 = 72  -> 70                              -> 70 × 3
+>
+> Two formulas agreeing on the one data point they were fitted to is not evidence between them.
+> **They diverge everywhere else**: at 135 lb ours proposes 70 / 80 / 100 and `Default` proposes
+> 55 / 80 / 110. **Generate a ramp for a 135 lb working set in the reference app and read the first
+> and last steps** — that settles it in ten seconds, and nothing else will.
+>
+> **The shape: a fit to a single observation is not a formula, and the third step is where a wrong
+> one shows.** The comment on `WarmupSets.Ramp` says these are "measured, not chosen", which is
+> true and is not the same as *correct* — the measurement had one point and two unknowns (the
+> percentage, and whether the reference floors at the bar).
+>
+> **The shape worth keeping, and it has now caught the SAME MISTAKE TWICE: a claim was made on the
+> strength of an absence, and an absence is only evidence if you looked where it would have been.**
+> The original claim came from the WORKOUT screens, where there is indeed no way to adjust
+> percentages, and nobody had opened the settings screenshots at that point. Then the correction
+> itself said the sub-screen was "not among the captured screenshots" — without opening the
+> fourteen files to check. It was file eleven.
 
-> **The settings model that used to be item 2 on this list no longer exists as a requirement.** It
-> was there to hold editable warm-up percentages — and the reference app offers no way to adjust
-> them at all. You generate the sets and then edit the SETS. The ramp is hard-coded in
-> `Workout/WarmupSets.swift` and the whole model evaporated. Worth remembering as a shape: a
-> requirement inherited from "surely the reference app has a screen for this" that it does not have.
+> ~~**The settings model that used to be item 2 on this list no longer exists as a requirement.**~~
+> **SUPERSEDED by the block above — the reference app DOES have that screen, and it was in the
+> captured screenshots the whole time.** Kept as the record of a requirement deleted on the strength
+> of an absence nobody had looked for. The ramp is still hard-coded in `Workout/WarmupSets.swift`
+> and there is still no screen for it here; what changed is that this is now a DEFERRED feature
+> rather than a mistaken one.
 
 > **START HERE IN A NEW SESSION.** The one-line state: **sync works end to end against the real
 > project, and every stored weight is now KILOGRAMS.** A workout logged on a simulator (Bench Press
@@ -253,6 +288,33 @@ right.**
   > **`HKWorkoutBuilder`, not the `HKWorkout` initialisers** — all of them are
   > `API_DEPRECATED("Use HKWorkoutBuilder", ios(8.0, 17.0))`, read out of `HKWorkout.h` rather than
   > recalled.
+
+- **WORKOUT CALORIES — the client half of `workout_calorie_rate`, which was a live column with no
+  client code.** A flat rate per hour the user picks (None / Low / Medium / High / Very High at
+  0 / 150 / 200 / 250 / 300 kcal), taken from the reference app's own Apple Health screen
+  (`Settings accessed from profile page/IMG_2996.PNG`). The Swift enum, the `AppSettings` field,
+  the wire row + mapper + apply, the picker under Settings → Apple Health, and an
+  `activeEnergyBurned` sample on the `HKWorkoutBuilder`.
+  > **`none` writes NO SAMPLE, not a zero one.** `HealthWorkoutPlan.activeEnergyKilocalories` is
+  > `Double?` so the two cannot be confused, and `noneWritesNoEnergySampleAtAllRatherThanZero` is
+  > the load-bearing test. A rule written as "multiply by the rate" passes every other test in that
+  > file and silently writes a 0 kcal sample into Apple Fitness — rule 4, in somebody else's UI.
+  > **Energy is a SECOND write permission and it is checked separately.** iOS authorizes
+  > `activeEnergyBurned` independently of workouts and Health can switch the two off
+  > independently, so both statuses are read before writing and energy is SKIPPED when refused.
+  > Adding a sample the app may not share throws out of `finishWorkout`, which would lose the
+  > WORKOUT because of a permission about its energy — trading a record for an estimate. Both types
+  > are requested in ONE prompt, so nobody meets a permission sheet at the end of a session.
+  > **The rate row appears only once workouts are authorized**, which is the absent-unit-rows rule
+  > applied to a preference: until Health is allowed, nothing reads the rate. The reference shows
+  > its row unconditionally — a deliberate divergence, and it costs nothing, because the row
+  > appears the moment the permission it depends on is granted.
+  > **The client default is `medium` because the SERVER's default is `medium`.** A client
+  > defaulting to `none` against a column defaulting to `medium` means a device that never touched
+  > the setting disagrees with the row the server hands its next device.
+  > ⚠️ **THE NUMBER IS NOT VERIFIED — see "Not verified".** Whether our sample double-counts
+  > against a worn Apple Watch in the Activity rings is a fact about how Apple merges energy, and
+  > no test anywhere can reach it.
 
 ### What turning sync on for real found — one outage, and the harness was hiding it
 
@@ -515,7 +577,17 @@ underneath never changed — only whether the screen described it honestly.
 
 ### What is left, in order
 
-1. **Apple Health — the MEASUREMENTS half.** Workouts already go out (see Landed). What remains is
+1. **The two corrections the reference screens forced, and neither is built.** A per-type
+   **TOGGLE** separate from the permission — `HealthStore.swift`'s "authorization is the only
+   switch" reasoning is wrong for that model, because iOS cannot revoke its own permission and so
+   there is no way to turn the feature off from inside the app at all. And **BACKFILL** ("14
+   workouts without corresponding Health entries. Add?"), which is cheap here: the external-uuid
+   lookup that makes writing idempotent is the same query that finds what is missing.
+   > **The calorie rate made the toggle more pressing, not less.** Somebody who dislikes the energy
+   > number can now only stop it by picking `None` or by leaving the app for Health — and `None`
+   > turns off energy, not workouts.
+
+2. **Apple Health — the MEASUREMENTS half.** Workouts already go out (see Landed). What remains is
    the genuinely bidirectional part, and with it the echo-loop trap `02-architecture.md` flags:
    write a weight to Health, Health notifies observers, the app re-imports its own write as a new
    entry, duplicates forever. `MeasurementEntry.source` exists for exactly that guard.
@@ -718,6 +790,15 @@ ringer `docs/MODEL-NOTES.md`.
   nothing has ever exercised: `SetRow` reacts to a unit change with `.onChange(of: unit)`, and
   until this screen existed nothing could produce that change. Switching to Metric with a workout
   open is the case to try — every entry chip on screen should re-render in kilograms.
+- ⚠️ **THE CALORIE NUMBER IS UNVERIFIED, AND DOUBLE COUNTING IS THE THING TO CHECK.** A Watch worn
+  while lifting is ALREADY writing `activeEnergyBurned` continuously; our sample on top may land in
+  the Activity rings twice. The reference app's copy only claims its setting is ignored when
+  logging *via its Watch app* — it says nothing about merely wearing one, and whether Apple
+  deduplicates energy across sources for the rings was never established. **Finish a workout, then
+  look at the day's Move ring and at the workout's own calorie figure in Apple Fitness.** If it
+  double-counts, `None` is the honest setting for a Watch wearer and the real answer is attaching
+  the Watch's EXISTING samples instead of adding our own (HANDOFF.md item 2).
+  > The picker screen says this to the user in its own footer, so nobody has to find it here first.
 - **APPLE HEALTH HAS NEVER WRITTEN A WORKOUT.** The rule is tested, the entitlement is verified
   in the signed app, and NOTHING has actually reached Health — a unit test cannot grant a
   permission or write a sample. What needs a thumb: Settings → Apple Health → Allow, then finish a

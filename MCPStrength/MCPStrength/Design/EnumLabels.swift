@@ -66,6 +66,38 @@ extension BarType {
     }
 }
 
+extension WorkoutCalorieRate {
+    /// The bare name of the rate, for the list of choices.
+    var displayName: String {
+        switch self {
+        case .none:     "None"
+        case .low:      "Low"
+        case .medium:   "Medium"
+        case .high:     "High"
+        case .veryHigh: "Very High"
+        }
+    }
+
+    /// The name WITH the number it stands for — the settings row's value, and
+    /// the reference app's own wording (`Medium (200 kcal per hour)`).
+    ///
+    /// **The number is on the label on purpose.** "Medium" alone is the app
+    /// asserting an amount of energy without ever saying what it is, which is
+    /// the fabricated-figure problem rule 4 is about wearing a different hat.
+    /// Naming the rate at the point of choosing it is what makes a user-picked
+    /// estimate honest rather than invented.
+    ///
+    /// `none` carries no number, because `None (0 kcal per hour)` reads as a
+    /// measurement of zero rather than as "do not write energy at all" — the
+    /// fabricated zero, exactly.
+    var settingsLabel: String {
+        switch self {
+        case .none: displayName
+        default:    "\(displayName) (\(Int(kilocaloriesPerHour)) kcal per hour)"
+        }
+    }
+}
+
 extension WeightUnit {
     /// How a unit is named where a unit is being CHOSEN — the settings screen's
     /// Weight Unit row and the per-exercise Preferences sheet.

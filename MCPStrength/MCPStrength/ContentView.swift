@@ -140,7 +140,15 @@ struct ContentView: View {
         guard !AutomatedLaunch.isRunningTests else { return }
         guard !UIPreviewMode.isEnabled else { return }
         guard let health else { return }
-        guard case .success(let plan) = HealthWorkoutRule.plan(for: workout) else { return }
+        // The rate comes from the SAME query the weight unit is read from, and
+        // falls back the same way: `MCPStrengthApp` makes the row before any
+        // view exists, and `.medium` matches both the model's declaration
+        // default and the server's column default. Three places disagreeing
+        // about what a bare setting means is the failure canonical storage
+        // exists to remove.
+        let rate = settings.first?.workoutCalorieRate ?? .medium
+        guard case .success(let plan) = HealthWorkoutRule.plan(for: workout, rate: rate)
+        else { return }
         Task { try? await health.writeWorkout(plan) }
     }
 

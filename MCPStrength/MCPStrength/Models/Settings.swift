@@ -63,6 +63,45 @@ enum SizeUnit: String, Codable, CaseIterable, Sendable {
     case inches, centimeters
 }
 
+/// How much energy a logged workout claims, as a flat rate per hour the user
+/// picks. Taken from the reference app's Apple Health screen
+/// (`Settings accessed from profile page/IMG_2996.PNG`, "Workout Active
+/// Calories Rate — Medium (200 kcal per hour)"), not invented here.
+///
+/// **Why this is not the fabricated number AGENTS.md rule 4 forbids.** The
+/// objection to writing `0`, or to inventing a METs estimate, is the app
+/// presenting a figure it never measured as though it had. A rate the USER
+/// SELECTS is the opposite — the user saying "count my lifting at roughly
+/// this" — and every screen that offers it says the number it will use.
+/// `none` stays a first-class choice and is exactly what the app did before
+/// this existed.
+///
+/// An enum on both sides: `public.workout_calorie_rate` in Postgres has these
+/// five values and this spelling, `veryHigh` included, so the client can
+/// encode the Swift enum straight onto the wire with no mapping table between
+/// two vocabularies to get wrong (`20260819180000_workout_calorie_rate.sql`).
+///
+/// > **`case none` is the Postgres value, not `Optional.none`.** The column is
+/// > `not null` and the property is non-optional, so the two never meet — but
+/// > do not "tidy" this into an optional. A missing rate and a rate of zero are
+/// > the same number and different statements, and the server can only store
+/// > the first as a lie.
+enum WorkoutCalorieRate: String, Codable, CaseIterable, Sendable {
+    case none, low, medium, high, veryHigh
+
+    /// Kilocalories per hour of workout. The five numbers are the reference
+    /// app's, measured off its own screen rather than chosen here.
+    var kilocaloriesPerHour: Double {
+        switch self {
+        case .none:     0
+        case .low:      150
+        case .medium:   200
+        case .high:     250
+        case .veryHigh: 300
+        }
+    }
+}
+
 @Model
 final class AppSettings {
     var id: UUID = UUID()
@@ -128,6 +167,19 @@ final class AppSettings {
     /// buckets are the only reader.
     var weekStartDay: Int = 1
 
+    /// The rate Apple Health is told to count a finished workout at.
+    ///
+    /// **`medium`, matching the server's `default 'medium'` exactly**, and the
+    /// two must not drift: a client default of `none` against a server default
+    /// of `medium` means a device that has never touched the setting disagrees
+    /// with the row the server hands its next device.
+    ///
+    /// It is also the reference app's default, and defaulting to `none`
+    /// instead would ship a feature that silently does nothing until somebody
+    /// finds the picker — the failure this project has already shipped twice
+    /// (the hardcoded rest timer, the unread unit settings).
+    var workoutCalorieRate: WorkoutCalorieRate = WorkoutCalorieRate.medium
+
     // MARK: Shape not decided — no screen until it is
 
     /// Light / dark / follow-the-system, once a light palette exists. There is
@@ -157,6 +209,7 @@ final class AppSettings {
         sizeUnit: SizeUnit = .inches,
         defaultRestSeconds: Int = 90,
         weekStartDay: Int = 1,
+        workoutCalorieRate: WorkoutCalorieRate = .medium,
         theme: String? = nil,
         language: String? = nil,
         previousSetBehavior: String? = nil
@@ -169,6 +222,7 @@ final class AppSettings {
         self.sizeUnit = sizeUnit
         self.defaultRestSeconds = defaultRestSeconds
         self.weekStartDay = weekStartDay
+        self.workoutCalorieRate = workoutCalorieRate
         self.theme = theme
         self.language = language
         self.previousSetBehavior = previousSetBehavior
@@ -227,6 +281,19 @@ extension AppSettings {
     func setWeightUnit(_ unit: WeightUnit) {
         guard weightUnit != unit else { return }
         weightUnit = unit
+        markEdited()
+    }
+
+    /// Change the rate Apple Health is told to count a workout at, marking the
+    /// row only if it actually moved.
+    ///
+    /// Same rule and same reason as `setWeightUnit`: opening a picker to see
+    /// which option has the tick and tapping it is ordinary, and a row that
+    /// dirties itself every time somebody LOOKS at it beats a genuine edit made
+    /// on another device purely because this one was opened more recently.
+    func setWorkoutCalorieRate(_ rate: WorkoutCalorieRate) {
+        guard workoutCalorieRate != rate else { return }
+        workoutCalorieRate = rate
         markEdited()
     }
 }

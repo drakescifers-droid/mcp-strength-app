@@ -500,6 +500,17 @@ means it never appears in a pull.
 deliberately undecided (`Models/Settings.swift`), and an enum on the server would commit both sides
 to cases nobody has chosen.
 
+> **`workout_calorie_rate` is the counter-example, added 2026-08-19, and it is an ENUM for exactly
+> the reason those three are not.** Its five cases were read off a shipped screen rather than
+> invented, so the list is settled and the column can reject a value the client should never send.
+> The Swift enum's raw values match it character for character, `veryHigh` included, because the
+> client encodes the enum straight onto the wire and there is no mapping table between two
+> spellings to get wrong.
+>
+> It is also the one field on this row where the CLIENT's default matters: `not null default
+> 'medium'` on the column, `WorkoutCalorieRate.medium` on the model. A device that has never opened
+> the picker must agree with the row the server hands its next device.
+
 ## Out of scope
 
 - **Realtime.** Pull on launch, on foreground, and after a workout is finished. A push

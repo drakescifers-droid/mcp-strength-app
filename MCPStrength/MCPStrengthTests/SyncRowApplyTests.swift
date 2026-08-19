@@ -557,6 +557,7 @@ struct SyncRowApplyTests {
             sizeUnit: .centimeters,
             defaultRestSeconds: 150,
             weekStartDay: 2,
+            workoutCalorieRate: .veryHigh,
             theme: "dark",
             language: "en",
             previousSetBehavior: "lastTime"
@@ -571,6 +572,7 @@ struct SyncRowApplyTests {
             sizeUnit: .inches,
             defaultRestSeconds: 30,
             weekStartDay: 7,
+            workoutCalorieRate: .none,
             theme: "wrong",
             language: "wrong",
             previousSetBehavior: "wrong"
@@ -587,6 +589,7 @@ struct SyncRowApplyTests {
         #expect(dest.sizeUnit == .centimeters)
         #expect(dest.defaultRestSeconds == 150)
         #expect(dest.weekStartDay == 2)
+        #expect(dest.workoutCalorieRate == .veryHigh)
         #expect(dest.theme == "dark")
         #expect(dest.language == "en")
         #expect(dest.previousSetBehavior == "lastTime")

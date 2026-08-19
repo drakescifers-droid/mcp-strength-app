@@ -314,8 +314,25 @@ touches how an in-progress workout is represented.
 > * **Eligibility mirrors `PushFilter.shouldPush(_ workout:)`** and a test asserts the two agree. If
 >   they diverge, the app is telling Health something different from what it tells its own server.
 
-> **ENERGY: DECIDED 2026-08-19 from the reference app's own screens, and it is simpler than every
-> alternative considered.** A FLAT RATE PER HOUR that the user picks — None / Low / Medium / High /
+> ✅ **ENERGY SHIPPED 2026-08-19 — the client half of `workout_calorie_rate` is built and the
+> setting is reachable.** `WorkoutCalorieRate` (five cases, the server's five values), the field on
+> `AppSettings` with the server's own `medium` default, the wire row / mapper / apply, the picker
+> under Settings → Apple Health, and an `activeEnergyBurned` sample attached to the
+> `HKWorkoutBuilder`. **What is NOT verified is the number** — see the double-counting warning
+> below, which is a fact about Apple's ring merging and cannot be tested anywhere but a phone.
+>
+> **Two implementation facts worth not re-deriving:**
+>
+> * **Energy is a SECOND write permission, asked for in the same prompt.** `activeEnergyBurned` is
+>   authorized separately from workouts and can be switched off separately in Health, so both
+>   statuses are checked before writing — and energy is SKIPPED rather than allowed to throw.
+>   Adding a sample the app may not share makes `finishWorkout` throw, which would lose the WORKOUT
+>   over a permission about its energy: trading a record for an estimate.
+> * **`none` writes no sample at all, not a zero one**, and that is the one branch a rule written as
+>   "multiply by the rate" gets silently wrong. `HealthWorkoutPlan.activeEnergyKilocalories` is
+>   `Double?` for exactly that distinction.
+>
+> The design, unchanged from when it was decided: a FLAT RATE PER HOUR that the user picks — None / Low / Medium / High /
 > Very High at 0 / 150 / 200 / 250 / 300 kcal per hour, Medium by default. No MET table, no
 > bodyweight calculation, no reading Active Energy back out of HealthKit.
 >
@@ -340,7 +357,7 @@ touches how an in-progress workout is represented.
 > the write-only entitlement), and it is NOT established that HealthKit lets an app attach samples
 > ANOTHER SOURCE owns. Test that on a device before committing to it.
 
-> **Two more corrections the reference screens forced, beyond energy:**
+> **Two more corrections the reference screens forced, beyond energy — BOTH STILL OUTSTANDING:**
 >
 > 1. **There IS an explicit per-type toggle, separate from the permission** — "Workouts: Sync
 >    workouts originating from Strong to Apple Health". `HealthStore.swift` argues there should be

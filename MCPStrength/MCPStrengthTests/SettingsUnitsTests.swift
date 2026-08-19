@@ -98,6 +98,81 @@ struct SettingsUnitsTests {
         #expect(try context.fetch(FetchDescriptor<AppSettings>()).count == 1)
     }
 
+    // MARK: - The workout calorie rate
+
+    // Same rule as the unit, and the same reason it is on the model rather than
+    // in the view: the guard is the interesting part and a view cannot be
+    // tested.
+    @Test func choosingADifferentCalorieRateWritesItAndMarksTheRow() throws {
+        let context = try makeContext()
+        let settings = AppSettings.current(in: context)
+        settings.needsSync = false
+        settings.updatedAt = .distantPast
+
+        settings.setWorkoutCalorieRate(.high)
+
+        #expect(settings.workoutCalorieRate == .high)
+        #expect(settings.needsSync == true)
+        #expect(settings.updatedAt > .distantPast)
+    }
+
+    @Test func rePickingTheSameCalorieRateDoesNotMarkTheRow() throws {
+        let context = try makeContext()
+        let settings = AppSettings.current(in: context)
+        settings.needsSync = false
+        settings.updatedAt = .distantPast
+
+        settings.setWorkoutCalorieRate(.medium)
+
+        #expect(settings.workoutCalorieRate == .medium)
+        #expect(settings.needsSync == false, "re-picking the current value is not an edit")
+        #expect(settings.updatedAt == .distantPast, "updatedAt must not move")
+    }
+
+    // CHOOSING `none` IS A REAL CHANGE, and it is the case a rule written as
+    // "write it if there is something to write" silently drops — the same shape
+    // as clearing a per-exercise preference back to Default. Turning energy off
+    // has to travel, or the setting un-does itself on the next pull.
+    @Test func turningTheRateOffIsAnEditLikeAnyOther() throws {
+        let context = try makeContext()
+        let settings = AppSettings.current(in: context)
+        settings.setWorkoutCalorieRate(.veryHigh)
+        settings.needsSync = false
+        settings.updatedAt = .distantPast
+
+        settings.setWorkoutCalorieRate(.none)
+
+        #expect(settings.workoutCalorieRate == .none)
+        #expect(settings.needsSync == true, "turning it off must travel")
+    }
+
+    // The client default has to be the SERVER's default. A device that has
+    // never opened the picker must agree with the row the server hands its next
+    // device, and `20260819180000_workout_calorie_rate.sql` says `default
+    // 'medium'`.
+    @Test func aFreshSettingsRowDefaultsToTheServersDefault() throws {
+        let context = try makeContext()
+        #expect(AppSettings.current(in: context).workoutCalorieRate == .medium)
+    }
+
+    // MARK: - The rate's labels
+
+    // The row's value names the NUMBER it stands for, which is what makes a
+    // user-chosen estimate honest rather than an unexplained assertion. The
+    // wording is the reference app's own.
+    @Test func theCalorieRateLabelCarriesItsNumber() {
+        #expect(WorkoutCalorieRate.medium.settingsLabel == "Medium (200 kcal per hour)")
+        #expect(WorkoutCalorieRate.veryHigh.settingsLabel == "Very High (300 kcal per hour)")
+    }
+
+    // And `none` carries no number, because "None (0 kcal per hour)" reads as a
+    // measurement of zero rather than as "do not write energy at all" — the
+    // fabricated zero, exactly.
+    @Test func noneIsNamedWithoutAZero() {
+        #expect(WorkoutCalorieRate.none.settingsLabel == "None")
+        #expect(!WorkoutCalorieRate.none.settingsLabel.contains("0"))
+    }
+
     // MARK: - The label both screens use
 
     // The settings row displays the value with the SAME string the picker

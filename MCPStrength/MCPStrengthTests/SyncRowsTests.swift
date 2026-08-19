@@ -253,6 +253,7 @@ struct SyncRowsTests {
             sizeUnit: .centimeters,
             defaultRestSeconds: 150,
             weekStartDay: 2,
+            workoutCalorieRate: .veryHigh,
             theme: "dark",
             language: "en",
             previousSetBehavior: "lastTime"
@@ -269,6 +270,7 @@ struct SyncRowsTests {
         #expect(row.sizeUnit == .centimeters)
         #expect(row.defaultRestSeconds == 150)
         #expect(row.weekStartDay == 2)
+        #expect(row.workoutCalorieRate == .veryHigh)
         #expect(row.theme == "dark")
         #expect(row.language == "en")
         #expect(row.previousSetBehavior == "lastTime")
@@ -315,6 +317,10 @@ struct SyncRowsTests {
         #expect(settingsJSON.contains("\"weight_unit\""))
         #expect(settingsJSON.contains("\"measurement_weight_unit\""))
         #expect(settingsJSON.contains("\"previous_set_behavior\""))
+        // The column the server has had since 20260819180000. A row that omits
+        // it takes the server's default silently, which is the half-feature
+        // this change exists to close.
+        #expect(settingsJSON.contains("\"workout_calorie_rate\""))
         #expect(!settingsJSON.contains("\"userID\""))
 
         let context = try makeContext()
@@ -514,7 +520,8 @@ struct SyncRowsTests {
         let settingsJSON = try encodedJSON(SyncAppSettingsRow(
             userID: user, weightUnit: .lbs, measurementWeightUnit: .lbs,
             distanceUnit: .miles, sizeUnit: .inches, defaultRestSeconds: 90,
-            weekStartDay: 1, theme: nil, language: nil, previousSetBehavior: nil,
+            weekStartDay: 1, workoutCalorieRate: .medium, theme: nil,
+            language: nil, previousSetBehavior: nil,
             updatedAt: when, deletedAt: nil, serverUpdatedAt: nil
         ))
         for key in SyncAppSettingsRow.CodingKeys.allCases {

@@ -19,11 +19,11 @@ state, the traps, the decisions and the reasoning behind them. Don't re-derive f
 those files already explain, and don't duplicate them into new files.
 
 The one-line state: **the app is on Drake's phone, he is training on it, and Phase 2 is down to
-ONE item — Apple Health, part done.** Sync proven end to end IN BOTH DIRECTIONS against the live project,
-canonical units done, a round of gym-found bugs fixed,
-per-exercise Preferences — model and sheet — landed, the settings screen makes the global weight
-unit changeable, and **both settings and preferences now SYNC** (table live on the project, client
-conformances on). Swift suite green, SQL suite green.
+Apple Health — workouts go out, calories now go with them, measurements do not.** Sync proven end
+to end IN BOTH DIRECTIONS against the live project, canonical units done, a round of gym-found bugs
+fixed, per-exercise Preferences — model and sheet — landed, the settings screen makes the global
+weight unit changeable, **both settings and preferences SYNC**, and the workout calorie rate is
+built on both sides. Swift suite green (546 tests), SQL suite green.
 
 > **THE APP IS IN HIS HAND AND HE TESTS IT.** That changes how you work — see
 > `AGENTS.md` § "DRAKE DOES THE UI TESTING". Build, install, hand over. Do not drive the simulator
@@ -51,24 +51,21 @@ conformances on). Swift suite green, SQL suite green.
 
 ## Next piece of work, in order
 
-1. **APPLE HEALTH CALORIES — the server column is LIVE and there is NO CLIENT CODE. Start here.**
-   `app_settings.workout_calorie_rate` was applied to the project on 2026-08-19 (migration
-   `20260819180000`) and nothing in the app reads or sends it. **The dangling state is safe** — the
-   column is `not null default 'medium'`, the client never sends it, and an upsert without it takes
-   the default — but it is half a feature and it is the obvious next thing.
-   > **The design is DECIDED, from the reference app's own screens** (Drake sent them; see
-   > `02-architecture.md` § the Health block). A flat rate per hour the user picks: None / Low /
-   > Medium / High / Very High at 0 / 150 / 200 / 250 / 300 kcal per hour, Medium default. No MET
-   > table, no bodyweight maths. A user-chosen rate is NOT the fabricated number this repo keeps
-   > refusing to write — the user is saying "count my lifting at roughly this".
-   > **What is left:** the Swift enum, the `AppSettings` field (declaration-level default — rule 2),
-   > the wire row + mapper + apply + the explicit `encode` line (the CaseIterable completeness test
-   > will fail until that line exists, which is the point of it), the picker screen, and attaching
-   > an `activeEnergyBurned` sample to the `HKWorkoutBuilder`.
-   > ⚠️ **CHECK DOUBLE COUNTING FIRST.** A worn Watch already writes `activeEnergyBurned`
-   > continuously; our sample on top may count twice in the Activity rings. The reference's copy
-   > only claims its setting is ignored when logging VIA its Watch app — it says nothing about
-   > merely wearing one. Not established; check on a device before trusting the number.
+1. ✅ **APPLE HEALTH CALORIES ARE BUILT — both halves — AND THE NUMBER NEEDS A THUMB.**
+   `WorkoutCalorieRate` (five cases matching `public.workout_calorie_rate`), the `AppSettings`
+   field defaulting to `medium` like the column does, the wire row + mapper + apply + the explicit
+   `encode` line, the picker under Settings → Apple Health, and an `activeEnergyBurned` sample on
+   the `HKWorkoutBuilder`. A flat rate per hour the user picks: None / Low / Medium / High / Very
+   High at 0 / 150 / 200 / 250 / 300 kcal.
+   > ⚠️ **WHAT IS UNVERIFIED IS DOUBLE COUNTING, and it is a fact about Apple rather than about
+   > this code — only a phone can answer it.** A worn Watch already writes `activeEnergyBurned`
+   > continuously; our sample on top may count twice in the Activity rings. Finish a workout, then
+   > look at the day's Move ring and at the workout's own calorie figure in Apple Fitness. If it
+   > double-counts, `None` is the honest setting and item 2 below is the real answer.
+   > **Two decisions worth knowing before touching it:** energy is a SECOND write permission,
+   > authorized and revocable separately from workouts, so it is skipped rather than allowed to
+   > throw (a permission about energy must not cost the whole workout); and `none` writes NO
+   > SAMPLE rather than a zero one.
 
 2. **The better energy answer, and Drake's stated preference — attach the Watch's EXISTING
    samples.** `HKWorkoutBuilder.addSamples` documents that samples *"will be saved to the database
@@ -79,12 +76,16 @@ conformances on). Swift suite green, SQL suite green.
    established that HealthKit lets an app attach samples ANOTHER SOURCE owns.** Test that on a
    device first. Drake said the flat rate "is fine for now" and this is where it should end up.
 
-3. **Two more corrections the reference screens forced**, both recorded in `02-architecture.md`:
-   an explicit per-type **toggle** separate from the permission (so `HealthStore.swift`'s
-   "authorization is the only switch" reasoning is wrong — iOS cannot revoke its own permission, so
-   without a toggle there is no way to turn it off from inside the app), and **backfill** ("14
-   workouts without corresponding Health entries. Add?"), which is cheap because the external-uuid
-   lookup that makes writing idempotent is the same query that finds what is missing.
+3. **Two more corrections the reference screens forced, and NEITHER IS BUILT** — both recorded in
+   `02-architecture.md`: an explicit per-type **toggle** separate from the permission (so
+   `HealthStore.swift`'s "authorization is the only switch" reasoning is wrong — iOS cannot revoke
+   its own permission, so without a toggle there is no way to turn it off from inside the app), and
+   **backfill** ("14 workouts without corresponding Health entries. Add?"), which is cheap because
+   the external-uuid lookup that makes writing idempotent is the same query that finds what is
+   missing.
+   > The calorie rate made the toggle MORE pressing: somebody who dislikes the energy number can
+   > now only stop it by picking `None` or by leaving the app for Health, and `None` turns off
+   > energy, not workouts.
 
 4. **Apple Health — the MEASUREMENTS half.** The genuinely bidirectional part, and the echo-loop
    trap: write a weight to Health, Health notifies observers, the app re-imports its own write as a
@@ -134,8 +135,19 @@ Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
 - ⚠️ **APPLE HEALTH HAS NEVER WRITTEN A WORKOUT.** The rule is tested and the entitlement is
   verified in the SIGNED app, but no sample has reached Health — a unit test cannot grant a
   permission or write one. **Settings → Apple Health → Allow, finish a workout, look in Apple
-  Fitness.** And specifically: finishing the SAME workout twice must produce ONE entry, which is
-  the whole point of the external-uuid lookup.
+  Fitness.** Three things to look at, in this order:
+  1. the workout is there at all;
+  2. **the calories.** The permission sheet now asks for Active Energy as well as Workouts —
+     allow both. Then check the day's Move ring: if you were wearing the Watch, our estimate may
+     be counted ON TOP of what the Watch already recorded. That is the one unverified thing in
+     this feature, and `None` in Settings → Apple Health → Workout Active Calories Rate is the
+     honest setting until it is answered;
+  3. finishing the SAME workout twice must produce ONE entry, which is the whole point of the
+     external-uuid lookup.
+- **The calorie rate picker is new and has never been tapped.** Settings → Apple Health → Workout
+  Active Calories Rate. It only appears once Health is allowed — deliberate, and the reasoning is
+  in `04-status.md`. Worth saying whether the row title reads as too long on the phone; it is the
+  reference app's own wording and it wraps to two lines.
 - ~~SYNC HAS FAILED ONCE~~ — the 2026-08-19 outage is fixed and explained below. `permission denied for table app_settings`: a
   table created after `grant … on all tables` had never been granted, and because it is first in
   the push order the whole run aborted. Migration `20260819140000` fixes it and is applied.
@@ -154,6 +166,14 @@ Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
   change feel like it should have done something? The second is deliberate — a no-change Save
   writes nothing at all, so the table only ever holds preferences somebody actually set.
 - The tappable rest divider, the per-exercise menu and the sticky notes need a real thumb.
+- ⚠️ **THE WARM-UP PERCENTAGES ARE PROBABLY WRONG, AND ONLY YOU CAN SETTLE IT.** The reference's
+  `Warm-up Calculator` screen was in the screenshots all along (`IMG_3002.PNG`) and its `Default`
+  formula reads **40% / 60% / 80%** at 5 / 5 / 3. Ours is 50 / 60 / 75 at 5 / 5 / 3, fitted to a
+  single 90 lb screenshot that BOTH formulas reproduce once the bar floor is applied.
+  **Generate a ramp for a 135 lb working set in the reference app and tell me the first and last
+  steps** — ours says 70 and 100, the reference's `Default` says 55 and 110. Ten seconds, and
+  nothing else can decide it. I have changed nothing; the ramp is shipped and its numbers are sane.
+  Full arithmetic in `04-status.md`.
 - **Hammer Strength exercises.** The category is live in the app and the database; the actual
   movements land with the bigger exercise-library refresh I'm doing separately. Don't seed them.
 - **Signing out with unpushed changes** (`06-sync.md`, Open question) is still undecided. The

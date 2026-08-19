@@ -598,6 +598,7 @@ struct SyncAppSettingsRow: Codable, Sendable, Equatable {
     let sizeUnit: SizeUnit
     let defaultRestSeconds: Int
     let weekStartDay: Int
+    let workoutCalorieRate: WorkoutCalorieRate
     let theme: String?
     let language: String?
     let previousSetBehavior: String?
@@ -614,6 +615,7 @@ struct SyncAppSettingsRow: Codable, Sendable, Equatable {
         case sizeUnit = "size_unit"
         case defaultRestSeconds = "default_rest_seconds"
         case weekStartDay = "week_start_day"
+        case workoutCalorieRate = "workout_calorie_rate"
         case previousSetBehavior = "previous_set_behavior"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
@@ -638,6 +640,12 @@ struct SyncAppSettingsRow: Codable, Sendable, Equatable {
         try c.encode(sizeUnit, forKey: .sizeUnit)
         try c.encode(defaultRestSeconds, forKey: .defaultRestSeconds)
         try c.encode(weekStartDay, forKey: .weekStartDay)
+        // Not optional, so no nil to drop — but the CaseIterable completeness
+        // test still fails without this line, which is the entire reason that
+        // test iterates `allCases` rather than checking only the nullable
+        // fields. Self-tested by deleting it: TWO tests go red and both name
+        // the column.
+        try c.encode(workoutCalorieRate, forKey: .workoutCalorieRate)
         try c.encode(theme, forKey: .theme)
         try c.encode(language, forKey: .language)
         try c.encode(previousSetBehavior, forKey: .previousSetBehavior)
@@ -951,6 +959,7 @@ enum SyncRowMapper {
             sizeUnit: settings.sizeUnit,
             defaultRestSeconds: settings.defaultRestSeconds,
             weekStartDay: settings.weekStartDay,
+            workoutCalorieRate: settings.workoutCalorieRate,
             theme: settings.theme,
             language: settings.language,
             previousSetBehavior: settings.previousSetBehavior,

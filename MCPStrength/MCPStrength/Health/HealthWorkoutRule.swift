@@ -48,6 +48,17 @@ struct HealthWorkoutPlan: Equatable, Sendable {
     let start: Date
     let end: Date
 
+    /// Active energy to attach, in kilocalories — or `nil` for no energy
+    /// sample at all.
+    ///
+    /// **`nil` and `0` are different instructions and must stay different.**
+    /// Nil means "write a workout with no energy", which is what this app did
+    /// before the rate existed and what `WorkoutCalorieRate.none` still asks
+    /// for. Zero would be a sample claiming an hour of squatting burned
+    /// nothing — a fabricated measurement in somebody else's UI, where no
+    /// caveat can be added and it cannot be taken back (AGENTS.md rule 4).
+    let activeEnergyKilocalories: Double?
+
     var duration: TimeInterval { end.timeIntervalSince(start) }
 }
 
@@ -75,7 +86,15 @@ enum HealthWorkoutRule {
     /// from what it tells its own server. The one difference is that Health
     /// additionally needs a positive interval, because it stores a duration
     /// where the server stores two timestamps.
-    static func plan(for workout: Workout) -> Result<HealthWorkoutPlan, Ineligible> {
+    ///
+    /// `rate` is REQUIRED rather than defaulted, so that a caller which has not
+    /// read `AppSettings` cannot silently write energy at somebody else's
+    /// setting. The compiler asks the question at every call site; a default
+    /// would answer it wrong exactly once, invisibly.
+    static func plan(
+        for workout: Workout,
+        rate: WorkoutCalorieRate
+    ) -> Result<HealthWorkoutPlan, Ineligible> {
         if workout.deletedAt != nil { return .failure(.deleted) }
         guard let completedAt = workout.completedAt else { return .failure(.unfinished) }
         guard completedAt > workout.startedAt else { return .failure(.notPositiveDuration) }
@@ -84,30 +103,63 @@ enum HealthWorkoutRule {
             HealthWorkoutPlan(
                 externalID: workout.id,
                 start: workout.startedAt,
-                end: completedAt
+                end: completedAt,
+                activeEnergyKilocalories: energy(
+                    forSeconds: completedAt.timeIntervalSince(workout.startedAt),
+                    at: rate
+                )
             )
         )
+    }
+
+    /// Kilocalories for a workout of this length at this rate, or `nil` when
+    /// there is no energy to claim.
+    ///
+    /// A flat rate per hour, pro-rated by duration. No bodyweight, no METs, no
+    /// heart rate — the whole point of the reference app's design is that the
+    /// user supplies the estimate and the app does nothing but scale it by how
+    /// long they trained.
+    ///
+    /// **`none` returns nil rather than 0**, which is the one branch here that
+    /// matters: see `HealthWorkoutPlan.activeEnergyKilocalories`.
+    static func energy(forSeconds seconds: TimeInterval, at rate: WorkoutCalorieRate) -> Double? {
+        guard rate != .none else { return nil }
+        guard seconds > 0 else { return nil }
+        return rate.kilocaloriesPerHour * seconds / 3600
     }
 }
 
 // MARK: - What is deliberately NOT in the plan
 
-//  **ENERGY BURNED IS ABSENT, and that is a decision rather than a gap.**
+//  **ENERGY IS NOW A USER-CHOSEN RATE, and the reversal is worth understanding
+//  rather than just reading.** This block used to say energy was absent on
+//  purpose, because every number the app could compute would be invented.
 //
-//  Nothing in this app computes calories. It has no heart rate, no body mass on
-//  the workout, and no METs table — every number it could put in that field
-//  would be invented. `HKWorkoutBuilder` is perfectly happy to write a workout
-//  with no energy sample, and Fitness shows it as a workout with no energy.
+//  That argument was about the APP inventing a figure. It does not apply to a
+//  figure the USER picks: `WorkoutCalorieRate` is the person saying "count my
+//  lifting at roughly 200 kcal an hour", every screen that offers it names the
+//  number, and `none` — the behaviour that shipped first — is still a
+//  first-class choice. What rule 4 forbids is presenting an unmeasured number
+//  as a measurement, not letting somebody state an estimate about their own
+//  training.
 //
-//  Writing `0` instead would be worse than writing nothing: Apple Fitness would
-//  render "0 calories" against an hour of squatting, which reads as a
-//  measurement rather than an absence. That is AGENTS.md rule 4 — never display
-//  a fabricated zero — applied to somebody else's UI, where we cannot add a
-//  caveat and cannot take it back.
+//  What has NOT changed: a fabricated ZERO is still worse than nothing, so
+//  `none` produces no sample at all rather than a 0 kcal one.
 //
-//  This is the field to revisit if the app ever gains body mass (it has a
-//  Weight measurement type) and a defensible MET estimate. Until then, absent
-//  is the honest answer.
+//  ⚠️ **DOUBLE COUNTING IS UNVERIFIED AND IS THE THING TO CHECK ON A DEVICE.**
+//  A Watch worn while lifting is already writing `activeEnergyBurned`
+//  continuously. Our sample on top may land in the Activity rings twice. The
+//  reference app's copy only claims its setting is ignored when logging VIA its
+//  Watch app — it says nothing about merely wearing one, and whether Apple
+//  deduplicates energy across sources for the rings was never established.
+//  Check it in Apple Fitness before trusting the number, and `none` is the
+//  honest setting for a Watch wearer until it is.
+//
+//  The better long-term answer is to ATTACH the Watch's existing samples rather
+//  than adding our own — real measured energy, no estimate — and it needs read
+//  permission plus a fact nobody has established (whether HealthKit lets an app
+//  attach samples another source owns). docs/02-architecture.md § the Health
+//  block has both.
 //
 //  **TOTAL VOLUME IS ALSO ABSENT.** `Workout.totalVolume` is kilograms×reps,
 //  which is a real number this app does compute — but Health has no type for
