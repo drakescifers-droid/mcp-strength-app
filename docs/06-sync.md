@@ -348,6 +348,102 @@ preserves them on re-seed and must stop referring to them; that is the one call 
 > preference today. **Whoever builds the first delete path owns reviving it** — clearing
 > `deletedAt` when the user sets a preference again — and this is the note that says so.
 
+## Syncing the two singleton-ish tables: `app_settings` and `exercise_preferences`
+
+**Status: DECIDED 2026-08-18, before building any of it.** Same order as the preferences split
+above, and for the same reason: three of the four problems here are silent-data-loss shaped, and
+two of them were only found by writing the design down.
+
+These are one job because they share one blocker. Every other synced table is keyed on `id`, and
+`SyncClient.upsert` hard-codes `onConflict: "id"`. Neither of these is:
+
+| Table | Server key | Because |
+|---|---|---|
+| `app_settings` | `user_id` | one row per person |
+| `exercise_preferences` | `(user_id, exercise_id)` | one row per person per exercise |
+
+### The conflict target becomes a per-entity fact
+
+`SyncEntity` gains `conflictTarget`, defaulting to `"id"`, alongside `tableName` — the two facts
+about a table belong together, and a table's key is not something a caller should have to remember.
+`SyncTransport.upsert` takes it as an argument rather than reading a global.
+
+> **Nothing may conform to `Syncable` until the migration is applied AND VERIFIED REMOTE.** If the
+> client pushes to a table the server does not have, PostgREST rejects the batch — and a rejected
+> batch aborts the WHOLE RUN, so the pull stops too and every later sync fails identically. That is
+> the 18-seeded-measurement-types failure exactly. The ordering rule that got broken on 2026-08-18
+> was defended by a comment and lost; this one is defended by sequence, because the conformance is a
+> separate commit from the migration and `supabase migration list` is the gate between them.
+
+### `AppSettings` does NOT go through the pull index
+
+The generic pull matches a server row to a local one with `index[row.id]`. **For a singleton that is
+the wrong question**, and asking it anyway destroys a real setting:
+
+> **The failure it would cause, concretely.** Drake's phone already has an `AppSettings` row,
+> created before sync existed, carrying a random `UUID()`. The server will identify settings by
+> `user_id`. On the first pull the ids do not match, so the engine treats the server's copy as a new
+> row and inserts a SECOND one. `AppSettings.current(in:)` resolves "oldest live row wins", so the
+> app would then read whichever happened to be older — and the unit choice appears to revert at
+> random, on a value whose entire job is telling the user what their numbers mean.
+
+So settings pull through `AppSettings.current(in:)` rather than an id lookup: resolve the one row,
+run the same `ConflictResolver` against it, apply onto it. `SyncAppSettingsRow.id` is a COMPUTED
+property returning `userID`, present only to satisfy `SyncWireRow`; nothing matches on it.
+
+**Rejected: rewriting the local row's id to the user id.** It cannot be a `StoreMigrations` step —
+those run at launch and this needs a signed-in user, so it would be a sync-time fixup wearing a
+migration's clothes. And it solves a problem that only exists if we insist on using the index.
+
+`ExercisePreference` is the opposite case and needs no special path: its local `id` IS the exercise's
+id (see the correction above), which every device agrees on independently, so the generic index
+works unchanged. Its wire row's `id` is likewise computed — from `exercise_id`, because that table
+has no `id` column either.
+
+### A never-touched settings row MUST NOT PUSH, and this is the one that would have bitten
+
+`needsSync` defaults to `true` and `MCPStrengthApp` creates the settings row at first launch. So a
+newly installed device has a settings row that is dirty, carries pure defaults, and has never been
+touched by anybody.
+
+> **The sequence that loses data.** Drake picks kilograms on phone A; it pushes at time T. He
+> installs on phone B. B creates its default row (pounds, `updatedAt == .distantPast`,
+> `needsSync == true`). A run is claim → **push** → pull, so B pushes BEFORE it pulls — and
+> `pushModels` backfills `.distantPast` to `Date()` on the way out, which is now, which is later
+> than T. **Phone B uploads pounds over the kilograms Drake chose, wins last-write-wins doing it,
+> and then pulls its own answer back.** The setting silently reverts on both devices and nothing
+> anywhere reports a conflict, because as far as the engine is concerned B made the newer edit.
+
+The fix is a push filter, not scheduling: `PushFilter.shouldPush(_ settings: AppSettings)` requires
+`updatedAt != .distantPast` — *this row has actually been edited*. A defaults row is "never touched",
+and `.distantPast` is exactly how this codebase already spells that. `setWeightUnit` stamps it, so
+the moment a user genuinely chooses something the row becomes eligible.
+
+This is the same shape as the seeded-library filter and as the sparse `exercise_preferences` table:
+**a value meaning "never touched" must never be read as "the user did something".** That is now the
+fourth instance in this project (43 fabricated discards, 25 rows of default preferences, the seeded
+push, this), which is enough to call it the house failure mode.
+
+> The backfill is safely downstream of the filter — `pushModels` checks `shouldPush` before it
+> stamps — so no extra guard is needed there. Do not reorder those two.
+
+`exercise_preferences` needs no equivalent filter, because a preference row only exists where the
+user set something. That is the whole point of keeping it sparse.
+
+### What the Postgres half needs
+
+A new migration, verified remote before anything else moves: an `app_settings` table keyed on
+`user_id` with the field list from `Models/Settings.swift`, two new enums (`distance_unit`,
+`size_unit`), the owner-only RLS policy, and registration in BOTH trigger lists — the
+`set_sync_metadata` list in `0002` and the last-write-wins list in `0008`. Those lists are explicit
+rather than looped over `information_schema` on purpose, so a new table has to be added deliberately;
+adding one and forgetting the lists yields a table with no `server_updated_at` maintenance, which
+means it never appears in a pull.
+
+`theme`, `language` and `previous_set_behavior` are `text`, not enums — their case lists are
+deliberately undecided (`Models/Settings.swift`), and an enum on the server would commit both sides
+to cases nobody has chosen.
+
 ## Out of scope
 
 - **Realtime.** Pull on launch, on foreground, and after a workout is finished. A push

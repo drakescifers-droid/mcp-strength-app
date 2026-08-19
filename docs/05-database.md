@@ -182,6 +182,15 @@ Two more absences worth stating so they are not re-added by reflex:
   > **One row per user means the key is `user_id`, not `id`** — the same per-entity conflict-target
   > problem `06-sync.md` already works through for `exercise_preferences`. Do it once for both. Until
   > then settings are local-only, so a second device silently shows pounds to a kg lifter.
+  > **DESIGNED 2026-08-18** — `06-sync.md` § "Syncing the two singleton-ish tables" decides the whole
+  > shape, including two hazards that only appeared once it was written down: settings must not match
+  > on `id` (the local row predates sync and carries a random one, so an id match inserts a SECOND
+  > settings row and the unit choice appears to revert at random), and a never-touched settings row
+  > must not push at all (a fresh install would otherwise upload its defaults over a real choice made
+  > on another device, and WIN, because push runs before pull and the backfill stamps it `now`).
+  > **The table must be registered in BOTH trigger lists** — `set_sync_metadata` in `0002` and
+  > last-write-wins in `0008`. They are explicit lists on purpose; a table missing from the first
+  > never appears in any pull.
 - **Canonical units.** Set `weight`/`distance` carry no unit, matching the app, which means they are
   implicitly in the user's global unit — a setting that does not exist yet. `01-data-model.md`
   recommends canonical storage with unit as a display preference. **That decision has to land before
