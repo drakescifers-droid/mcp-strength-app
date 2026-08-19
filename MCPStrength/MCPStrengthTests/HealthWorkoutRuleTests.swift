@@ -42,10 +42,15 @@ struct HealthWorkoutRuleTests {
 
     private let start = Date(timeIntervalSince1970: 1_800_000_000)
 
-    private func finishedWorkout(in context: ModelContext, minutes: Double = 45) -> Workout {
+    private func finishedWorkout(
+        in context: ModelContext,
+        minutes: Double = 45,
+        startingAt startedAt: Date? = nil
+    ) -> Workout {
+        let origin = startedAt ?? start
         let workout = Workout(name: "Evening Workout")
-        workout.startedAt = start
-        workout.completedAt = start.addingTimeInterval(minutes * 60)
+        workout.startedAt = origin
+        workout.completedAt = origin.addingTimeInterval(minutes * 60)
         context.insert(workout)
         return workout
     }
@@ -318,5 +323,160 @@ struct HealthWorkoutRuleTests {
         let a = HealthWorkoutRule.plan(for: unfinished, rate: .medium)
         let b = HealthWorkoutRule.plan(for: deleted, rate: .medium)
         #expect(a != b)
+    }
+
+    // MARK: - Backfill
+    //
+    // Which finished workouts Health does not yet have, and the sentence
+    // the Settings banner shows for that count. The interesting cases are
+    // the ABSENCES: a rule written as "every workout in the array, minus
+    // the set" passes a test that only feeds it finished rows, and then
+    // the banner offers Add for a row writeWorkout will refuse.
+    //
+    // alreadyWritten is a parameter, not a query. No HealthKit types here.
+
+    // THE LOAD-BEARING ONE for backfill. Ineligible rows are not "missing
+    // from Health" — they will never be written. If this were wrong, Add
+    // would offer an in-progress, tombstoned, or zero-length workout that
+    // `plan` (and therefore writeWorkout) will refuse.
+    @Test func ineligibleWorkoutsAreNotMissingEvenWhenHealthHasNoneOfOurs() throws {
+        let context = try makeContext()
+        let unfinished = Workout(name: "In progress")
+        unfinished.startedAt = start
+        context.insert(unfinished)
+
+        let tombstoned = finishedWorkout(in: context)
+        tombstoned.markDeleted()
+
+        let zeroLength = Workout(name: "Instant")
+        zeroLength.startedAt = start
+        zeroLength.completedAt = start
+        context.insert(zeroLength)
+
+        let missing = HealthWorkoutRule.missingFromHealth(
+            [unfinished, tombstoned, zeroLength],
+            alreadyWritten: []
+        )
+
+        #expect(missing.isEmpty)
+    }
+
+    @Test func aFinishedWorkoutWhoseIdIsNotInTheSetIsMissing() throws {
+        let context = try makeContext()
+        let workout = finishedWorkout(in: context)
+
+        let missing = HealthWorkoutRule.missingFromHealth(
+            [workout],
+            alreadyWritten: []
+        )
+
+        #expect(missing.map(\.id) == [workout.id])
+    }
+
+    @Test func aFinishedWorkoutWhoseIdIsInTheSetIsNotMissing() throws {
+        let context = try makeContext()
+        let workout = finishedWorkout(in: context)
+
+        let missing = HealthWorkoutRule.missingFromHealth(
+            [workout],
+            alreadyWritten: [workout.id]
+        )
+
+        #expect(missing.isEmpty)
+    }
+
+    // A written id is about THAT workout. Subtracting the set from the
+    // array as ids is right; treating "any hit" as "the list is done"
+    // would hide a session that still needs writing.
+    @Test func aWrittenIdDoesNotHideADifferentFinishedWorkout() throws {
+        let context = try makeContext()
+        let written = finishedWorkout(in: context)
+        let unwritten = finishedWorkout(in: context, startingAt: start.addingTimeInterval(3600))
+
+        let missing = HealthWorkoutRule.missingFromHealth(
+            [written, unwritten],
+            alreadyWritten: [written.id]
+        )
+
+        #expect(missing.map(\.id) == [unwritten.id])
+    }
+
+    @Test func twoMissingWorkoutsComeBackInStartedAtOrderEvenIfTheInputIsReversed() throws {
+        let context = try makeContext()
+        let earlier = finishedWorkout(in: context)
+        let later = finishedWorkout(in: context, startingAt: start.addingTimeInterval(3600))
+
+        let missing = HealthWorkoutRule.missingFromHealth(
+            [later, earlier],
+            alreadyWritten: []
+        )
+
+        #expect(missing.map(\.id) == [earlier.id, later.id])
+        #expect(missing[0].startedAt < missing[1].startedAt)
+    }
+
+    // Eligibility is plan, so the rate cannot change which rows are
+    // missing. If this split, Add would offer a row at one rate that
+    // writeWorkout would refuse at another. A rule that skipped plan
+    // entirely would still pass the finished-only tests above.
+    @Test func theMissingSetIsTheSameAtNoneAndMedium() throws {
+        let context = try makeContext()
+        let unfinished = Workout(name: "In progress")
+        unfinished.startedAt = start
+        context.insert(unfinished)
+        let finished = finishedWorkout(in: context)
+
+        let workouts = [unfinished, finished]
+
+        func idsEligible(at rate: WorkoutCalorieRate) -> [UUID] {
+            workouts.compactMap { workout in
+                if case .success = HealthWorkoutRule.plan(for: workout, rate: rate) {
+                    return workout.id
+                }
+                return nil
+            }
+        }
+
+        #expect(idsEligible(at: .none) == idsEligible(at: .medium))
+
+        let missing = HealthWorkoutRule.missingFromHealth(
+            workouts,
+            alreadyWritten: []
+        ).map(\.id)
+
+        #expect(missing == idsEligible(at: .none))
+        #expect(missing == idsEligible(at: .medium))
+        #expect(missing == [finished.id])
+    }
+
+    // THE LOAD-BEARING ONE for the banner. A count of 0 produces nil, not
+    // a string containing "0". A banner reading "0 workouts without
+    // entries" is a count of absence — AGENTS.md rule 4. The view that
+    // gets nil shows nothing.
+    @Test func aZeroCountProducesNilNotAFabricatedZero() {
+        #expect(HealthWorkoutRule.backfillPrompt(count: 0) == nil)
+        #expect(HealthWorkoutRule.backfillPrompt(count: 0)?.contains("0") != true)
+    }
+
+    @Test func aNegativeCountProducesNilNotABanner() {
+        #expect(HealthWorkoutRule.backfillPrompt(count: -3) == nil)
+        #expect(HealthWorkoutRule.backfillPrompt(count: -3)?.contains("0") != true)
+    }
+
+    @Test func oneMissingWorkoutUsesTheSingularSentence() {
+        #expect(
+            HealthWorkoutRule.backfillPrompt(count: 1)
+                == "1 MCP Strength workout without a corresponding Apple Health entry. Add workout to Apple Health?"
+        )
+        // "1 workouts" is the kind of lie this project refuses to ship.
+        #expect(HealthWorkoutRule.backfillPrompt(count: 1)?.contains("workouts") != true)
+    }
+
+    @Test func fourteenMissingWorkoutsUsesThePluralSentenceFromTheReference() {
+        let sentence = HealthWorkoutRule.backfillPrompt(count: 14)
+        #expect(
+            sentence
+                == "14 MCP Strength workouts without corresponding Apple Health entries. Add workouts to Apple Health?"
+        )
     }
 }

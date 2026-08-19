@@ -226,6 +226,9 @@ enum SyncRowApply {
         settings.defaultRestSeconds = row.defaultRestSeconds
         settings.weekStartDay = row.weekStartDay
         settings.workoutCalorieRate = row.workoutCalorieRate
+        settings.writeWorkoutsToHealth = row.writeWorkoutsToHealth
+        settings.writeMeasurementsToHealth = row.writeMeasurementsToHealth
+        settings.readMeasurementsFromHealth = row.readMeasurementsFromHealth
         settings.theme = row.theme
         settings.language = row.language
         settings.previousSetBehavior = row.previousSetBehavior

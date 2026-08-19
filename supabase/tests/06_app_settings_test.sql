@@ -39,6 +39,27 @@ select tests.assert(
   'no behaviour'
 );
 
+select tests.assert(
+  (select write_workouts_to_health from public.app_settings
+    where user_id = '11111111-1111-1111-1111-111111111111') = true,
+  'app_settings.write_workouts_to_health did not default to true — a false '
+  'default would silently stop writing workouts the user has been sending'
+);
+
+select tests.assert(
+  (select write_measurements_to_health from public.app_settings
+    where user_id = '11111111-1111-1111-1111-111111111111') = true,
+  'app_settings.write_measurements_to_health did not default to true — a false '
+  'default would silently stop writing the four types that can travel'
+);
+
+select tests.assert(
+  (select read_measurements_from_health from public.app_settings
+    where user_id = '11111111-1111-1111-1111-111111111111') = true,
+  'app_settings.read_measurements_from_health did not default to true — a false '
+  'default would silently stop importing Health samples'
+);
+
 -- The three undecided fields are nullable text, mirroring `String?` on the
 -- client. An enum here would commit both sides to cases nobody has chosen.
 select tests.assert(

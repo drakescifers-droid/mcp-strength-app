@@ -254,6 +254,9 @@ struct SyncRowsTests {
             defaultRestSeconds: 150,
             weekStartDay: 2,
             workoutCalorieRate: .veryHigh,
+            writeWorkoutsToHealth: false,
+            writeMeasurementsToHealth: false,
+            readMeasurementsFromHealth: false,
             theme: "dark",
             language: "en",
             previousSetBehavior: "lastTime"
@@ -271,6 +274,9 @@ struct SyncRowsTests {
         #expect(row.defaultRestSeconds == 150)
         #expect(row.weekStartDay == 2)
         #expect(row.workoutCalorieRate == .veryHigh)
+        #expect(row.writeWorkoutsToHealth == false)
+        #expect(row.writeMeasurementsToHealth == false)
+        #expect(row.readMeasurementsFromHealth == false)
         #expect(row.theme == "dark")
         #expect(row.language == "en")
         #expect(row.previousSetBehavior == "lastTime")
@@ -321,6 +327,9 @@ struct SyncRowsTests {
         // it takes the server's default silently, which is the half-feature
         // this change exists to close.
         #expect(settingsJSON.contains("\"workout_calorie_rate\""))
+        #expect(settingsJSON.contains("\"write_workouts_to_health\""))
+        #expect(settingsJSON.contains("\"write_measurements_to_health\""))
+        #expect(settingsJSON.contains("\"read_measurements_from_health\""))
         #expect(!settingsJSON.contains("\"userID\""))
 
         let context = try makeContext()
@@ -520,7 +529,8 @@ struct SyncRowsTests {
         let settingsJSON = try encodedJSON(SyncAppSettingsRow(
             userID: user, weightUnit: .lbs, measurementWeightUnit: .lbs,
             distanceUnit: .miles, sizeUnit: .inches, defaultRestSeconds: 90,
-            weekStartDay: 1, workoutCalorieRate: .medium, theme: nil,
+            weekStartDay: 1, workoutCalorieRate: .medium, writeWorkoutsToHealth: true,
+            writeMeasurementsToHealth: true, readMeasurementsFromHealth: true, theme: nil,
             language: nil, previousSetBehavior: nil,
             updatedAt: when, deletedAt: nil, serverUpdatedAt: nil
         ))

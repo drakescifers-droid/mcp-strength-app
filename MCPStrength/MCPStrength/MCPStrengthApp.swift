@@ -197,6 +197,16 @@ struct MCPStrengthApp: App {
                        health.workoutSharingStatus == .authorized {
                         try? await health.requestWorkoutAuthorization()
                     }
+                    // UPGRADE PATH for measurement *read*. Anyone who granted
+                    // write of the four types before this build already has
+                    // Measurements On, so Settings Allow never shows again.
+                    // iOS shows the sheet at most once per type.
+                    if !AutomatedLaunch.isRunningTests,
+                       !UIPreviewMode.isEnabled,
+                       let health,
+                       health.measurementSharingStatus == .authorized {
+                        try? await health.requestMeasurementAuthorization()
+                    }
                     if engine == nil {
                         engine = SyncEngine(
                             context: sharedModelContainer.mainContext,

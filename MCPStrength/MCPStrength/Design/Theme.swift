@@ -50,6 +50,15 @@ enum Theme {
     /// The D set badge.
     static let dropSet = Color(red: 0.533333, green: 0.149020, blue: 0.988235)
 
+    /// The Health backfill strip. Not `warmup`: that is a set-type badge, and
+    /// a notice that reused it would look like a warm-up set sitting in
+    /// Settings. Sampled from the reference (`IMG_2996.PNG`).
+    static let notice = Color(red: 0.925490, green: 0.756863, blue: 0.180392)
+    /// Text and the Add control on `notice`. Dark on yellow so the sentence
+    /// stays readable; accent-blue on yellow would be the rest-timer bug
+    /// (a control that cannot be told from the fill).
+    static let noticeText = Color(red: 0.145098, green: 0.117647, blue: 0.039216)
+
     // MARK: Failure alias
     //
     // The F set badge is the *same red* as `destructive`, verified across both

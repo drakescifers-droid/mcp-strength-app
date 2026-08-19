@@ -49,6 +49,8 @@ struct ThemeSampler: View {
             swatchRow("textSecondary", Theme.textSecondary, "#94989A")
             swatchRow("warmup", Theme.warmup, "#FFA13B")
             swatchRow("dropSet", Theme.dropSet, "#8826FC")
+            swatchRow("notice", Theme.notice, "#ECC12E")
+            swatchRow("noticeText", Theme.noticeText, "#251E0A")
             // failure is an alias of destructive — show it aliased, not duplicated.
             swatchRow("failure (= destructive)", Theme.failure, "#FF5964")
         }

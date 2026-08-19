@@ -18,11 +18,7 @@ I'm not a developer — explain things in plain English. Code, commits and docs 
 state, the traps, the decisions and the reasoning behind them. Don't re-derive from the code what
 those files already explain, and don't duplicate them into new files.
 
-The one-line state: **the app is on Drake's phone, he is training on it, Phase 2 is down to Apple
-Health — workouts go out, Watch Active Energy is attached when it exists otherwise the estimate
-is used, measurements do not travel — and the custom keypad is DONE on the phone.** Next is
-proving Watch-attach on a real session, then the per-type Health toggle and backfill, then
-measurements. Sync proven end to end IN BOTH DIRECTIONS against the live project,
+The one-line state: **the app is on Drake's phone, he is training on it, Phase 2 is down to proving Watch-attach on a real session — workouts go out (Watch energy + backfill), the four HealthKit measurement types write out and import back, and the custom keypad is DONE on the phone.** Sync proven end to end IN BOTH DIRECTIONS against the live project,
 canonical units done, a round of gym-found bugs fixed, per-exercise Preferences — model and sheet —
 landed, the settings screen makes the global weight unit changeable, **both settings and
 preferences SYNC**, the workout calorie rate is built on both sides, and **the warm-up ramp's
@@ -74,24 +70,10 @@ after the keypad (548+ tests), SQL suite green.
    - No existing samples → keep the flat-rate estimate.
    - If attaching **throws** → fall back to the estimate.
 
-2. **Two more corrections the reference screens forced, and NEITHER IS BUILT** — both recorded in
-   `02-architecture.md`: an explicit per-type **toggle** separate from the permission (so
-   `HealthStore.swift`'s "authorization is the only switch" reasoning is wrong — iOS cannot revoke
-   its own permission, so without a toggle there is no way to turn it off from inside the app), and
-   **backfill** ("14 workouts without corresponding Health entries. Add?"), which is cheap because
-   the external-uuid lookup that makes writing idempotent is the same query that finds what is
-   missing.
-   > The calorie rate made the toggle MORE pressing: somebody who dislikes the energy number can
-   > now only stop it by picking `None` or by leaving the app for Health, and `None` turns off
-   > energy, not workouts. `04-status.md` used to list this before Watch-attach; Drake's order is
-   > Watch first.
-
-3. **Apple Health — the MEASUREMENTS half.** The genuinely bidirectional part, and the echo-loop
-   trap: write a weight to Health, Health notifies observers, the app re-imports its own write as a
-   new entry, duplicates forever. `MeasurementEntry.source` exists for that guard.
-   > **Only 4 of the 18 measurement types exist in HealthKit** — Weight, Body Fat %, Caloric
-   > Intake, Waist. The other fourteen are limb and torso circumferences with no HealthKit type, so
-   > the screen must say which rows can travel rather than implying all of them do.
+2. ~~**Apple Health — import measurements FROM Health.**~~ **WIRED 2026-08-19.**
+   Write, read toggle, both yellow banners. Unverified on the phone: whether
+   Allow asks to read the four types, whether Add from Health lands a Weight
+   on Measure, and whether our own write does not echo back.
 
 Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
 

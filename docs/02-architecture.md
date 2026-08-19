@@ -359,17 +359,25 @@ touches how an in-progress workout is represented.
 > and skip the estimate; none found → keep the flat rate; attach throws → fall
 > back to the estimate.
 
-> **Two more corrections the reference screens forced, beyond energy — BOTH STILL OUTSTANDING:**
+> **Two more corrections the reference screens forced, beyond energy:**
 >
-> 1. **There IS an explicit per-type toggle, separate from the permission** — "Workouts: Sync
->    workouts originating from Strong to Apple Health". `HealthStore.swift` argues there should be
->    no stored flag because authorization already answers it. **That reasoning is wrong for the
->    reference's model**, which is *permitted AND switched on*: iOS cannot revoke its own
->    permission, so without a toggle there is no way to turn the feature off from inside the app at
->    all. Match the reference.
-> 2. **BACKFILL** — "14 Strong workouts without corresponding Apple Health entries. Add?" Cheap for
->    us: the external-uuid lookup that makes writing idempotent is the same query that finds what is
->    missing.
+> 1. ✅ **Workouts toggle — landed 2026-08-19.** `writeWorkoutsToHealth` on
+>    `AppSettings`, default on, synced. The Settings Apple Health row is a
+>    switch when permission is granted, not a dead "On". HealthStore will not
+>    write unless permitted AND switched on. `None` on the calorie rate still
+>    turns off energy only.
+> 2. ✅ **BACKFILL — landed 2026-08-19.** Yellow strip under Workouts when
+>    permitted and switched on: `missingFromHealth` minus this app's
+>    `HKMetadataKeyExternalUUID` values, `backfillPrompt` nil at 0.
+>    Add writes through `writeWorkout`. A failed query hides the banner
+>    rather than looking like "Health has none of ours".
+> 3. ✅ **MEASUREMENTS BOTH WAYS — four types, 2026-08-19.** Mapping/echo/import
+>    rule is `HealthMeasurementRule` (Ringer, grok-4.6, first try on mapping and
+>    on import-plan + both banners). Weight, Body Fat %, Caloric Intake and
+>    Waist write when permitted AND `writeMeasurementsToHealth` is on, and
+>    import when permitted AND `readMeasurementsFromHealth` is on. Identity
+>    of an inbound sample is `externalID ?? sampleID`. The other fourteen
+>    types have no HealthKit type.
 
 > ⚠️ **Bidirectional Health has one trap worth designing for up front: the echo loop.** Write a
 > weight entry to HealthKit → Health notifies observers of new data → the app imports it back as

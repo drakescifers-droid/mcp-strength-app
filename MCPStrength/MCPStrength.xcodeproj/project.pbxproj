@@ -385,8 +385,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "MCP Strength";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads Active Energy already recorded during your workout — usually by Apple Watch — so your training uses those calories instead of an estimate.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Adds the workouts you finish to Apple Health, so your training shows up alongside the rest of your activity.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads Active Energy already recorded during your workout — usually by Apple Watch — and Weight, Body Fat, calories eaten, and Waist already in Apple Health, so they can show up here.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Adds the workouts you finish, and the Weight, Body Fat, calories, and Waist you record, to Apple Health.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -421,8 +421,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "MCP Strength";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads Active Energy already recorded during your workout — usually by Apple Watch — so your training uses those calories instead of an estimate.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Adds the workouts you finish to Apple Health, so your training shows up alongside the rest of your activity.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads Active Energy already recorded during your workout — usually by Apple Watch — and Weight, Body Fat, calories eaten, and Waist already in Apple Health, so they can show up here.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Adds the workouts you finish, and the Weight, Body Fat, calories, and Waist you record, to Apple Health.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

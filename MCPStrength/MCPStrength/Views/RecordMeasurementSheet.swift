@@ -13,6 +13,14 @@ import SwiftData
 struct RecordMeasurementSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(HealthStore.self) private var health: HealthStore?
+
+    @Query(
+        filter: #Predicate<AppSettings> { $0.deletedAt == nil },
+        sort: \AppSettings.createdAt,
+        order: .forward
+    )
+    private var settings: [AppSettings]
 
     let type: MeasurementType
 
@@ -124,6 +132,21 @@ struct RecordMeasurementSheet: View {
         )
         context.insert(entry)
         try? context.save()
+        writeFinishedMeasurementToHealth(entry)
         dismiss()
+    }
+
+    /// Same shape as finishing a workout: Health is beside the save, not
+    /// inside it. No permission, a turned-off switch, or a type HealthKit
+    /// cannot hold (Neck, biceps, …) is silent — Settings is where that
+    /// state is legible, and interrupting Save to say so would nag for a
+    /// feature they did not turn on.
+    private func writeFinishedMeasurementToHealth(_ entry: MeasurementEntry) {
+        guard !AutomatedLaunch.isRunningTests else { return }
+        guard !UIPreviewMode.isEnabled else { return }
+        guard let health else { return }
+        let enabled = settings.first?.writeMeasurementsToHealth ?? true
+        guard case .success(let plan) = HealthMeasurementRule.plan(for: entry) else { return }
+        Task { try? await health.writeMeasurement(plan, enabled: enabled) }
     }
 }

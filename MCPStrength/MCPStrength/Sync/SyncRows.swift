@@ -599,6 +599,9 @@ struct SyncAppSettingsRow: Codable, Sendable, Equatable {
     let defaultRestSeconds: Int
     let weekStartDay: Int
     let workoutCalorieRate: WorkoutCalorieRate
+    let writeWorkoutsToHealth: Bool
+    let writeMeasurementsToHealth: Bool
+    let readMeasurementsFromHealth: Bool
     let theme: String?
     let language: String?
     let previousSetBehavior: String?
@@ -616,6 +619,9 @@ struct SyncAppSettingsRow: Codable, Sendable, Equatable {
         case defaultRestSeconds = "default_rest_seconds"
         case weekStartDay = "week_start_day"
         case workoutCalorieRate = "workout_calorie_rate"
+        case writeWorkoutsToHealth = "write_workouts_to_health"
+        case writeMeasurementsToHealth = "write_measurements_to_health"
+        case readMeasurementsFromHealth = "read_measurements_from_health"
         case previousSetBehavior = "previous_set_behavior"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
@@ -646,6 +652,9 @@ struct SyncAppSettingsRow: Codable, Sendable, Equatable {
         // fields. Self-tested by deleting it: TWO tests go red and both name
         // the column.
         try c.encode(workoutCalorieRate, forKey: .workoutCalorieRate)
+        try c.encode(writeWorkoutsToHealth, forKey: .writeWorkoutsToHealth)
+        try c.encode(writeMeasurementsToHealth, forKey: .writeMeasurementsToHealth)
+        try c.encode(readMeasurementsFromHealth, forKey: .readMeasurementsFromHealth)
         try c.encode(theme, forKey: .theme)
         try c.encode(language, forKey: .language)
         try c.encode(previousSetBehavior, forKey: .previousSetBehavior)
@@ -960,6 +969,9 @@ enum SyncRowMapper {
             defaultRestSeconds: settings.defaultRestSeconds,
             weekStartDay: settings.weekStartDay,
             workoutCalorieRate: settings.workoutCalorieRate,
+            writeWorkoutsToHealth: settings.writeWorkoutsToHealth,
+            writeMeasurementsToHealth: settings.writeMeasurementsToHealth,
+            readMeasurementsFromHealth: settings.readMeasurementsFromHealth,
             theme: settings.theme,
             language: settings.language,
             previousSetBehavior: settings.previousSetBehavior,

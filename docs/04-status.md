@@ -38,10 +38,11 @@ provides sync and backup, because a local-only store has no recovery story.
 
 **Phase 2 — in progress. Sync is PROVEN against the real project, storage is canonical
 kilograms, per-exercise Preferences is DONE, the units setting is REACHABLE, both of them SYNC,
-Apple Health writes workouts, prefers Watch Active Energy when it exists, and falls back to
-the flat-rate estimate, and the custom number keypad is ON THE PHONE.** What remains of Phase 2
-is proving Watch-attach on a real session, then the measurements half of Health, plus the two
-corrections the reference screens forced (a per-type toggle, and backfill).
+Apple Health writes workouts when the in-app toggle is on, prefers Watch Active Energy when it
+exists, falls back to the flat-rate estimate, offers backfill for sessions Health never got,
+writes the four HealthKit measurement types and can import them back (banners + Add),
+and the custom number keypad is ON THE PHONE.**
+What remains of Phase 2 is proving Watch-attach on a real session.
 
 > ⚠️ **THE CLAIM BELOW IS WRONG, AND THE SUB-SCREEN HAS NOW BEEN LOOKED AT.** It was used to
 > delete a requirement. `Settings accessed from profile page/IMG_2990.PNG` has a
@@ -338,6 +339,37 @@ right.**
   Written as a Ringer job for the rule (`mcpstrength-watch-energy`, grok-4.6, first try) and
   wired here. **Unverified on a Watch-on session.**
 
+- **WORKOUTS TOGGLE — permitted AND switched on.** `writeWorkoutsToHealth` on `AppSettings`,
+  default `true`, synced (`20260819200000`, applied and verified in the dump). The Settings
+  Apple Health row is a switch when permission is granted. HealthStore will not write unless
+  both are true. Re-flipping the switch that is already on does not mark the row edited.
+
+- **HEALTH BACKFILL — "N workouts without corresponding Apple Health entries. Add?"**
+  `HealthWorkoutRule.missingFromHealth` subtracts this app's written external UUIDs from
+  eligible local workouts (eligibility is `plan`, not a second list of reasons).
+  `backfillPrompt(count:)` is nil at 0 (rule 4) and singular at 1. Settings shows the
+  yellow strip under Workouts when permitted AND switched on; Add writes through the
+  same `writeWorkout` path Finish uses. A failed Health query hides the banner rather
+  than treating it as "Health has none of ours" (that would duplicate). Ringer job
+  `mcpstrength-health-backfill` (grok-4.6, attempt 2 — the retry was a one-line
+  `#expect` the check demanded, not a logic miss). **Unverified on the phone: whether
+  the count matches what Health actually lacks, and whether Add lands them.**
+
+- **MEASUREMENTS ↔ HEALTH — four types, both directions.** `HealthMeasurementRule` maps
+  Weight / Body Fat %, Caloric Intake / Waist by seed UUID, converts to Health
+  units (body fat 20% → 0.20, not 20), refuses `.healthKit` source on the way
+  out, and skips our own samples on the way in (`importPlan` identity is
+  `externalID ?? sampleID` so a scale sample with no metadata still dedupes).
+  Settings has write and read toggles (`writeMeasurementsToHealth` /
+  `readMeasurementsFromHealth`, `20260819210000`, applied and verified in
+  the dump) plus two yellow banners: local rows Health never got, and Health
+  samples the app never got. The other fourteen types have no HealthKit type
+  and are not sent or imported. Ringer jobs `mcpstrength-health-measurements`
+  and `mcpstrength-health-measurement-import` (both grok-4.6, first try).
+  **Unverified on the phone: whether Allow asks to read, whether Add from
+  Health lands a Weight on the Measure tab, and whether our own write does
+  not echo back as a duplicate.**
+
 - **CUSTOM NUMBER KEYPAD — on the phone 2026-08-19, Drake approved it after two layout fixes.**
   Chip + pinned keypad (`Views/NumberKeypad.swift` + `Workout/NumberKeypadEditing.swift`), not
   `ToolbarItemGroup(placement: .keyboard)` and not a `UITextField` `inputView`. Hosted on the
@@ -617,25 +649,7 @@ underneath never changed — only whether the screen described it honestly.
    Read entitlement and prompt are in. **Unverified on a Watch-on session**, including
    whether HealthKit lets an app attach samples another source owns.
 
-2. **The two corrections the reference screens forced, and neither is built.** A per-type
-   **TOGGLE** separate from the permission — `HealthStore.swift`'s "authorization is the only
-   switch" reasoning is wrong for that model, because iOS cannot revoke its own permission and so
-   there is no way to turn the feature off from inside the app at all. And **BACKFILL** ("14
-   workouts without corresponding Health entries. Add?"), which is cheap here: the external-uuid
-   lookup that makes writing idempotent is the same query that finds what is missing.
-   > **The calorie rate made the toggle more pressing, not less.** Somebody who dislikes the energy
-   > number can now only stop it by picking `None` or by leaving the app for Health — and `None`
-   > turns off energy, not workouts.
-
-3. **Apple Health — the MEASUREMENTS half.** Workouts already go out (see Landed). What remains is
-   the genuinely bidirectional part, and with it the echo-loop trap `02-architecture.md` flags:
-   write a weight to Health, Health notifies observers, the app re-imports its own write as a new
-   entry, duplicates forever. `MeasurementEntry.source` exists for exactly that guard.
-   > **Only 4 of the 18 seeded measurement types exist in HealthKit** — Weight, Body Fat %,
-   > Caloric Intake and Waist. The other fourteen are limb and torso circumferences with no
-   > HealthKit type at all, so the screen has to say which rows can travel rather than implying
-   > all of them do.
-   Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
+Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
 
 > ~~**A cleared field does not travel.**~~ **FIXED 2026-08-19, all thirteen row structs.** Kept
 > below only as the record of what it was.

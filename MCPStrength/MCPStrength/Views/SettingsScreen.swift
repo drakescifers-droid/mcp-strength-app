@@ -76,6 +76,37 @@ struct SettingsScreen: View {
     )
     private var settings: [AppSettings]
 
+    /// Every live workout, so backfill can subtract what Health already has.
+    /// `missingFromHealth` then drops unfinished / tombstoned / zero-length;
+    /// this query only has to keep deleted-at-nil so a tombstone is not even
+    /// in the array (the rule still refuses one if a caller handed it in).
+    @Query(filter: #Predicate<Workout> { $0.deletedAt == nil })
+    private var workouts: [Workout]
+
+    /// Live and tombstoned. `alreadyHave` for import must include
+    /// tombstones so a deleted Health row does not come back as a new one.
+    /// `missingFromHealth` still refuses tombstones via `plan`.
+    @Query private var measurementEntries: [MeasurementEntry]
+
+    @Query(filter: #Predicate<MeasurementType> { $0.deletedAt == nil })
+    private var measurementTypes: [MeasurementType]
+
+    /// The banner sentence, or `nil` to show nothing. Nil is also the
+    /// "could not ask Health" case — a failed query must not look like
+    /// "Health has none of ours", which would offer Add for every finished
+    /// workout and then duplicate them.
+    @State private var backfillPrompt: String?
+    @State private var missingWorkouts: [Workout] = []
+    @State private var isAddingBackfill = false
+
+    @State private var measurementWritePrompt: String?
+    @State private var missingMeasurements: [MeasurementEntry] = []
+    @State private var isAddingMeasurementWrite = false
+
+    @State private var measurementImportPrompt: String?
+    @State private var importableMeasurements: [HealthMeasurementImportPlan] = []
+    @State private var isAddingMeasurementImport = false
+
     /// The unit to SHOW. Falls back to the same default as
     /// `AppSettings.weightUnit` and the environment key, because three places
     /// disagreeing about what a bare number means is the failure canonical
@@ -141,32 +172,50 @@ struct SettingsScreen: View {
             }
         }
         .preferredColorScheme(.dark)
+        .task(id: backfillScanKey) {
+            await refreshBackfill()
+        }
+        .task(id: measurementBackfillScanKey) {
+            await refreshMeasurementBackfill()
+        }
+    }
+
+    /// Rescan when permission, the toggle, or the number of live workouts
+    /// changes. A finished session while this sheet is open should be able
+    /// to appear on the banner without dismissing Settings.
+    private var backfillScanKey: String {
+        "\(writeWorkoutsToHealth)-\(health?.workoutSharingStatus.hashValue ?? 0)-\(workouts.count)"
+    }
+
+    private var measurementBackfillScanKey: String {
+        "\(writeMeasurementsToHealth)-\(readMeasurementsFromHealth)-\(health?.measurementSharingStatus.hashValue ?? 0)-\(measurementEntries.count)"
     }
 
     // MARK: - Apple Health
     //
-    // TWO ROWS, and they are different kinds of thing. `Workouts` is a
-    // PERMISSION: there is no stored "write workouts to Health" flag anywhere,
-    // because HealthKit already keeps a per-device answer and iOS already owns
-    // the UI for changing it, so a second flag would be a second source of
-    // truth that can disagree with the first (see HealthStore.swift).
-    // `Workout Active Calories Rate` is a PREFERENCE — a number the user
-    // chooses — and it is stored, synced, and defaulted to match the server.
+    // TWO KINDS OF SWITCH, and they are not the same thing. The iOS
+    // permission is asked once and cannot be revoked from here. The
+    // `writeWorkoutsToHealth` toggle is the in-app switch the reference
+    // has — permitted AND switched on — because without it the only way
+    // to stop writing is to leave the app for Health. `Workout Active
+    // Calories Rate` is a third thing: a number, stored, synced, shown
+    // only when workouts are actually being written.
     //
-    // The four states are genuinely different sentences with different next
-    // steps, which is exactly why `.notDetermined` is not collapsed into
-    // "denied": one is a button, the other is an instruction to go somewhere
-    // else. Getting that wrong would be a control that looks tappable and
-    // cannot work — the rest-timer bug's shape.
-    //
-    // **The rate row appears only once workouts are actually being written**,
-    // and that is the same rule applied to a preference rather than a
-    // permission. Until Health is allowed, nothing reads the rate, so a picker
-    // for it would be a control that changes a value with no consumer — which
-    // is precisely why the other three unit rows are absent from this screen.
-    // The reference app shows its rate row unconditionally; this is a
-    // deliberate divergence, and it costs nothing, because the row appears the
-    // moment the permission it depends on is granted.
+    // The four permission states are still genuinely different sentences.
+    // `.notDetermined` is a button; `.denied` is an instruction to go to
+    // Health; `.authorized` is the toggle.
+
+    private var writeWorkoutsToHealth: Bool {
+        settings.first?.writeWorkoutsToHealth ?? true
+    }
+
+    private var writeMeasurementsToHealth: Bool {
+        settings.first?.writeMeasurementsToHealth ?? true
+    }
+
+    private var readMeasurementsFromHealth: Bool {
+        settings.first?.readMeasurementsFromHealth ?? true
+    }
 
     @ViewBuilder
     private var healthSection: some View {
@@ -179,6 +228,12 @@ struct SettingsScreen: View {
                 .foregroundStyle(Theme.textSecondary)
                 .padding(.horizontal, Spacing.screenMargin)
 
+            Text("ALLOW MCP STRENGTH TO WRITE")
+                .font(Typography.secondary)
+                .foregroundStyle(Theme.textSecondary)
+                .padding(.horizontal, Spacing.screenMargin)
+                .padding(.top, Spacing.compact)
+
             VStack(spacing: 0) {
                 if status == .notDetermined {
                     Button {
@@ -187,15 +242,31 @@ struct SettingsScreen: View {
                         SettingsValueRow(title: "Workouts", value: "Allow")
                     }
                     .buttonStyle(.plain)
+                } else if status == .authorized {
+                    SettingsToggleRow(
+                        title: "Workouts",
+                        subtitle: "Sync workouts originating from MCP Strength to Apple Health.",
+                        isOn: writeWorkoutsToHealth,
+                        onChange: { enabled in
+                            AppSettings.current(in: context).setWriteWorkoutsToHealth(enabled)
+                        }
+                    )
                 } else {
-                    // Not a button: nothing here can change it. iOS never lets
-                    // an app grant or revoke its own permission, so a tappable
-                    // row would be a control that does nothing.
                     SettingsValueRow(title: "Workouts", value: healthValue(status))
                 }
             }
             .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.card))
             .padding(.horizontal, Spacing.screenMargin)
+
+            if status == .authorized, writeWorkoutsToHealth, let prompt = backfillPrompt {
+                HealthBackfillBanner(
+                    text: prompt,
+                    isBusy: isAddingBackfill,
+                    addAccessibilityLabel: "Add workouts to Apple Health",
+                    onAdd: { Task { await addMissingWorkoutsToHealth() } }
+                )
+                .padding(.horizontal, Spacing.screenMargin)
+            }
 
             Text(healthExplanation(status))
                 .font(Typography.secondary)
@@ -203,7 +274,11 @@ struct SettingsScreen: View {
                 .padding(.horizontal, Spacing.screenMargin)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if status == .authorized {
+            measurementWriteRow(status: health?.measurementSharingStatus ?? .unavailable)
+
+            measurementReadRow(status: health?.measurementSharingStatus ?? .unavailable)
+
+            if status == .authorized, writeWorkoutsToHealth {
                 calorieRateRow(energyStatus: energyStatus)
             }
         }
@@ -273,6 +348,135 @@ struct SettingsScreen: View {
         .padding(.top, Spacing.compact)
     }
 
+    @ViewBuilder
+    private func measurementWriteRow(status: HealthSharingStatus) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.compact) {
+            VStack(spacing: 0) {
+                if status == .notDetermined {
+                    Button {
+                        Task { try? await health?.requestMeasurementAuthorization() }
+                    } label: {
+                        SettingsValueRow(title: "Measurements", value: "Allow")
+                    }
+                    .buttonStyle(.plain)
+                } else if status == .authorized {
+                    SettingsToggleRow(
+                        title: "Measurements",
+                        subtitle: "Sync measurements originating from MCP Strength to Apple Health.",
+                        isOn: writeMeasurementsToHealth,
+                        onChange: { enabled in
+                            AppSettings.current(in: context).setWriteMeasurementsToHealth(enabled)
+                        }
+                    )
+                } else {
+                    SettingsValueRow(title: "Measurements", value: healthValue(status))
+                }
+            }
+            .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.card))
+            .padding(.horizontal, Spacing.screenMargin)
+
+            if status == .authorized, writeMeasurementsToHealth, let prompt = measurementWritePrompt {
+                HealthBackfillBanner(
+                    text: prompt,
+                    isBusy: isAddingMeasurementWrite,
+                    addAccessibilityLabel: "Add measurements to Apple Health",
+                    onAdd: { Task { await addMissingMeasurementsToHealth() } }
+                )
+                .padding(.horizontal, Spacing.screenMargin)
+            }
+
+            Text(measurementWriteExplanation(status))
+                .font(Typography.secondary)
+                .foregroundStyle(Theme.textSecondary)
+                .padding(.horizontal, Spacing.screenMargin)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, Spacing.compact)
+    }
+
+    private func measurementWriteExplanation(_ status: HealthSharingStatus) -> String {
+        switch status {
+        case .notDetermined:
+            return "Weight, Body Fat %, Caloric Intake and Waist can be added to Apple Health. The other body-part measurements have no Apple Health type, so they stay in this app."
+        case .authorized:
+            if writeMeasurementsToHealth {
+                return "Those four types are added when you record them. Neck, arms, legs and the rest have no Apple Health type and are not sent."
+            }
+            return "Measurements you record are not added to Apple Health. Turn this back on to resume."
+        case .denied:
+            return "Turned off. To allow it, open Health, then Sharing, then Apps, and turn on MCP Strength."
+        case .unavailable:
+            return "Apple Health is not available on this device."
+        }
+    }
+
+    @ViewBuilder
+    private func measurementReadRow(status: HealthSharingStatus) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.compact) {
+            Text("ALLOW MCP STRENGTH TO READ")
+                .font(Typography.secondary)
+                .foregroundStyle(Theme.textSecondary)
+                .padding(.horizontal, Spacing.screenMargin)
+
+            VStack(spacing: 0) {
+                if status == .notDetermined {
+                    Button {
+                        Task { try? await health?.requestMeasurementAuthorization() }
+                    } label: {
+                        SettingsValueRow(title: "Measurements", value: "Allow")
+                    }
+                    .buttonStyle(.plain)
+                } else if status == .authorized {
+                    SettingsToggleRow(
+                        title: "Measurements",
+                        subtitle: "Measurements will be read from Apple Health and shown here. They sync like any other entry you record.",
+                        isOn: readMeasurementsFromHealth,
+                        onChange: { enabled in
+                            AppSettings.current(in: context).setReadMeasurementsFromHealth(enabled)
+                        }
+                    )
+                } else {
+                    SettingsValueRow(title: "Measurements", value: healthValue(status))
+                }
+            }
+            .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.card))
+            .padding(.horizontal, Spacing.screenMargin)
+
+            if status == .authorized, readMeasurementsFromHealth, let prompt = measurementImportPrompt {
+                HealthBackfillBanner(
+                    text: prompt,
+                    isBusy: isAddingMeasurementImport,
+                    addAccessibilityLabel: "Add measurements from Apple Health",
+                    onAdd: { Task { await addMeasurementsFromHealth() } }
+                )
+                .padding(.horizontal, Spacing.screenMargin)
+            }
+
+            Text(measurementReadExplanation(status))
+                .font(Typography.secondary)
+                .foregroundStyle(Theme.textSecondary)
+                .padding(.horizontal, Spacing.screenMargin)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, Spacing.compact)
+    }
+
+    private func measurementReadExplanation(_ status: HealthSharingStatus) -> String {
+        switch status {
+        case .notDetermined:
+            return "Weight, Body Fat %, Caloric Intake and Waist already in Apple Health can be added here. The other body-part measurements have no Apple Health type."
+        case .authorized:
+            if readMeasurementsFromHealth {
+                return "Those four types can be added from Apple Health. A number this app wrote is not imported again."
+            }
+            return "Measurements in Apple Health are not added here. Turn this back on to resume."
+        case .denied:
+            return "Turned off. To allow it, open Health, then Sharing, then Apps, and turn on MCP Strength."
+        case .unavailable:
+            return "Apple Health is not available on this device."
+        }
+    }
+
     private func calorieExplanation(_ energyStatus: HealthSharingStatus) -> String {
         switch energyStatus {
         case .authorized:
@@ -305,9 +509,12 @@ struct SettingsScreen: View {
     private func healthExplanation(_ status: HealthSharingStatus) -> String {
         switch status {
         case .notDetermined:
-            return "Finished workouts can be added to Apple Health, so your training counts toward your activity. Nothing is read from Health."
+            return "Finished workouts can be added to Apple Health, so your training counts toward your activity."
         case .authorized:
-            return "Workouts you finish are added to Apple Health. To stop, turn MCP Strength off in Health under Sharing."
+            if writeWorkoutsToHealth {
+                return "Workouts you finish are added to Apple Health."
+            }
+            return "Workouts you finish are not added to Apple Health. Turn this back on to resume."
         case .denied:
             // The only place that can change it is Health itself, so say so
             // rather than leaving a dead "Off" with no route back.
@@ -333,6 +540,140 @@ struct SettingsScreen: View {
     /// already has the tick must not dirty the row.
     private func choose(_ rate: WorkoutCalorieRate) {
         AppSettings.current(in: context).setWorkoutCalorieRate(rate)
+    }
+
+    /// Ask Health what it already has, then compose the banner from the
+    /// two backfill functions. A failed query clears the banner rather
+    /// than treating it as "Health has none of ours" — that would offer
+    /// Add for every finished workout and then duplicate them.
+    @MainActor
+    private func refreshBackfill() async {
+        guard
+            writeWorkoutsToHealth,
+            health?.workoutSharingStatus == .authorized,
+            let health
+        else {
+            missingWorkouts = []
+            backfillPrompt = nil
+            return
+        }
+        do {
+            let written = try await health.writtenExternalIDs()
+            let missing = HealthWorkoutRule.missingFromHealth(
+                workouts,
+                alreadyWritten: written
+            )
+            missingWorkouts = missing
+            backfillPrompt = HealthWorkoutRule.backfillPrompt(count: missing.count)
+        } catch {
+            missingWorkouts = []
+            backfillPrompt = nil
+        }
+    }
+
+    /// Write every missing workout through the same path Finish uses, then
+    /// rescan. One failure does not abort the rest — a session Health
+    /// already has (the race with a finish that landed while this ran)
+    /// must not block the others. `writeWorkout` is itself idempotent.
+    @MainActor
+    private func addMissingWorkoutsToHealth() async {
+        guard let health, !isAddingBackfill else { return }
+        isAddingBackfill = true
+        defer { isAddingBackfill = false }
+        let rate = calorieRate
+        for workout in missingWorkouts {
+            guard case .success(let plan) = HealthWorkoutRule.plan(for: workout, rate: rate)
+            else { continue }
+            try? await health.writeWorkout(plan, rate: rate, workoutsEnabled: true)
+        }
+        await refreshBackfill()
+    }
+
+    /// Same throw-clears-the-banner contract as workouts. Write and import
+    /// are two queries; a failure on one must not invent a banner for the
+    /// other, so each has its own do/catch.
+    @MainActor
+    private func refreshMeasurementBackfill() async {
+        let status = health?.measurementSharingStatus
+        guard let health, status == .authorized else {
+            missingMeasurements = []
+            measurementWritePrompt = nil
+            importableMeasurements = []
+            measurementImportPrompt = nil
+            return
+        }
+
+        if writeMeasurementsToHealth {
+            do {
+                let written = try await health.writtenMeasurementExternalIDs()
+                let missing = HealthMeasurementRule.missingFromHealth(
+                    from: measurementEntries,
+                    alreadyWritten: written
+                )
+                missingMeasurements = missing
+                measurementWritePrompt = HealthMeasurementRule.writePrompt(count: missing.count)
+            } catch {
+                missingMeasurements = []
+                measurementWritePrompt = nil
+            }
+        } else {
+            missingMeasurements = []
+            measurementWritePrompt = nil
+        }
+
+        if readMeasurementsFromHealth {
+            do {
+                let facts = try await health.measurementSampleFacts()
+                let alreadyHave = Set(measurementEntries.map(\.id))
+                let plans = HealthMeasurementRule.importPlans(
+                    from: facts,
+                    alreadyHave: alreadyHave
+                )
+                importableMeasurements = plans
+                measurementImportPrompt = HealthMeasurementRule.importPrompt(count: plans.count)
+            } catch {
+                importableMeasurements = []
+                measurementImportPrompt = nil
+            }
+        } else {
+            importableMeasurements = []
+            measurementImportPrompt = nil
+        }
+    }
+
+    @MainActor
+    private func addMissingMeasurementsToHealth() async {
+        guard let health, !isAddingMeasurementWrite else { return }
+        isAddingMeasurementWrite = true
+        defer { isAddingMeasurementWrite = false }
+        for entry in missingMeasurements {
+            guard case .success(let plan) = HealthMeasurementRule.plan(for: entry) else { continue }
+            try? await health.writeMeasurement(plan, enabled: true)
+        }
+        await refreshMeasurementBackfill()
+    }
+
+    @MainActor
+    private func addMeasurementsFromHealth() async {
+        guard !isAddingMeasurementImport else { return }
+        isAddingMeasurementImport = true
+        defer { isAddingMeasurementImport = false }
+        let typesByID = Dictionary(uniqueKeysWithValues: measurementTypes.map { ($0.id, $0) })
+        for plan in importableMeasurements {
+            guard let type = typesByID[plan.typeID] else { continue }
+            let entry = MeasurementEntry(
+                id: plan.id,
+                value: plan.local.value,
+                unit: plan.local.unit,
+                recordedAt: plan.recordedAt,
+                source: .healthKit,
+                type: type
+            )
+            context.insert(entry)
+            entry.markEdited()
+        }
+        try? context.save()
+        await refreshMeasurementBackfill()
     }
 
     @ViewBuilder
@@ -362,6 +703,78 @@ struct SettingsScreen: View {
 /// The VALUE ON THE ROW is the part worth keeping. A row reading only
 /// "Weight Unit >" makes you open the screen to find out what it is set to,
 /// which is the one question a settings list should answer without being tapped.
+private struct SettingsToggleRow: View {
+    let title: String
+    let subtitle: String
+    let isOn: Bool
+    let onChange: (Bool) -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Spacing.compact) {
+            VStack(alignment: .leading, spacing: Spacing.compact / 2) {
+                Text(title)
+                    .font(Typography.body)
+                    .foregroundStyle(Theme.textPrimary)
+                Text(subtitle)
+                    .font(Typography.secondary)
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: Spacing.compact)
+            Toggle("", isOn: Binding(
+                get: { isOn },
+                set: onChange
+            ))
+            .labelsHidden()
+            .tint(Theme.accent)
+        }
+        .padding(.vertical, Spacing.comfortable)
+        .padding(.horizontal, Spacing.screenMargin)
+    }
+}
+
+/// The yellow strip under Workouts. Copy comes from
+/// `HealthWorkoutRule.backfillPrompt`; this view only lays it out.
+///
+/// Add is a real button, not a tap on the whole strip: the sentence is a
+/// question, and tapping the question to answer it is easy to do by
+/// accident while scrolling. Busy replaces the label rather than hiding
+/// the control — a vanished Add while writing reads as "nothing to add".
+private struct HealthBackfillBanner: View {
+    let text: String
+    let isBusy: Bool
+    let addAccessibilityLabel: String
+    let onAdd: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Spacing.compact) {
+            Image(systemName: "info.circle")
+                .font(Typography.body)
+                .foregroundStyle(Theme.noticeText)
+            Text(text)
+                .font(Typography.secondary)
+                .foregroundStyle(Theme.noticeText)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: Spacing.compact)
+            Button(action: onAdd) {
+                if isBusy {
+                    ProgressView()
+                        .tint(Theme.noticeText)
+                } else {
+                    Text("Add")
+                        .font(Typography.button)
+                        .foregroundStyle(Theme.noticeText)
+                }
+            }
+            .disabled(isBusy)
+            .accessibilityLabel(isBusy ? "Adding. \(addAccessibilityLabel)" : addAccessibilityLabel)
+        }
+        .padding(.vertical, Spacing.comfortable)
+        .padding(.horizontal, Spacing.screenMargin)
+        .background(Theme.notice, in: .rect(cornerRadius: Radius.card))
+    }
+}
+
 private struct SettingsValueRow: View {
     let title: String
     let value: String

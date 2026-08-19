@@ -153,6 +153,63 @@ struct SettingsUnitsTests {
     @Test func aFreshSettingsRowDefaultsToTheServersDefault() throws {
         let context = try makeContext()
         #expect(AppSettings.current(in: context).workoutCalorieRate == .medium)
+        #expect(AppSettings.current(in: context).writeWorkoutsToHealth == true)
+        #expect(AppSettings.current(in: context).writeMeasurementsToHealth == true)
+        #expect(AppSettings.current(in: context).readMeasurementsFromHealth == true)
+    }
+
+    // MARK: - Write workouts to Health
+
+    @Test func turningWorkoutHealthWritingOffWritesItAndMarksTheRow() throws {
+        let context = try makeContext()
+        let settings = AppSettings.current(in: context)
+        settings.needsSync = false
+        settings.updatedAt = .distantPast
+
+        settings.setWriteWorkoutsToHealth(false)
+
+        #expect(settings.writeWorkoutsToHealth == false)
+        #expect(settings.needsSync == true, "turning it off must travel")
+        #expect(settings.updatedAt > .distantPast)
+    }
+
+    @Test func reFlippingTheWorkoutHealthSwitchDoesNotMarkTheRow() throws {
+        let context = try makeContext()
+        let settings = AppSettings.current(in: context)
+        settings.needsSync = false
+        settings.updatedAt = .distantPast
+
+        settings.setWriteWorkoutsToHealth(true)
+
+        #expect(settings.writeWorkoutsToHealth == true)
+        #expect(settings.needsSync == false, "flipping a switch that is already on is not an edit")
+        #expect(settings.updatedAt == .distantPast, "updatedAt must not move")
+    }
+
+    @Test func turningMeasurementHealthWritingOffWritesItAndMarksTheRow() throws {
+        let context = try makeContext()
+        let settings = AppSettings.current(in: context)
+        settings.needsSync = false
+        settings.updatedAt = .distantPast
+
+        settings.setWriteMeasurementsToHealth(false)
+
+        #expect(settings.writeMeasurementsToHealth == false)
+        #expect(settings.needsSync == true)
+        #expect(settings.updatedAt > .distantPast)
+    }
+
+    @Test func reFlippingTheMeasurementHealthSwitchesDoesNotMarkTheRow() throws {
+        let context = try makeContext()
+        let settings = AppSettings.current(in: context)
+        settings.needsSync = false
+        settings.updatedAt = .distantPast
+
+        settings.setWriteMeasurementsToHealth(true)
+        settings.setReadMeasurementsFromHealth(true)
+
+        #expect(settings.needsSync == false)
+        #expect(settings.updatedAt == .distantPast)
     }
 
     // MARK: - The rate's labels

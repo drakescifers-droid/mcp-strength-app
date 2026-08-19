@@ -558,6 +558,9 @@ struct SyncRowApplyTests {
             defaultRestSeconds: 150,
             weekStartDay: 2,
             workoutCalorieRate: .veryHigh,
+            writeWorkoutsToHealth: false,
+            writeMeasurementsToHealth: false,
+            readMeasurementsFromHealth: false,
             theme: "dark",
             language: "en",
             previousSetBehavior: "lastTime"
@@ -590,6 +593,9 @@ struct SyncRowApplyTests {
         #expect(dest.defaultRestSeconds == 150)
         #expect(dest.weekStartDay == 2)
         #expect(dest.workoutCalorieRate == .veryHigh)
+        #expect(dest.writeWorkoutsToHealth == false)
+        #expect(dest.writeMeasurementsToHealth == false)
+        #expect(dest.readMeasurementsFromHealth == false)
         #expect(dest.theme == "dark")
         #expect(dest.language == "en")
         #expect(dest.previousSetBehavior == "lastTime")

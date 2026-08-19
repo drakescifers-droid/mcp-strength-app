@@ -43,6 +43,20 @@
 //  change on either side, and it is correct across devices because it asks
 //  Health what Health already has rather than remembering what we did.
 //
+//  ## Backfill is the other half of that decision
+//
+//  People log workouts, then later grant Health permission (or flip the in-app
+//  toggle on). Those older sessions never went out. Because there is no
+//  `didWriteToHealth` flag, "what is missing" cannot be a local column — it is
+//  the same query that makes the write idempotent, inverted: local workouts
+//  that `plan` would accept, whose ids Health does not yet hold.
+//
+//  `missingFromHealth` answers WHICH rows. `backfillPrompt` answers WHAT the
+//  Settings banner says for a count. They stay two functions so the sentence
+//  cannot become a second way of counting — a bug in one would then be
+//  invisible in the other. The query that fills `alreadyWritten` is
+//  HealthStore's job, the same shape as `existingSamplesInInterval` for energy.
+//
 
 import Foundation
 
@@ -242,6 +256,90 @@ enum HealthWorkoutRule {
             return .writeEstimate(kilocalories: kilocalories)
         case .none, .writeEstimate:
             return action
+        }
+    }
+
+    /// Finished workouts Health does not yet have an entry for, in training
+    /// order.
+    ///
+    /// The other half of rejecting a `didWriteToHealth` column: because we
+    /// ask Health what it already holds rather than remembering what we did,
+    /// "what is missing" is the same question inverted. `alreadyWritten` is
+    /// the set of this app's `HKMetadataKeyExternalUUID` values — each is a
+    /// workout's own id, the same `HealthWorkoutPlan.externalID` the writer
+    /// stamps. That set is a fact the HealthKit layer will report after a
+    /// query this file cannot run, the same shape as
+    /// `existingSamplesInInterval` on `energyAction`. Importing HealthKit
+    /// here to "complete" the decision would put the untestable half back
+    /// into the testable one.
+    ///
+    /// **Eligibility is `plan(for:rate:)`, not a second list of reasons.**
+    /// An unfinished, tombstoned, or non-positive-duration workout cannot
+    /// be "missing from Health" because it will never be written. If this
+    /// function and `plan` ever disagreed, the banner would offer Add for
+    /// a row `writeWorkout` will refuse.
+    ///
+    /// The calorie rate does not belong here. Energy is about what gets
+    /// attached to a write, not about whether a write should happen. The
+    /// call through `plan` still needs a rate (it is required, not
+    /// defaulted); `.none` is the cheapest argument and is not a claim
+    /// about the energy the eventual write will carry.
+    ///
+    /// Sorted by `startedAt` ascending so Add writes them in training
+    /// order and Apple Fitness's timeline matches the gym, not the order
+    /// the local array happened to be in. An unsorted return is a silent
+    /// shuffle every time Settings appears.
+    ///
+    /// An empty `alreadyWritten` means Health has none of ours yet: every
+    /// eligible workout is missing. A set that contains a workout's id
+    /// means that one is not missing, even if a different workout in the
+    /// same list is.
+    static func missingFromHealth(
+        _ workouts: [Workout],
+        alreadyWritten: Set<UUID>
+    ) -> [Workout] {
+        workouts
+            .filter { workout in
+                guard !alreadyWritten.contains(workout.id) else { return false }
+                if case .success = plan(for: workout, rate: .none) {
+                    return true
+                }
+                return false
+            }
+            .sorted { $0.startedAt < $1.startedAt }
+    }
+
+    /// The sentence the Settings banner shows for this many missing
+    /// workouts, or `nil` when there is nothing to show.
+    ///
+    /// A function of a count, not of the missing array, and that split is
+    /// the whole point. If the sentence counted the array itself, a bug in
+    /// `missingFromHealth` would produce a matching lie in the banner and
+    /// the two tests would agree on the wrong number. The view asks this
+    /// with `missing.count`; the two answers have to be composed, not
+    /// derived from each other.
+    ///
+    /// **`count <= 0` is `nil`, not `"0 …"`.** A banner reading "0 workouts
+    /// without entries" is a count of absence — AGENTS.md rule 4. The view
+    /// that gets nil shows nothing. Negative counts are the same: nothing
+    /// in the app should pass one, and treating it as a count would invent
+    /// a banner.
+    ///
+    /// Singular vs plural is load-bearing English, not decoration. "1
+    /// workouts" is the kind of lie this project refuses to ship. The
+    /// wording is the reference app's ("14 Strong workouts without
+    /// corresponding Apple Health entries. Add?") with Strong renamed to
+    /// MCP Strength — the app's name, not "Strong", and not dropped. The
+    /// Add *button* is drawn by the view; the sentence still asks the
+    /// question, matching the screenshot.
+    static func backfillPrompt(count: Int) -> String? {
+        switch count {
+        case ...0:
+            return nil
+        case 1:
+            return "1 MCP Strength workout without a corresponding Apple Health entry. Add workout to Apple Health?"
+        default:
+            return "\(count) MCP Strength workouts without corresponding Apple Health entries. Add workouts to Apple Health?"
         }
     }
 }

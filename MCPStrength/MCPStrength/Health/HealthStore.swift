@@ -11,20 +11,13 @@
 //  may not exist. Behind a protocol, everything that DECIDES is testable and
 //  only the framework calls are not.
 //
-//  ## Authorization is the only "is this on?" flag
+//  ## Authorization is not the only "is this on?" flag
 //
-//  There is deliberately no `writeWorkoutsToHealth` setting stored anywhere.
-//  HealthKit already keeps a per-device answer to that question, iOS already
-//  provides the UI for changing it, and a second flag would be a second source
-//  of truth that can disagree with the first — with the app claiming to write
-//  while the system silently drops everything.
-//
-//  The consequence, and it is a real one: **turning it back off happens in
-//  Apple Health, not here.** iOS never lets an app revoke its own permission,
-//  so a private toggle could only mean "authorized but choosing not to", which
-//  is a distinction with no user-visible meaning today. If a reason for one
-//  appears, that is the moment to add it — see the reference app's Apple Health
-//  screen, which does carry per-type switches.
+//  iOS never lets an app revoke its own Health permission, so a stored
+//  `writeWorkoutsToHealth` preference sits beside authorization. Both have
+//  to be true for a write to happen: permitted AND switched on, which is
+//  the reference app's model. Turning the switch off happens here; turning
+//  the permission off still happens in Health.
 //
 //  ## Why we now READ Active Energy, and only that
 //
@@ -34,11 +27,22 @@
 //  by our estimate. `HealthWorkoutRule.energyAction` is the decision;
 //  this file is the query, the attach, and the fallback if attach throws.
 //
-//  `NSHealthShareUsageDescription` is therefore present, and the read set
-//  below is that one type. Asking to read anything we do not query is a
-//  permission prompt that cannot be honestly explained. Read status is
-//  NOT checkable — `authorizationStatus(for:)` only reports sharing —
-//  so a denied read looks like "no samples" and we keep the estimate.
+//  ## Backfill asks the same question as idempotency, for every id
+//
+//  `alreadyWritten` is "does Health have THIS workout?" at finish. Settings
+//  needs the inverse for every finished workout, so `writtenExternalIDs`
+//  is the same source predicate without the id filter. A failed query
+//  throws rather than returning empty: empty means "none of ours", and
+//  treating a failure as empty would offer Add for the whole history
+//  and then duplicate it.
+//
+//  `NSHealthShareUsageDescription` covers Active Energy AND the four
+//  measurement types we actually query. Asking to read anything we do
+//  not query is a permission prompt that cannot be honestly explained.
+//  Read status is NOT checkable — `authorizationStatus(for:)` only
+//  reports sharing — so a denied energy read looks like "no samples"
+//  and we keep the estimate, and a denied measurement read looks like
+//  Health has nothing to import.
 //
 //  ## TWO write types, and they are authorized separately
 //
@@ -97,15 +101,77 @@ protocol HealthWriting: AnyObject {
     /// Bool about existing samples is a query this protocol's caller cannot
     /// run.
     ///
+    /// `workoutsEnabled` is the in-app toggle, separate from authorization.
+    /// Both must be true. Skipping here rather than throwing keeps a turned-
+    /// off switch from failing the end of a session.
+    ///
     /// Returns whether anything was written, so a caller can tell a real write
     /// from a correctly-skipped duplicate.
     @discardableResult
-    func writeWorkout(_ plan: HealthWorkoutPlan, rate: WorkoutCalorieRate) async throws -> Bool
+    func writeWorkout(
+        _ plan: HealthWorkoutPlan,
+        rate: WorkoutCalorieRate,
+        workoutsEnabled: Bool
+    ) async throws -> Bool
+
+    /// The `HKMetadataKeyExternalUUID` values this app has already written.
+    ///
+    /// The other half of `alreadyWritten`: that call asks about ONE id at
+    /// finish time (limit 1). This asks about ALL of them, so Settings can
+    /// subtract and offer backfill. Same source predicate — another app's
+    /// workout that happens to carry the same metadata key is not ours.
+    ///
+    /// Throws rather than returning `[]` on a failed query. Empty means
+    /// "Health has none of ours"; a failure is "we could not ask", and those
+    /// must stay distinguishable or the banner would offer Add for every
+    /// finished workout when Health is unreachable, then duplicate them.
+    func writtenExternalIDs() async throws -> Set<UUID>
+
+    /// Whether the user has allowed writing the four measurement quantity
+    /// types. Combined: if any type is still unasked, this is `.notDetermined`
+    /// so Settings can show Allow; if all four are authorized, `.authorized`.
+    var measurementSharingStatus: HealthSharingStatus { get }
+
+    /// Ask to write AND read Weight, Body Fat %, Caloric Intake and Waist.
+    /// Read is in the same prompt as write so Settings does not have a
+    /// second Allow for types it is about to query. Asking to read a type
+    /// we do not query is a permission prompt that cannot be honestly
+    /// explained — we query exactly these four.
+    func requestMeasurementAuthorization() async throws
+
+    /// Write this measurement sample, unless Health already has it.
+    ///
+    /// `enabled` is the in-app write toggle. Both it and authorization must
+    /// be true. Skipping rather than throwing keeps a turned-off switch
+    /// from failing a Save.
+    @discardableResult
+    func writeMeasurement(
+        _ plan: HealthMeasurementPlan,
+        enabled: Bool
+    ) async throws -> Bool
+
+    /// The `HKMetadataKeyExternalUUID` values this app has already written
+    /// as measurement samples (the four quantity types).
+    ///
+    /// Same contract as `writtenExternalIDs` for workouts: throws rather
+    /// than returning `[]` on a failed query, because empty means "Health
+    /// has none of ours" and a failure must not offer Add for every local
+    /// Weight and then duplicate them.
+    func writtenMeasurementExternalIDs() async throws -> Set<UUID>
+
+    /// Every sample of the four measurement types, reduced to facts the
+    /// import rule can decide on. Includes other apps' samples — skipping
+    /// ours is `importPlan`'s job (`isFromThisApp`).
+    ///
+    /// Throws on a failed query rather than returning empty: empty means
+    /// "Health has nothing to offer", which would hide a banner that should
+    /// have shown, or worse, look like a successful empty scan.
+    func measurementSampleFacts() async throws -> [HealthMeasurementSampleFacts]
 }
 
 /// Mirrors `HKAuthorizationStatus` without exposing HealthKit to the rest of
 /// the app — the same reason `ServerRefusal` exists in the sync engine.
-enum HealthSharingStatus: Equatable, Sendable {
+enum HealthSharingStatus: Equatable, Hashable, Sendable {
     /// Never asked.
     case notDetermined
     /// Asked, and allowed.
@@ -129,6 +195,12 @@ final class HealthStore: HealthWriting {
     /// writing another is an authorization error at runtime and nowhere else.
     private static let workoutType = HKObjectType.workoutType()
     private static let activeEnergyType = HKQuantityType(.activeEnergyBurned)
+    private static let measurementTypes: [HKQuantityType] = [
+        HKQuantityType(.bodyMass),
+        HKQuantityType(.bodyFatPercentage),
+        HKQuantityType(.dietaryEnergyConsumed),
+        HKQuantityType(.waistCircumference),
+    ]
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
@@ -138,6 +210,15 @@ final class HealthStore: HealthWriting {
 
     var activeEnergySharingStatus: HealthSharingStatus {
         status(of: Self.activeEnergyType)
+    }
+
+    var measurementSharingStatus: HealthSharingStatus {
+        guard isAvailable else { return .unavailable }
+        let statuses = Self.measurementTypes.map { status(of: $0) }
+        if statuses.contains(.notDetermined) { return .notDetermined }
+        if statuses.allSatisfy({ $0 == .authorized }) { return .authorized }
+        if statuses.contains(.denied) { return .denied }
+        return .notDetermined
     }
 
     private func status(of type: HKObjectType) -> HealthSharingStatus {
@@ -162,9 +243,113 @@ final class HealthStore: HealthWriting {
         )
     }
 
+    func requestMeasurementAuthorization() async throws {
+        guard isAvailable else { return }
+        try await store.requestAuthorization(
+            toShare: Set(Self.measurementTypes),
+            read: Set(Self.measurementTypes)
+        )
+    }
+
     @discardableResult
-    func writeWorkout(_ plan: HealthWorkoutPlan, rate: WorkoutCalorieRate) async throws -> Bool {
+    func writeMeasurement(
+        _ plan: HealthMeasurementPlan,
+        enabled: Bool
+    ) async throws -> Bool {
         guard isAvailable else { return false }
+        guard enabled else { return false }
+        guard measurementSharingStatus == .authorized else { return false }
+
+        let sampleType = Self.quantityType(plan.quantity)
+        if try await alreadyWritten(externalID: plan.externalID, sampleType: sampleType) {
+            return false
+        }
+
+        let sample = HKQuantitySample(
+            type: sampleType,
+            quantity: HKQuantity(
+                unit: Self.unit(plan.quantity),
+                doubleValue: plan.canonicalValue
+            ),
+            start: plan.recordedAt,
+            end: plan.recordedAt,
+            metadata: [HKMetadataKeyExternalUUID: plan.externalID.uuidString]
+        )
+        try await store.save(sample)
+        return true
+    }
+
+    func writtenMeasurementExternalIDs() async throws -> Set<UUID> {
+        let mine = HKQuery.predicateForObjects(from: .default())
+        var ids: Set<UUID> = []
+        for type in Self.measurementTypes {
+            let samples = try await samples(of: type, matching: mine, limit: HKObjectQueryNoLimit)
+            for sample in samples {
+                guard
+                    let raw = sample.metadata?[HKMetadataKeyExternalUUID] as? String,
+                    let id = UUID(uuidString: raw)
+                else { continue }
+                ids.insert(id)
+            }
+        }
+        return ids
+    }
+
+    func measurementSampleFacts() async throws -> [HealthMeasurementSampleFacts] {
+        var facts: [HealthMeasurementSampleFacts] = []
+        for quantity in HealthMeasurementQuantity.allCases {
+            let type = Self.quantityType(quantity)
+            let unit = Self.unit(quantity)
+            let samples = try await samples(of: type, matching: nil, limit: HKObjectQueryNoLimit)
+            for sample in samples {
+                guard let quantitySample = sample as? HKQuantitySample else { continue }
+                let external: UUID?
+                if let raw = quantitySample.metadata?[HKMetadataKeyExternalUUID] as? String {
+                    external = UUID(uuidString: raw)
+                } else {
+                    external = nil
+                }
+                facts.append(
+                    HealthMeasurementSampleFacts(
+                        isFromThisApp: quantitySample.sourceRevision.source == HKSource.default(),
+                        sampleID: quantitySample.uuid,
+                        externalID: external,
+                        quantity: quantity,
+                        canonicalValue: quantitySample.quantity.doubleValue(for: unit),
+                        recordedAt: quantitySample.startDate
+                    )
+                )
+            }
+        }
+        return facts
+    }
+
+    private static func quantityType(_ quantity: HealthMeasurementQuantity) -> HKQuantityType {
+        switch quantity {
+        case .bodyMass:                 HKQuantityType(.bodyMass)
+        case .bodyFatPercentage:        HKQuantityType(.bodyFatPercentage)
+        case .dietaryEnergyConsumed:    HKQuantityType(.dietaryEnergyConsumed)
+        case .waistCircumference:       HKQuantityType(.waistCircumference)
+        }
+    }
+
+    private static func unit(_ quantity: HealthMeasurementQuantity) -> HKUnit {
+        switch quantity {
+        case .bodyMass:                 .gramUnit(with: .kilo)
+        case .bodyFatPercentage:        .percent()
+        case .dietaryEnergyConsumed:    .kilocalorie()
+        case .waistCircumference:       .meter()
+        }
+    }
+
+    @discardableResult
+    func writeWorkout(
+        _ plan: HealthWorkoutPlan,
+        rate: WorkoutCalorieRate,
+        workoutsEnabled: Bool
+    ) async throws -> Bool {
+        guard isAvailable else { return false }
+        guard workoutsEnabled else { return false }
         guard workoutSharingStatus == .authorized else { return false }
 
         // IDEMPOTENCY, asked of Health rather than remembered locally. See
@@ -292,6 +477,13 @@ final class HealthStore: HealthWriting {
     /// that happens to carry the same metadata key is not ours to deduplicate
     /// against, and a shared id is not impossible.
     private func alreadyWritten(externalID: UUID) async throws -> Bool {
+        try await alreadyWritten(externalID: externalID, sampleType: .workoutType())
+    }
+
+    private func alreadyWritten(
+        externalID: UUID,
+        sampleType: HKSampleType
+    ) async throws -> Bool {
         let mine = HKQuery.predicateForObjects(from: .default())
         let sameID = HKQuery.predicateForObjects(
             withMetadataKey: HKMetadataKeyExternalUUID,
@@ -299,18 +491,40 @@ final class HealthStore: HealthWriting {
             value: externalID.uuidString
         )
         let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [mine, sameID])
+        let samples = try await samples(of: sampleType, matching: predicate, limit: 1)
+        return !samples.isEmpty
+    }
 
-        return try await withCheckedThrowingContinuation { continuation in
+    func writtenExternalIDs() async throws -> Set<UUID> {
+        let mine = HKQuery.predicateForObjects(from: .default())
+        let samples = try await samples(of: .workoutType(), matching: mine, limit: HKObjectQueryNoLimit)
+        var ids: Set<UUID> = []
+        for sample in samples {
+            guard
+                let raw = sample.metadata?[HKMetadataKeyExternalUUID] as? String,
+                let id = UUID(uuidString: raw)
+            else { continue }
+            ids.insert(id)
+        }
+        return ids
+    }
+
+    private func samples(
+        of sampleType: HKSampleType,
+        matching predicate: NSPredicate?,
+        limit: Int
+    ) async throws -> [HKSample] {
+        try await withCheckedThrowingContinuation { continuation in
             let query = HKSampleQuery(
-                sampleType: .workoutType(),
+                sampleType: sampleType,
                 predicate: predicate,
-                limit: 1,
+                limit: limit,
                 sortDescriptors: nil
             ) { _, samples, error in
                 if let error {
                     continuation.resume(throwing: error)
                 } else {
-                    continuation.resume(returning: !(samples ?? []).isEmpty)
+                    continuation.resume(returning: samples ?? [])
                 }
             }
             store.execute(query)

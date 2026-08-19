@@ -147,9 +147,10 @@ struct ContentView: View {
         // about what a bare setting means is the failure canonical storage
         // exists to remove.
         let rate = settings.first?.workoutCalorieRate ?? .medium
+        let workoutsEnabled = settings.first?.writeWorkoutsToHealth ?? true
         guard case .success(let plan) = HealthWorkoutRule.plan(for: workout, rate: rate)
         else { return }
-        Task { try? await health.writeWorkout(plan, rate: rate) }
+        Task { try? await health.writeWorkout(plan, rate: rate, workoutsEnabled: workoutsEnabled) }
     }
 
     // MARK: - Tab view

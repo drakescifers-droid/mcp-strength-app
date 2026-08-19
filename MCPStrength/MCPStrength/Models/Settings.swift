@@ -180,6 +180,28 @@ final class AppSettings {
     /// (the hardcoded rest timer, the unread unit settings).
     var workoutCalorieRate: WorkoutCalorieRate = WorkoutCalorieRate.medium
 
+    /// Whether finished workouts are written to Apple Health.
+    ///
+    /// **Separate from the iOS permission**, and that is the whole reason
+    /// this exists. iOS never lets an app revoke its own Health permission,
+    /// so without this flag there is no way to turn the feature off from
+    /// inside the app. The reference's Apple Health screen has the same
+    /// split: permitted AND switched on. Default `true` matches the
+    /// behaviour before this field existed and the server column's default;
+    /// a client default of `false` would silently stop writing.
+    var writeWorkoutsToHealth: Bool = true
+
+    /// Whether the four HealthKit-backed measurement types are written out.
+    /// Same split as `writeWorkoutsToHealth`: iOS will not let this app
+    /// revoke its own permission, so the in-app switch is the only off.
+    /// Default `true` matches the reference and the server column.
+    var writeMeasurementsToHealth: Bool = true
+
+    /// Whether measurements are imported from Health. The echo-loop skip
+    /// (`HealthMeasurementRule.importDecision`) still runs; this flag is
+    /// whether we look at all. Default `true` matches the reference.
+    var readMeasurementsFromHealth: Bool = true
+
     // MARK: Shape not decided — no screen until it is
 
     /// Light / dark / follow-the-system, once a light palette exists. There is
@@ -210,6 +232,9 @@ final class AppSettings {
         defaultRestSeconds: Int = 90,
         weekStartDay: Int = 1,
         workoutCalorieRate: WorkoutCalorieRate = .medium,
+        writeWorkoutsToHealth: Bool = true,
+        writeMeasurementsToHealth: Bool = true,
+        readMeasurementsFromHealth: Bool = true,
         theme: String? = nil,
         language: String? = nil,
         previousSetBehavior: String? = nil
@@ -223,6 +248,9 @@ final class AppSettings {
         self.defaultRestSeconds = defaultRestSeconds
         self.weekStartDay = weekStartDay
         self.workoutCalorieRate = workoutCalorieRate
+        self.writeWorkoutsToHealth = writeWorkoutsToHealth
+        self.writeMeasurementsToHealth = writeMeasurementsToHealth
+        self.readMeasurementsFromHealth = readMeasurementsFromHealth
         self.theme = theme
         self.language = language
         self.previousSetBehavior = previousSetBehavior
@@ -294,6 +322,26 @@ extension AppSettings {
     func setWorkoutCalorieRate(_ rate: WorkoutCalorieRate) {
         guard workoutCalorieRate != rate else { return }
         workoutCalorieRate = rate
+        markEdited()
+    }
+
+    /// Same no-op guard as the unit and the rate: flipping a switch that is
+    /// already where you wanted it must not dirty the row.
+    func setWriteWorkoutsToHealth(_ enabled: Bool) {
+        guard writeWorkoutsToHealth != enabled else { return }
+        writeWorkoutsToHealth = enabled
+        markEdited()
+    }
+
+    func setWriteMeasurementsToHealth(_ enabled: Bool) {
+        guard writeMeasurementsToHealth != enabled else { return }
+        writeMeasurementsToHealth = enabled
+        markEdited()
+    }
+
+    func setReadMeasurementsFromHealth(_ enabled: Bool) {
+        guard readMeasurementsFromHealth != enabled else { return }
+        readMeasurementsFromHealth = enabled
         markEdited()
     }
 }
