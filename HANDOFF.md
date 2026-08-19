@@ -18,12 +18,14 @@ I'm not a developer — explain things in plain English. Code, commits and docs 
 state, the traps, the decisions and the reasoning behind them. Don't re-derive from the code what
 those files already explain, and don't duplicate them into new files.
 
-The one-line state: **the app is on Drake's phone, he is training on it, and Phase 2 is down to
-Apple Health — workouts go out, calories now go with them, measurements do not.** Sync proven end
-to end IN BOTH DIRECTIONS against the live project, canonical units done, a round of gym-found bugs
-fixed, per-exercise Preferences — model and sheet — landed, the settings screen makes the global
-weight unit changeable, **both settings and preferences SYNC**, and the workout calorie rate is
-built on both sides. Swift suite green (546 tests), SQL suite green.
+The one-line state: **the app is on Drake's phone, he is training on it, Phase 2 is down to Apple
+Health — workouts and their calories go out, measurements do not — and the next thing he has asked
+for is a CUSTOM KEYPAD.** Sync proven end to end IN BOTH DIRECTIONS against the live project,
+canonical units done, a round of gym-found bugs fixed, per-exercise Preferences — model and sheet —
+landed, the settings screen makes the global weight unit changeable, **both settings and
+preferences SYNC**, the workout calorie rate is built on both sides, and **the warm-up ramp's
+percentages were found wrong and corrected** (40 / 60 / 80, not 50 / 60 / 75). Swift suite green
+(548 tests), SQL suite green.
 
 > **THE APP IS IN HIS HAND AND HE TESTS IT.** That changes how you work — see
 > `AGENTS.md` § "DRAKE DOES THE UI TESTING". Build, install, hand over. Do not drive the simulator
@@ -51,21 +53,46 @@ built on both sides. Swift suite green (546 tests), SQL suite green.
 
 ## Next piece of work, in order
 
-1. ✅ **APPLE HEALTH CALORIES ARE BUILT — both halves — AND THE NUMBER NEEDS A THUMB.**
-   `WorkoutCalorieRate` (five cases matching `public.workout_calorie_rate`), the `AppSettings`
-   field defaulting to `medium` like the column does, the wire row + mapper + apply + the explicit
-   `encode` line, the picker under Settings → Apple Health, and an `activeEnergyBurned` sample on
-   the `HKWorkoutBuilder`. A flat rate per hour the user picks: None / Low / Medium / High / Very
-   High at 0 / 150 / 200 / 250 / 300 kcal.
-   > ⚠️ **WHAT IS UNVERIFIED IS DOUBLE COUNTING, and it is a fact about Apple rather than about
-   > this code — only a phone can answer it.** A worn Watch already writes `activeEnergyBurned`
-   > continuously; our sample on top may count twice in the Activity rings. Finish a workout, then
-   > look at the day's Move ring and at the workout's own calorie figure in Apple Fitness. If it
-   > double-counts, `None` is the honest setting and item 2 below is the real answer.
-   > **Two decisions worth knowing before touching it:** energy is a SECOND write permission,
-   > authorized and revocable separately from workouts, so it is skipped rather than allowed to
-   > throw (a permission about energy must not cost the whole workout); and `none` writes NO
-   > SAMPLE rather than a zero one.
+1. **THE CUSTOM NUMBER KEYPAD — Drake asked for it directly on 2026-08-19, and it is the next
+   thing to build.** Match the reference app's: digits, `⌫`, a dismiss-keyboard button, a **− / +**
+   pair, and a blue **Next**. Today every entry field is a plain `TextField` on the SYSTEM keypad
+   (`SetRow.swift`: weight `.decimalPad`, reps `.numberPad` or `.default` when a range is allowed,
+   RPE; plus `RestDivider`, `RecordMeasurementSheet` and the template editor, which reuses
+   `SetRow`).
+
+   > ⚠️ **LOOK AT THE REFERENCE BEFORE DESIGNING IT, because the one screenshot we have may not be
+   > the keypad you think it is.** In Drake's 2026-08-19 photo the REST BAR is what is selected
+   > (`2:30`, highlighted blue) — not a weight field — and the keypad shown **has no decimal
+   > point**. A weight field needs one (2.5 kg jumps, a 137.5 lb working set), so either the layout
+   > changes per field or something else is going on. This is the same trap as everything else on
+   > this ramp: *which* thing am I looking at. Four questions, all answerable in a minute in the
+   > reference app:
+   >   1. Does the WEIGHT field's keypad have a decimal key, and is the layout otherwise identical?
+   >   2. What do **−** and **+** step by — the plate increment (5 lb / 2.5 kg), 1 rep, 15 s of rest?
+   >      Does it depend on the field?
+   >   3. What does **Next** do at the LAST field of the LAST set — dismiss, add a set, nothing?
+   >   4. Does **Next** also tick the set complete, or only move focus?
+
+   > **The implementation route is the part with a real decision in it.** SwiftUI's `TextField` has
+   > no `inputView`, so a genuinely custom keyboard means either a `UIViewRepresentable` around
+   > `UITextField` (which gets `inputView` / `inputAccessoryView` for free) or abandoning
+   > `TextField` for a tap-target that drives `@FocusState` and a pinned keypad view. Do NOT reach
+   > for `ToolbarItemGroup(placement: .keyboard)` and call it done — that adds a bar ABOVE the
+   > system keypad rather than replacing it, which is a different design.
+
+   > **Three things that must survive the change**, all of which currently work:
+   >   * **Every write still goes through `commitWeight` / `commitReps`**, which is where
+   >     `markEdited()` lives. A keypad that mutates the model directly silently stops the row
+   >     syncing — AGENTS.md rule 3, and it would pass every test.
+   >   * **The template screen's reps field accepts a RANGE (`6-8`)**, which is why it asks for
+   >     `.default` rather than `.numberPad` today. A digits-only keypad breaks it unless it grows
+   >     a hyphen or a range affordance.
+   >   * **The caret.** `04-status.md` records a harness bug where tapping the middle of a
+   >     right-aligned chip put the caret BEFORE the text, so backspaces deleted nothing and "135"
+   >     was typed in front of "90". A keypad that replaces-on-first-digit avoids it; check.
+
+   **Visual work, so it stays here and does not go to Ringer** (`AGENTS.md` § routing), and Drake
+   tests it on the phone.
 
 2. **The better energy answer, and Drake's stated preference — attach the Watch's EXISTING
    samples.** `HKWorkoutBuilder.addSamples` documents that samples *"will be saved to the database
@@ -116,6 +143,13 @@ Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
 
 ## Waiting on me
 
+- 🆕 **FOUR QUESTIONS ABOUT THE KEYPAD, and only I can answer them — they need the reference app
+  open** (the whole item is #1 above). Open Strong, start a workout, and tap into the fields:
+  1. does the **weight** field's keypad have a **decimal point**? The photo I sent has none, and I
+     had the REST BAR selected when I took it, so it may not be the same keypad;
+  2. what do **−** and **+** step by, and does it change per field?
+  3. what does **Next** do on the last field of the last set?
+  4. does **Next** also tick the set complete, or only move the cursor?
 - **The bar on logging real workouts is LIFTED** — the units conversion has landed, which is the
   only thing it was ever waiting on. What still blocks the phone is the item below.
 - ✅ **SOLVED — the 13:35 push was `xcodebuild test`.** The test bundle is hosted by the app, so a

@@ -378,6 +378,20 @@ touches how an in-progress workout is represented.
 
 ## Open questions
 
+> **NEWEST, AND IT IS A REQUEST RATHER THAN A QUESTION — A CUSTOM NUMBER KEYPAD, asked for by
+> Drake 2026-08-19.** Match the reference app's — digits, `⌫`, dismiss, a **− / +** pair and a
+> blue **Next** — replacing the system keypad on every entry field. **It is an architectural choice rather than a styling one:**
+> SwiftUI's `TextField` has no `inputView`, so it needs either a `UIViewRepresentable` around
+> `UITextField` or a tap-target driving `@FocusState` and a pinned keypad view.
+> `ToolbarItemGroup(placement: .keyboard)` is NOT it — that sits above the system keypad rather
+> than replacing it.
+>
+> `HANDOFF.md` item 1 carries the four facts about the reference that must be established before
+> any of it is designed — starting with whether the weight field's keypad even has a decimal point
+> — and the three behaviours that must survive it: `markEdited` on the commit path, the template
+> screen's `6-8` rep RANGE, and the caret-position trap.
+
+
 1. **Seeding the exercise library.** Need a source for the initial library. Licensing matters
    if illustrations are included.
 2. **Edge Function transport fit.** Verify at Phase 3 that Supabase Edge Functions can serve
