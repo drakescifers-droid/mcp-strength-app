@@ -41,6 +41,42 @@
 //  encoding the Swift enum directly produces the exact string the column
 //  accepts, with no mapping table in between to get wrong.
 //
+//  ## A nil field must travel as an explicit `null`
+//
+//  Swift's synthesised `encode(to:)` uses `encodeIfPresent` for every
+//  Optional, so a nil property is OMITTED FROM THE JSON ENTIRELY. An upsert
+//  is `INSERT … ON CONFLICT DO UPDATE` and its SET clause is built from the
+//  keys the payload actually contains — so an omitted column keeps whatever
+//  the server already had. That silently turns *clear this* into *leave it
+//  alone*:
+//
+//      1. the user sets a value; it pushes and the server stores it
+//      2. they clear it; the key vanishes from the payload and the server
+//         keeps the old value
+//      3. the next pull brings the old value back down and overwrites the
+//         local nil. The clear undoes itself, on every device.
+//
+//  Reachable today: unfiling a template (`folder_id`), Leave Superset
+//  (`superset_group_id` — a shipped menu item), deleting a note or summary,
+//  removing a prescribed weight or a logged one.
+//
+//  Every row therefore writes `encode(to:)` itself, using `encode` for every
+//  field so a nil becomes JSON `null`. `serverUpdatedAt` is the ONE exception
+//  and stays `encodeIfPresent`: it is server-owned (the `set_sync_metadata`
+//  trigger writes it on every write) and a key for it is at best noise. Do
+//  not add `init(from:)` — the synthesised decoder already treats an explicit
+//  `null` as nil for an Optional.
+//
+//  `CodingKeys` is `CaseIterable` so one completeness test can ask every row
+//  type: with every optional nil, is every key except `server_updated_at`
+//  present? A forgotten line in a hand-written encoder would be worse than
+//  the bug this exists to fix — the field would never travel at all, set or
+//  cleared. The conformance lives on a same-file extension, not on the
+//  enum declaration — `check_row_mapping.py` matches the literal
+//  `enum CodingKeys: String, CodingKey {`, and `, CaseIterable` on that
+//  line makes it report every struct as missing. docs/06-sync.md § "A nil
+//  field must travel as an explicit `null`".
+//
 
 import Foundation
 
@@ -67,6 +103,24 @@ struct SyncExerciseRow: Codable, Sendable, Equatable {
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
         case serverUpdatedAt = "server_updated_at"
+    }
+
+    /// Explicit `null` for every nil. The reason lives in the file header
+    /// (and at length on `SyncExercisePreferenceRow.encode(to:)`): a
+    /// synthesised encoder omits optionals, and an omitted column is not
+    /// updated. `serverUpdatedAt` is the one `encodeIfPresent`.
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(userID, forKey: .userID)
+        try c.encode(name, forKey: .name)
+        try c.encode(aliases, forKey: .aliases)
+        try c.encode(bodyPart, forKey: .bodyPart)
+        try c.encode(category, forKey: .category)
+        try c.encode(isCustom, forKey: .isCustom)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(deletedAt, forKey: .deletedAt)
+        try c.encodeIfPresent(serverUpdatedAt, forKey: .serverUpdatedAt)
     }
 }
 
@@ -96,6 +150,22 @@ struct SyncTemplateFolderRow: Codable, Sendable, Equatable {
         case deletedAt = "deleted_at"
         case serverUpdatedAt = "server_updated_at"
     }
+
+    /// See `SyncExerciseRow.encode(to:)`. `serverUpdatedAt` is the one `encodeIfPresent`.
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(userID, forKey: .userID)
+        try c.encode(name, forKey: .name)
+        try c.encode(sortOrder, forKey: .sortOrder)
+        try c.encode(isCollapsed, forKey: .isCollapsed)
+        try c.encode(kind, forKey: .kind)
+        try c.encode(programCursor, forKey: .programCursor)
+        try c.encode(totalCycles, forKey: .totalCycles)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(deletedAt, forKey: .deletedAt)
+        try c.encodeIfPresent(serverUpdatedAt, forKey: .serverUpdatedAt)
+    }
 }
 
 struct SyncTemplateRow: Codable, Sendable, Equatable {
@@ -119,6 +189,21 @@ struct SyncTemplateRow: Codable, Sendable, Equatable {
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
         case serverUpdatedAt = "server_updated_at"
+    }
+
+    /// See `SyncExerciseRow.encode(to:)`. `serverUpdatedAt` is the one `encodeIfPresent`.
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(userID, forKey: .userID)
+        try c.encode(name, forKey: .name)
+        try c.encode(folderID, forKey: .folderID)
+        try c.encode(note, forKey: .note)
+        try c.encode(sortOrder, forKey: .sortOrder)
+        try c.encode(lastPerformedAt, forKey: .lastPerformedAt)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(deletedAt, forKey: .deletedAt)
+        try c.encodeIfPresent(serverUpdatedAt, forKey: .serverUpdatedAt)
     }
 }
 
@@ -148,6 +233,23 @@ struct SyncTemplateExerciseRow: Codable, Sendable, Equatable {
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
         case serverUpdatedAt = "server_updated_at"
+    }
+
+    /// See `SyncExerciseRow.encode(to:)`. `serverUpdatedAt` is the one `encodeIfPresent`.
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(userID, forKey: .userID)
+        try c.encode(templateID, forKey: .templateID)
+        try c.encode(exerciseID, forKey: .exerciseID)
+        try c.encode(sortOrder, forKey: .sortOrder)
+        try c.encode(supersetGroupID, forKey: .supersetGroupID)
+        try c.encode(note, forKey: .note)
+        try c.encode(stickyNote, forKey: .stickyNote)
+        try c.encode(defaultRestSeconds, forKey: .defaultRestSeconds)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(deletedAt, forKey: .deletedAt)
+        try c.encodeIfPresent(serverUpdatedAt, forKey: .serverUpdatedAt)
     }
 }
 
@@ -183,6 +285,27 @@ struct SyncTemplateSetRow: Codable, Sendable, Equatable {
         case deletedAt = "deleted_at"
         case serverUpdatedAt = "server_updated_at"
     }
+
+    /// See `SyncExerciseRow.encode(to:)`. `serverUpdatedAt` is the one `encodeIfPresent`.
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(userID, forKey: .userID)
+        try c.encode(templateExerciseID, forKey: .templateExerciseID)
+        try c.encode(sortOrder, forKey: .sortOrder)
+        try c.encode(setType, forKey: .setType)
+        try c.encode(weight, forKey: .weight)
+        try c.encode(reps, forKey: .reps)
+        try c.encode(repRangeStart, forKey: .repRangeStart)
+        try c.encode(repRangeEnd, forKey: .repRangeEnd)
+        try c.encode(rpe, forKey: .rpe)
+        try c.encode(distance, forKey: .distance)
+        try c.encode(durationSeconds, forKey: .durationSeconds)
+        try c.encode(restSeconds, forKey: .restSeconds)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(deletedAt, forKey: .deletedAt)
+        try c.encodeIfPresent(serverUpdatedAt, forKey: .serverUpdatedAt)
+    }
 }
 
 // MARK: - Programs
@@ -207,6 +330,20 @@ struct SyncProgramDayRow: Codable, Sendable, Equatable {
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
         case serverUpdatedAt = "server_updated_at"
+    }
+
+    /// See `SyncExerciseRow.encode(to:)`. `serverUpdatedAt` is the one `encodeIfPresent`.
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(userID, forKey: .userID)
+        try c.encode(folderID, forKey: .folderID)
+        try c.encode(templateID, forKey: .templateID)
+        try c.encode(sortOrder, forKey: .sortOrder)
+        try c.encode(label, forKey: .label)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(deletedAt, forKey: .deletedAt)
+        try c.encodeIfPresent(serverUpdatedAt, forKey: .serverUpdatedAt)
     }
 }
 
@@ -241,6 +378,25 @@ struct SyncWorkoutRow: Codable, Sendable, Equatable {
         case deletedAt = "deleted_at"
         case serverUpdatedAt = "server_updated_at"
     }
+
+    /// See `SyncExerciseRow.encode(to:)`. `serverUpdatedAt` is the one `encodeIfPresent`.
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(userID, forKey: .userID)
+        try c.encode(name, forKey: .name)
+        try c.encode(templateID, forKey: .templateID)
+        try c.encode(startedAt, forKey: .startedAt)
+        try c.encode(completedAt, forKey: .completedAt)
+        try c.encode(durationSeconds, forKey: .durationSeconds)
+        try c.encode(note, forKey: .note)
+        try c.encode(summary, forKey: .summary)
+        try c.encode(totalVolume, forKey: .totalVolume)
+        try c.encode(prCount, forKey: .prCount)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(deletedAt, forKey: .deletedAt)
+        try c.encodeIfPresent(serverUpdatedAt, forKey: .serverUpdatedAt)
+    }
 }
 
 struct SyncWorkoutExerciseRow: Codable, Sendable, Equatable {
@@ -269,6 +425,23 @@ struct SyncWorkoutExerciseRow: Codable, Sendable, Equatable {
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
         case serverUpdatedAt = "server_updated_at"
+    }
+
+    /// See `SyncExerciseRow.encode(to:)`. `serverUpdatedAt` is the one `encodeIfPresent`.
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(userID, forKey: .userID)
+        try c.encode(workoutID, forKey: .workoutID)
+        try c.encode(exerciseID, forKey: .exerciseID)
+        try c.encode(sortOrder, forKey: .sortOrder)
+        try c.encode(supersetGroupID, forKey: .supersetGroupID)
+        try c.encode(note, forKey: .note)
+        try c.encode(stickyNote, forKey: .stickyNote)
+        try c.encode(defaultRestSeconds, forKey: .defaultRestSeconds)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(deletedAt, forKey: .deletedAt)
+        try c.encodeIfPresent(serverUpdatedAt, forKey: .serverUpdatedAt)
     }
 }
 
@@ -304,6 +477,27 @@ struct SyncWorkoutSetRow: Codable, Sendable, Equatable {
         case deletedAt = "deleted_at"
         case serverUpdatedAt = "server_updated_at"
     }
+
+    /// See `SyncExerciseRow.encode(to:)`. `serverUpdatedAt` is the one `encodeIfPresent`.
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(userID, forKey: .userID)
+        try c.encode(workoutExerciseID, forKey: .workoutExerciseID)
+        try c.encode(sortOrder, forKey: .sortOrder)
+        try c.encode(setType, forKey: .setType)
+        try c.encode(weight, forKey: .weight)
+        try c.encode(reps, forKey: .reps)
+        try c.encode(rpe, forKey: .rpe)
+        try c.encode(distance, forKey: .distance)
+        try c.encode(durationSeconds, forKey: .durationSeconds)
+        try c.encode(restSeconds, forKey: .restSeconds)
+        try c.encode(isCompleted, forKey: .isCompleted)
+        try c.encode(completedAt, forKey: .completedAt)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(deletedAt, forKey: .deletedAt)
+        try c.encodeIfPresent(serverUpdatedAt, forKey: .serverUpdatedAt)
+    }
 }
 
 // MARK: - Measurements
@@ -327,6 +521,19 @@ struct SyncMeasurementTypeRow: Codable, Sendable, Equatable {
         case deletedAt = "deleted_at"
         case serverUpdatedAt = "server_updated_at"
     }
+
+    /// See `SyncExerciseRow.encode(to:)`. `serverUpdatedAt` is the one `encodeIfPresent`.
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(userID, forKey: .userID)
+        try c.encode(name, forKey: .name)
+        try c.encode(groupKind, forKey: .groupKind)
+        try c.encode(sortOrder, forKey: .sortOrder)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(deletedAt, forKey: .deletedAt)
+        try c.encodeIfPresent(serverUpdatedAt, forKey: .serverUpdatedAt)
+    }
 }
 
 struct SyncMeasurementEntryRow: Codable, Sendable, Equatable {
@@ -349,6 +556,21 @@ struct SyncMeasurementEntryRow: Codable, Sendable, Equatable {
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
         case serverUpdatedAt = "server_updated_at"
+    }
+
+    /// See `SyncExerciseRow.encode(to:)`. `serverUpdatedAt` is the one `encodeIfPresent`.
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(userID, forKey: .userID)
+        try c.encode(typeID, forKey: .typeID)
+        try c.encode(value, forKey: .value)
+        try c.encode(unit, forKey: .unit)
+        try c.encode(recordedAt, forKey: .recordedAt)
+        try c.encode(source, forKey: .source)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(deletedAt, forKey: .deletedAt)
+        try c.encodeIfPresent(serverUpdatedAt, forKey: .serverUpdatedAt)
     }
 }
 
@@ -504,6 +726,29 @@ extension SyncExercisePreferenceRow {
     /// pull index hits. Not a column, not stored, not in CodingKeys.
     var id: UUID { exerciseID }
 }
+
+// MARK: - CodingKeys: CaseIterable
+//
+// Same-file extensions, not `enum CodingKeys: String, CodingKey, CaseIterable`.
+// `supabase/scripts/check_row_mapping.py` matches that declaration literally
+// up to the `{`; putting CaseIterable on the line makes it report every
+// struct as having no CodingKeys, which is a false alarm that hides a real
+// misspelled column. Swift synthesises `allCases` for a same-file
+// extension of a no-payload enum; do not write the case list by hand.
+
+extension SyncExerciseRow.CodingKeys: CaseIterable {}
+extension SyncTemplateFolderRow.CodingKeys: CaseIterable {}
+extension SyncTemplateRow.CodingKeys: CaseIterable {}
+extension SyncTemplateExerciseRow.CodingKeys: CaseIterable {}
+extension SyncTemplateSetRow.CodingKeys: CaseIterable {}
+extension SyncProgramDayRow.CodingKeys: CaseIterable {}
+extension SyncWorkoutRow.CodingKeys: CaseIterable {}
+extension SyncWorkoutExerciseRow.CodingKeys: CaseIterable {}
+extension SyncWorkoutSetRow.CodingKeys: CaseIterable {}
+extension SyncMeasurementTypeRow.CodingKeys: CaseIterable {}
+extension SyncMeasurementEntryRow.CodingKeys: CaseIterable {}
+extension SyncAppSettingsRow.CodingKeys: CaseIterable {}
+extension SyncExercisePreferenceRow.CodingKeys: CaseIterable {}
 
 // MARK: - Model → row
 //

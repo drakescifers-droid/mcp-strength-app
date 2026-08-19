@@ -215,6 +215,22 @@ cards, because "best set" required both weight and reps. Three sets of pull-ups 
 mentioned in the summary. That bug survived ~295 tests. **Use this before believing any UI is
 right.**
 
+- **Explicit-null encoding, all thirteen row structs.** A cleared field now travels as JSON `null`
+  instead of vanishing from the payload and leaving the server's old value in place.
+  > **The most reachable instance was one the design doc missed: Leave Superset.** It is a shipped
+  > menu item that clears `superset_group_id`, so leaving a superset never travelled and the next
+  > pull put you back in it. Unfiling a template, deleting a note or summary, and clearing a
+  > prescribed or logged weight were the others.
+  > **The fix's own risk is bigger than the bug, and is guarded structurally.** A hand-written
+  > encoder that FORGETS a field means that field never travels at all — set or cleared — and it
+  > would compile, pass every existing round-trip, and be invisible in review. So every
+  > `CodingKeys` is `CaseIterable` and `everyNilOptionalStillEmitsItsKeyExceptServerUpdatedAt`
+  > iterates `allCases` per row with every optional nil. **Keep that test working when you add a
+  > column.**
+  > **Why eleven structs carried this for months:** every round-trip test built rows with values
+  > PRESENT. The absence is the case nobody wrote — the same shape as the warm-up ramp bug, where
+  > every test used a set list with no warm-ups in it.
+
 ### What turning sync on for real found — one outage, and the harness was hiding it
 
 **2026-08-19. The first sync after settings backup went live failed, and the failure was total:
@@ -476,19 +492,12 @@ underneath never changed — only whether the screen described it honestly.
 
 ### What is left, in order
 
-1. **A CLEARED FIELD DOES NOT TRAVEL, on all eleven pre-existing row structs.** Swift's synthesised
-   encoder omits nil optionals, and an upsert only updates the columns its payload mentions — so
-   clearing a value is a silent no-op that the next pull reverses. Unfiling a template
-   (`folder_id`), deleting a workout note or summary, removing a template set's prescribed weight:
-   none of them can currently reach the server. `docs/06-sync.md` § "A nil field must travel as an
-   explicit `null`" has the full argument.
-   > **The two NEW rows are already fixed** — they write explicit `encode` — because the
-   > Preferences sheet made it reachable the day it shipped. The rest is mechanical, an explicit
-   > `encode(to:)` per struct, and it changes every payload the app sends, which is why it is its
-   > own change with its own tests.
-   > **Why no test caught it for eleven structs:** every round-trip test builds a row with values
-   > PRESENT. The absence is the case nobody wrote — the same shape as the warm-up ramp bug, where
-   > every test used a set list with no warm-ups in it.
+1. **Apple Health.** The last item in Phase 2, and no longer blocked — see the signing note below.
+   Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
+
+> ~~**A cleared field does not travel.**~~ **FIXED 2026-08-19, all thirteen row structs.** Kept
+> below only as the record of what it was.
+
 2. ~~**Sync `AppSettings` and `ExercisePreference`.**~~ **DONE 2026-08-18.** Kept below because the
    reasoning is the record of why it was one job.
    

@@ -19,7 +19,8 @@ state, the traps, the decisions and the reasoning behind them. Don't re-derive f
 those files already explain, and don't duplicate them into new files.
 
 The one-line state: **the app is on Drake's phone, he is training on it, and Phase 2 is down to
-two items.** Sync proven end to end, canonical units done, a round of gym-found bugs fixed,
+ONE item — Apple Health.** Sync proven end to end IN BOTH DIRECTIONS against the live project,
+canonical units done, a round of gym-found bugs fixed,
 per-exercise Preferences — model and sheet — landed, the settings screen makes the global weight
 unit changeable, and **both settings and preferences now SYNC** (table live on the project, client
 conformances on). Swift suite green, SQL suite green.
@@ -50,18 +51,7 @@ conformances on). Swift suite green, SQL suite green.
 
 ## Next piece of work, in order
 
-1. **A CLEARED FIELD DOES NOT TRAVEL — eleven row structs, and it is silent.** Swift's synthesised
-   encoder omits nil optionals and an upsert only updates the columns its payload mentions, so
-   clearing a value never reaches the server and the next pull puts it back. Unfiling a template,
-   deleting a workout note, removing a template set's weight: all silent no-ops today.
-   `docs/06-sync.md` § "A nil field must travel as an explicit `null`" has the argument and the
-   worked fix.
-   > **The two rows added on 2026-08-18 are already correct** (explicit `encode`), because the
-   > Preferences sheet made clearing reachable immediately. The remaining eleven are mechanical but
-   > change every payload the app sends, so they want their own change and their own tests.
-   > **Found by the REAL suite after the Ringer check passed** — a compile cannot see it, and every
-   > existing round-trip test builds rows with values present. The absence is the case nobody wrote.
-2. **Apple Health.** Last thing in Phase 2, and no longer blocked — the developer account is live.
+1. **Apple Health.** Last thing in Phase 2, and no longer blocked — the developer account is live.
    Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
 
 > **Per-exercise Preferences is DONE, and it went through Ringer — which answers the question this

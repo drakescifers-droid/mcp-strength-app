@@ -112,7 +112,13 @@ def coding_keys() -> dict[str, set[str]]:
     swift = ROWS.read_text()
     structs: dict[str, set[str]] = {}
     for match in re.finditer(
-        r"struct (\w+): Codable.*?enum CodingKeys: String, CodingKey \{(.*?)\n    \}",
+        # `[^{\n]*` after CodingKey so a struct may declare EXTRA conformances
+        # on that line (e.g. `, CaseIterable`) without this script reporting the
+        # whole struct as missing. The literal form used to be required, which
+        # made it impossible to add CaseIterable there and silently forced the
+        # conformance onto an extension — a constraint nobody intended and
+        # nobody could see, that cost a Ringer run on 2026-08-19.
+        r"struct (\w+): Codable.*?enum CodingKeys: String, CodingKey[^{\n]*\{(.*?)\n    \}",
         swift,
         re.S,
     ):

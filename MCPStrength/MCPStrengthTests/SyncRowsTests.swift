@@ -108,6 +108,10 @@ struct SyncRowsTests {
     @Test func anOptionalParentIsAllowedToBeMissing() throws {
         // templates.folder_id is nullable — an unfiled template is normal, not
         // corrupt, and must still push.
+        //
+        // This asserts the Swift property. That is not enough: a nil that
+        // vanished from JSON is still nil here. The wire-form assertion is
+        // `unfilingATemplateSendsFolderIDAsNull`.
         let context = try makeContext()
         let template = Template(name: "Unfiled", order: 0)
         context.insert(template)
@@ -364,5 +368,205 @@ struct SyncRowsTests {
         // `server_updated_at` is the ONE field that must still be omitted: it is
         // server-owned and the trigger writes it on every write.
         #expect(!settingsJSON.contains("\"server_updated_at\""))
+    }
+
+    // MARK: - Completeness: every key travels, even when the value is nil
+    //
+    // Why the round-trips above never caught this: every one of them builds a
+    // row with values PRESENT, so the absence is the case nobody wrote — the
+    // same shape as the warm-up ramp bug, where every test used a set list
+    // with no warm-ups in it. A nil that vanished from JSON is still nil on
+    // the Swift struct, so mapper assertions on the property cannot see it
+    // either.
+    //
+    // Hand-writing thirteen encoders creates a worse failure mode than the
+    // bug they exist to fix: a field you forget to write stops syncing
+    // entirely, silently. CodingKeys is CaseIterable so this one test asks
+    // every row type: with every optional nil, is every key except
+    // `server_updated_at` present? That catches both a vanished nil and a
+    // forgotten encoder line. Assert on the KEY (`"folder_id":`), not the
+    // value, so the test does not care what a field's nil renders as.
+
+    /// One key of one encoded row. The loop that calls this is
+    /// `for key in SyncX.CodingKeys.allCases` — that is the whole defence.
+    /// A generic helper that iterates `Key.allCases` can be satisfied by
+    /// passing some other CaseIterable; this cannot.
+    private func assertKeyTravelsExceptServerUpdatedAt(
+        _ json: String,
+        key: some RawRepresentable<String>,
+        rowType: String
+    ) {
+        if key.rawValue == "server_updated_at" {
+            #expect(
+                !json.contains("\"server_updated_at\""),
+                "\(rowType) sent server_updated_at; it is server-owned and must be omitted"
+            )
+        } else {
+            #expect(
+                json.contains("\"\(key.rawValue)\":"),
+                "\(rowType) is missing \"\(key.rawValue)\": — a nil was omitted, or the encoder forgot this field"
+            )
+        }
+    }
+
+    @Test func everyNilOptionalStillEmitsItsKeyExceptServerUpdatedAt() throws {
+        let id = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
+
+        let exerciseJSON = try encodedJSON(SyncExerciseRow(
+            id: id, userID: nil, name: "E", aliases: [],
+            bodyPart: .arms, category: .barbell, isCustom: true,
+            updatedAt: when, deletedAt: nil, serverUpdatedAt: nil
+        ))
+        for key in SyncExerciseRow.CodingKeys.allCases {
+            assertKeyTravelsExceptServerUpdatedAt(exerciseJSON, key: key, rowType: "SyncExerciseRow")
+        }
+
+        let folderJSON = try encodedJSON(SyncTemplateFolderRow(
+            id: id, userID: user, name: "F", sortOrder: 0,
+            isCollapsed: false, kind: .folder, programCursor: 0,
+            totalCycles: nil, updatedAt: when, deletedAt: nil, serverUpdatedAt: nil
+        ))
+        for key in SyncTemplateFolderRow.CodingKeys.allCases {
+            assertKeyTravelsExceptServerUpdatedAt(folderJSON, key: key, rowType: "SyncTemplateFolderRow")
+        }
+
+        let templateJSON = try encodedJSON(SyncTemplateRow(
+            id: id, userID: user, name: "T", folderID: nil, note: nil,
+            sortOrder: 0, lastPerformedAt: nil, updatedAt: when,
+            deletedAt: nil, serverUpdatedAt: nil
+        ))
+        for key in SyncTemplateRow.CodingKeys.allCases {
+            assertKeyTravelsExceptServerUpdatedAt(templateJSON, key: key, rowType: "SyncTemplateRow")
+        }
+
+        let templateExerciseJSON = try encodedJSON(SyncTemplateExerciseRow(
+            id: id, userID: user, templateID: id, exerciseID: nil,
+            sortOrder: 0, supersetGroupID: nil, note: nil, stickyNote: nil,
+            defaultRestSeconds: 90, updatedAt: when, deletedAt: nil, serverUpdatedAt: nil
+        ))
+        for key in SyncTemplateExerciseRow.CodingKeys.allCases {
+            assertKeyTravelsExceptServerUpdatedAt(templateExerciseJSON, key: key, rowType: "SyncTemplateExerciseRow")
+        }
+
+        let templateSetJSON = try encodedJSON(SyncTemplateSetRow(
+            id: id, userID: user, templateExerciseID: id, sortOrder: 0,
+            setType: .normal, weight: nil, reps: nil, repRangeStart: nil,
+            repRangeEnd: nil, rpe: nil, distance: nil, durationSeconds: nil,
+            restSeconds: 0, updatedAt: when, deletedAt: nil, serverUpdatedAt: nil
+        ))
+        for key in SyncTemplateSetRow.CodingKeys.allCases {
+            assertKeyTravelsExceptServerUpdatedAt(templateSetJSON, key: key, rowType: "SyncTemplateSetRow")
+        }
+
+        let programDayJSON = try encodedJSON(SyncProgramDayRow(
+            id: id, userID: user, folderID: id, templateID: nil, sortOrder: 0,
+            label: nil, updatedAt: when, deletedAt: nil, serverUpdatedAt: nil
+        ))
+        for key in SyncProgramDayRow.CodingKeys.allCases {
+            assertKeyTravelsExceptServerUpdatedAt(programDayJSON, key: key, rowType: "SyncProgramDayRow")
+        }
+
+        let workoutJSON = try encodedJSON(SyncWorkoutRow(
+            id: id, userID: user, name: "W", templateID: nil, startedAt: when,
+            completedAt: nil, durationSeconds: 0, note: nil, summary: nil,
+            totalVolume: 0, prCount: 0, updatedAt: when, deletedAt: nil, serverUpdatedAt: nil
+        ))
+        for key in SyncWorkoutRow.CodingKeys.allCases {
+            assertKeyTravelsExceptServerUpdatedAt(workoutJSON, key: key, rowType: "SyncWorkoutRow")
+        }
+
+        let workoutExerciseJSON = try encodedJSON(SyncWorkoutExerciseRow(
+            id: id, userID: user, workoutID: id, exerciseID: nil, sortOrder: 0,
+            supersetGroupID: nil, note: nil, stickyNote: nil,
+            defaultRestSeconds: 90, updatedAt: when, deletedAt: nil, serverUpdatedAt: nil
+        ))
+        for key in SyncWorkoutExerciseRow.CodingKeys.allCases {
+            assertKeyTravelsExceptServerUpdatedAt(workoutExerciseJSON, key: key, rowType: "SyncWorkoutExerciseRow")
+        }
+
+        let workoutSetJSON = try encodedJSON(SyncWorkoutSetRow(
+            id: id, userID: user, workoutExerciseID: id, sortOrder: 0,
+            setType: .normal, weight: nil, reps: nil, rpe: nil, distance: nil,
+            durationSeconds: nil, restSeconds: 0, isCompleted: false,
+            completedAt: nil, updatedAt: when, deletedAt: nil, serverUpdatedAt: nil
+        ))
+        for key in SyncWorkoutSetRow.CodingKeys.allCases {
+            assertKeyTravelsExceptServerUpdatedAt(workoutSetJSON, key: key, rowType: "SyncWorkoutSetRow")
+        }
+
+        let measurementTypeJSON = try encodedJSON(SyncMeasurementTypeRow(
+            id: id, userID: nil, name: "Weight", groupKind: .core, sortOrder: 0,
+            updatedAt: when, deletedAt: nil, serverUpdatedAt: nil
+        ))
+        for key in SyncMeasurementTypeRow.CodingKeys.allCases {
+            assertKeyTravelsExceptServerUpdatedAt(measurementTypeJSON, key: key, rowType: "SyncMeasurementTypeRow")
+        }
+
+        let measurementEntryJSON = try encodedJSON(SyncMeasurementEntryRow(
+            id: id, userID: user, typeID: nil, value: 1, unit: "lb",
+            recordedAt: when, source: .manual, updatedAt: when,
+            deletedAt: nil, serverUpdatedAt: nil
+        ))
+        for key in SyncMeasurementEntryRow.CodingKeys.allCases {
+            assertKeyTravelsExceptServerUpdatedAt(measurementEntryJSON, key: key, rowType: "SyncMeasurementEntryRow")
+        }
+
+        let settingsJSON = try encodedJSON(SyncAppSettingsRow(
+            userID: user, weightUnit: .lbs, measurementWeightUnit: .lbs,
+            distanceUnit: .miles, sizeUnit: .inches, defaultRestSeconds: 90,
+            weekStartDay: 1, theme: nil, language: nil, previousSetBehavior: nil,
+            updatedAt: when, deletedAt: nil, serverUpdatedAt: nil
+        ))
+        for key in SyncAppSettingsRow.CodingKeys.allCases {
+            assertKeyTravelsExceptServerUpdatedAt(settingsJSON, key: key, rowType: "SyncAppSettingsRow")
+        }
+
+        let preferenceJSON = try encodedJSON(SyncExercisePreferenceRow(
+            userID: user, exerciseID: id, weightUnitOverride: nil, barType: nil,
+            focusMetric: .totalVolume, notes: nil, updatedAt: when,
+            deletedAt: nil, serverUpdatedAt: nil
+        ))
+        for key in SyncExercisePreferenceRow.CodingKeys.allCases {
+            assertKeyTravelsExceptServerUpdatedAt(preferenceJSON, key: key, rowType: "SyncExercisePreferenceRow")
+        }
+    }
+
+    @Test func unfilingATemplateSendsFolderIDAsNull() throws {
+        // The mapper test `anOptionalParentIsAllowedToBeMissing` already
+        // asserts the Swift property is nil. That never caught this: a nil
+        // omitted from JSON is still nil on the struct. Unfiling is a real
+        // user action — the clear has to be visible ON THE WIRE, or the next
+        // pull re-files the template.
+        let context = try makeContext()
+        let template = Template(name: "Unfiled", order: 0)
+        context.insert(template)
+
+        let json = try encodedJSON(SyncRowMapper.row(for: template, userID: user))
+        #expect(
+            json.contains("\"folder_id\":null"),
+            "unfiling a template omitted folder_id; the server would keep the old folder and the next pull would re-file it"
+        )
+    }
+
+    @Test func leavingASupersetSendsSupersetGroupIDAsNull() throws {
+        // "Leave Superset" is a shipped menu item (ActiveWorkoutScreen). It
+        // writes supersetGroupID = nil. If that key is omitted, the next pull
+        // restores the group and the leave undoes itself.
+        let context = try makeContext()
+        let workout = Workout(name: "W")
+        context.insert(workout)
+        let we = WorkoutExercise(
+            order: 0,
+            supersetGroupID: UUID(uuidString: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")!,
+            workout: workout
+        )
+        we.supersetGroupID = nil
+        context.insert(we)
+
+        let json = try encodedJSON(try #require(SyncRowMapper.row(for: we, userID: user)))
+        #expect(
+            json.contains("\"superset_group_id\":null"),
+            "Leave Superset omitted superset_group_id; the server would keep the group and the next pull would put the exercise back in it"
+        )
     }
 }

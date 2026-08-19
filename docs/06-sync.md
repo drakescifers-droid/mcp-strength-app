@@ -452,14 +452,35 @@ there, not a missing one — so this is reachable the day that sheet ships. Both
 > **`serverUpdatedAt` is the one field that must still be OMITTED rather than nulled.** It is
 > server-owned, the trigger writes it on every write, and a key for it is at best noise.
 
-> ⚠️ **THE SAME BUG IS LATENT IN EVERY OTHER ROW STRUCT, and it is now the most valuable thing on
-> the list.** The eleven pre-existing rows all use the synthesised encoder, so **no nullable field
-> can currently be cleared through sync**: unfiling a template (`folder_id`), deleting a workout's
-> note or summary, removing a prescribed weight from a template set. Each is a silent no-op that the
-> next pull reverses. It has never bitten because nothing had synced long enough for anyone to clear
-> a value on one device and look at another. Fixing it is mechanical — an explicit `encode(to:)` per
-> struct — but it changes every payload the app sends, so it wants its own change and its own tests
-> rather than being smuggled in here.
+> ✅ **FIXED ACROSS ALL THIRTEEN ROWS, 2026-08-19.** Every struct now writes its own
+> `encode(to:)`, so a nil travels as an explicit `null`. The most reachable instance was one this
+> section originally missed: **Leave Superset** is a shipped menu item that clears
+> `superset_group_id`, so leaving a superset never travelled and the next pull put you back in it.
+> Unfiling a template, deleting a note or summary, and removing a prescribed or logged weight were
+> the others.
+>
+> **Do NOT write `init(from:)`.** Providing only `encode(to:)` leaves the decoder synthesised, and
+> it already reads an explicit `null` as nil for an Optional. A hand-written decoder is more
+> surface for no gain, and "completing the Codable pair" is a plausible tidy-up to resist.
+
+> ⚠️ **THE FIX CREATES A WORSE BUG IF IT IS EVER EXTENDED CARELESSLY, and this is the paragraph
+> that matters.** With hand-written encoders, a field whose `c.encode` line is FORGOTTEN never
+> travels at all — set or cleared — where the original bug at least let a set value through. It
+> would compile, the mapper would fill it, and every existing round-trip test would still pass,
+> because those all assert on keys they already know about.
+>
+> So the defence is structural, not care: **every `CodingKeys` is `CaseIterable`**, and
+> `everyNilOptionalStillEmitsItsKeyExceptServerUpdatedAt` builds each row with every optional nil
+> and iterates `CodingKeys.allCases`, asserting each key is present. Adding a column and forgetting
+> the encoder line fails that test immediately. **If you add a row struct or a column, that test is
+> the thing to keep working.**
+>
+> The conformance sits on a same-file `extension`, not on the enum's declaration line, and that is
+> forced rather than stylistic: `supabase/scripts/check_row_mapping.py` matched
+> `enum CodingKeys: String, CodingKey {` literally, so `, CaseIterable` there made it report every
+> struct as having no keys at all. **The script has since been relaxed to allow extra
+> conformances**, so either placement works now — but the extension is what shipped and moving it
+> is churn.
 >
 > **Why no test caught it for eleven structs:** every existing round-trip test builds a row with
 > values PRESENT. The absence is the case nobody wrote, which is the same shape as the warm-up ramp
