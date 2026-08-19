@@ -314,6 +314,44 @@ touches how an in-progress workout is represented.
 > * **Eligibility mirrors `PushFilter.shouldPush(_ workout:)`** and a test asserts the two agree. If
 >   they diverge, the app is telling Health something different from what it tells its own server.
 
+> **ENERGY: DECIDED 2026-08-19 from the reference app's own screens, and it is simpler than every
+> alternative considered.** A FLAT RATE PER HOUR that the user picks — None / Low / Medium / High /
+> Very High at 0 / 150 / 200 / 250 / 300 kcal per hour, Medium by default. No MET table, no
+> bodyweight calculation, no reading Active Energy back out of HealthKit.
+>
+> **Why a user-chosen rate is not the fabricated number this project keeps refusing to write.** The
+> objection to `0`, or to an invented MET estimate, is the app presenting a figure it did not
+> measure as though it had. A rate the user selects is the opposite — the user saying "count my
+> lifting at roughly this" — and the screen says exactly what it does. `none` stays first-class and
+> is what the app did before.
+>
+> ⚠️ **UNVERIFIED RISK, and it is the thing to check first: DOUBLE COUNTING.** If a Watch is worn
+> while lifting it is ALREADY writing `activeEnergyBurned` continuously. Writing our own sample on
+> top may add to the Activity rings twice. The reference app's copy only claims the setting is
+> ignored when logging *via its Watch app* — it says nothing about merely wearing one. Whether
+> Apple deduplicates energy across sources for the rings was NOT established; check on a device
+> before trusting the number.
+>
+> **The better long-term answer, and Drake's preference: attach the Watch's EXISTING samples.**
+> `HKWorkoutBuilder.addSamples` documents that samples "will be saved to the database if they have
+> not already been saved" — so already-recorded energy can be ASSOCIATED with our workout rather
+> than duplicated. Real measured numbers, no estimate, no Watch app. Two things to settle first:
+> it needs READ permission (so `NSHealthShareUsageDescription` and a non-empty read set, widening
+> the write-only entitlement), and it is NOT established that HealthKit lets an app attach samples
+> ANOTHER SOURCE owns. Test that on a device before committing to it.
+
+> **Two more corrections the reference screens forced, beyond energy:**
+>
+> 1. **There IS an explicit per-type toggle, separate from the permission** — "Workouts: Sync
+>    workouts originating from Strong to Apple Health". `HealthStore.swift` argues there should be
+>    no stored flag because authorization already answers it. **That reasoning is wrong for the
+>    reference's model**, which is *permitted AND switched on*: iOS cannot revoke its own
+>    permission, so without a toggle there is no way to turn the feature off from inside the app at
+>    all. Match the reference.
+> 2. **BACKFILL** — "14 Strong workouts without corresponding Apple Health entries. Add?" Cheap for
+>    us: the external-uuid lookup that makes writing idempotent is the same query that finds what is
+>    missing.
+
 > ⚠️ **Bidirectional Health has one trap worth designing for up front: the echo loop.** Write a
 > weight entry to HealthKit → Health notifies observers of new data → the app imports it back as
 > a *new* entry → duplicate. The fix is the `source` field already in the data model: tag
