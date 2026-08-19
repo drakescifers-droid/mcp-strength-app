@@ -19,9 +19,12 @@ state, the traps, the decisions and the reasoning behind them. Don't re-derive f
 those files already explain, and don't duplicate them into new files.
 
 The one-line state: **the app is on Drake's phone, he is training on it, Phase 2's remaining
-build work is DONE, and Phase 3 (the real MCP server) is next.** Sync is proven both ways
-against the live project. Apple Health writes workouts (Watch energy preferred, backfill for
-what permission missed) and the four HealthKit measurement types travel both ways. The custom
+build work is DONE, and Phase 3 has started.** The MCP server is an Edge Function
+(`supabase/functions/mcp`) with OAuth discovery, exercise tools, and
+template read/write (`create_template` / `update_template`). Claude connects at
+`https://mcp.mcpstrength.com`. Remaining tools: history, logging, programs. Sync is proven both ways against the live
+project. Apple Health writes workouts (Watch energy preferred, backfill for what
+permission missed) and the four HealthKit measurement types travel both ways. The custom
 keypad is done. What Phase 2 still needs is a gym check, not a build: Watch-attach on a real
 session. Canonical units done, gym-found bugs fixed, Preferences and the units setting SYNC,
 calorie rate on both sides, warm-up ramp corrected to 40 / 60 / 80. Swift suite green, SQL
@@ -57,17 +60,25 @@ suite green.
 
 ## Next piece of work, in order
 
-1. **Phase 3 — the real MCP server.** Drake has confirmed it is in scope for v1,
-   and this chat is starting it. Multi-user, OAuth, hosted, on top of Phase 2's
-   database. **Read `docs/03-mcp-tools.md` (the contract and what the spike
-   lost) and `docs/02-architecture.md` § Phase 3 + MCP auth + Edge Functions
-   before writing a line.** `spike/` is frozen and is not a starting point.
+1. **Phase 3 — remaining MCP tools, then the live OAuth click.** Scaffold landed
+   2026-08-19. Transport fits Edge Functions (Streamable HTTP is POST-per-message;
+   the long-lived-connection fallback is closed). `list_exercises` is the first
+   tool. **Read `docs/03-mcp-tools.md` for the rest of the contract and
+   `docs/02-architecture.md` § Auth for how OAuth is wired.** `spike/` is frozen
+   and is not a starting point.
 
-   The host decision in `02`: Supabase Edge Functions first; if the Edge runtime
-   cannot serve MCP's transport for a long-lived connection, fall back to a
-   container (Fly / Railway / Render). The property worth protecting: the server
-   holds no privileged database credential — it queries Postgres **as the user**,
-   and RLS does the enforcement.
+   Next tools: history and progress (must return notes), `log_workout`,
+   `create_program` / `delete_program` / `delete_template`. Strict
+   validation, UUID writes, no silent coercion.
+   `list_exercises`, `create_exercise`, `get_templates`, `get_template`,
+   `create_template`, and `update_template` are already in. Claude Connect
+   is live at `https://mcp.mcpstrength.com`.
+
+   Live project (Drake, dashboard): Authentication → OAuth Server → Site URL
+   `https://mcpstrength.com`, Authorization Path `/oauth/consent`. URL
+   Configuration: allow `https://mcpstrength.com/**`. Do not try Claude
+   Connect until the domain is live on Pages. The server still queries
+   Postgres **as the user**; never `supabaseAdmin`.
 
 2. **Prove Watch-attach on a real session — a gym check, not a build.** Wired
    2026-08-19. Do not block Phase 3 on it. Decision is `HealthEnergyAction` /
@@ -138,6 +149,15 @@ phone — see Waiting on me.
 
 ## Waiting on me
 
+- ✅ **OAUTH ON THE LIVE PROJECT, dashboard 2026-08-19.** OAuth 2.1 on, dynamic
+  registration on. MCP function deployed. Allow page is the site in `web/`.
+- ✅ **MCPSTRENGTH.COM LIVE, 2026-08-19.** Pages on Cloudflare, nameservers
+  at Namecheap, Site URL `https://mcpstrength.com`, Authorization Path
+  `/oauth/consent`, redirect URLs for apex and www. Allow page preview is
+  `https://mcpstrength.com/oauth/consent`. Claude's connector URL is
+  **https://mcp.mcpstrength.com**. Tools so far: `list_exercises`,
+  `create_exercise`, `get_templates`, `get_template`, `create_template`,
+  `update_template`.
 - 🆕 **WATCH-ATTACH ON A REAL SESSION.** Wear the Watch, finish a real-length
   session, look at Apple Fitness: one energy number, not our estimate sitting
   on top of the Watch's. Does not block Phase 3.

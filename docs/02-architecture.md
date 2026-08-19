@@ -144,9 +144,32 @@ That's the property worth protecting: the MCP server holds no privileged databas
 and has no ability to read across users. It's a thin translation layer between MCP tool calls
 and a user-scoped Postgres session.
 
-> **To verify at implementation time:** exact OAuth flow requirements and transport for remote
-> MCP servers, and how the connector registration works on each Claude surface. The MCP spec
-> moves; check current docs rather than trusting this paragraph.
+> **Verified 2026-08-19, at the start of Phase 3.** Transport is Streamable HTTP
+> (MCP spec 2026-07-28): one POST per JSON-RPC message, no GET stream, no
+> protocol-level sessions. That fits Edge Functions — it is ordinary
+> request/response, not a long-lived connection. The function is
+> `supabase/functions/mcp`. Claude finds OAuth from a `401` whose
+> `WWW-Authenticate` points at protected-resource metadata. The advertised
+> `resource` is **not** taken from `req.url`: hosted Edge Functions rewrite
+> that to `http://<ref>.supabase.co/mcp`, which would not match the URL a
+> client types. Production `MCP_RESOURCE_URL` is **`https://mcp.mcpstrength.com`**,
+> a Cloudflare Worker that forwards to `${SUPABASE_URL}/functions/v1/mcp`.
+> Claude pastes the branded hostname, not the functions URL.
+>
+> **The consent page cannot be an Edge Function on `*.supabase.co`.** The
+> platform rewrites `text/html` to `text/plain` and applies
+> `Content-Security-Policy: default-src 'none'; sandbox` so nobody can host a
+> login page on the shared domain. Production consent is the static site in
+> `web/`, hosted on Cloudflare Pages at **mcpstrength.com** (`/oauth/consent`).
+> Site URL on the live project must be `https://mcpstrength.com` with
+> authorization path `/oauth/consent`. The MCP JSON endpoint is reached at
+> `https://mcp.mcpstrength.com`; the Edge Function is the origin behind it.
+>
+> **The service-role key is still in the Edge Function environment.** The
+> platform injects it; we cannot make it absent. The property is enforced by
+> never constructing an admin client: handlers take `ctx.supabase` only, and
+> `neverAdmin_test.ts` fails if `supabaseAdmin` appears in the function
+> source. Do not "just this once" reach for it to skip RLS.
 
 ---
 
@@ -253,7 +276,12 @@ Also lands here, from Phase 0 (`03-mcp-tools.md`):
 Supabase, schema, RLS, auth, sync engine. The long unglamorous phase.
 
 **Phase 3 — the real MCP server.**
-Multi-user, OAuth, hosted, on top of Phase 2's database.
+Multi-user, OAuth, hosted, on top of Phase 2's database. Started 2026-08-19:
+Edge Function at `supabase/functions/mcp`, Allow page at
+`web/oauth/consent` on mcpstrength.com (Cloudflare Pages). First tools
+`list_exercises`, `create_exercise`, `get_templates`, `get_template`,
+`create_template`, `update_template`. Remaining: history, logging, programs.
+`spike/` stays frozen.
 
 **Phase 4 — product.**
 App Store, onboarding, pricing.
@@ -266,9 +294,13 @@ question the rest of the project is betting on.
 ## Decisions
 
 **MCP server hosts on Supabase Edge Functions.** Keeps the whole system on one platform — one
-bill, one dashboard, and the database is already adjacent. The constraint to verify at Phase 3
-is whether the Edge runtime supports MCP's transport for a long-lived connection; if it
-doesn't, fall back to a container host (Fly / Railway / Render).
+bill, one dashboard, and the database is already adjacent. **Verified 2026-08-19:** MCP
+2026-07-28 dropped the GET stream and protocol-level sessions, so the transport is a POST
+per message. The long-lived-connection constraint that would have forced a container does
+not apply. Fall back to Fly / Railway / Render only if a later spec revision reintroduces
+one. Gateway `verify_jwt` is **off** on `mcp` (and leftover `oauth-consent`) so the unauthenticated
+discovery `401` is ours (with `WWW-Authenticate`); the function then requires a user JWT
+and queries as that user.
 
 **Apple Watch is deferred to v2.** The phone app gets built cleanly first. Cost of deferring:
 adding Watch later means revisiting the local data layer, since live Watch↔phone session sync
@@ -401,5 +433,9 @@ touches how an in-progress workout is represented.
 
 1. **Seeding the exercise library.** Need a source for the initial library. Licensing matters
    if illustrations are included.
-2. **Edge Function transport fit.** Verify at Phase 3 that Supabase Edge Functions can serve
-   the MCP transport; the spec moves, so check current docs rather than assuming.
+2. ~~**Edge Function transport fit.**~~ **Closed 2026-08-19.** Streamable HTTP is
+   request/response POST; Edge Functions serve it. See the Auth section above.
+   Live Site URL is `https://mcpstrength.com`, authorization path
+   `/oauth/consent`. Claude connects at `https://mcp.mcpstrength.com`. Local
+   `config.toml` still uses the `oauth-consent` Edge Function because
+   `supabase start` *can* serve HTML; the hosted `*.supabase.co` domain cannot.

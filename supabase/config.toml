@@ -156,7 +156,13 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://127.0.0.1:3000"
+# Combined with [auth.oauth_server] authorization_url_path to form the
+# consent page Claude is redirected to. Local `supabase start` can serve
+# HTML from the oauth-consent Edge Function; hosted `*.supabase.co` cannot,
+# so production consent is mcpstrength.com (`web/oauth/consent`). Email
+# confirmation is disabled on this project; if it is turned on, this URL
+# is also where confirmation links land.
+site_url = "http://127.0.0.1:54321/functions/v1"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
@@ -362,14 +368,17 @@ enabled = false
 # Obtain from https://clerk.com/setup/supabase
 # domain = "example.clerk.accounts.dev"
 
-# OAuth server configuration
+# OAuth server configuration — Phase 3. Claude discovers this project as an
+# authorization server and registers itself (DCR). Local consent is the
+# oauth-consent Edge Function. Live project: Site URL mcpstrength.com,
+# authorization path `/oauth/consent`. config.toml only affects
+# `supabase start`.
 [auth.oauth_server]
-# Enable OAuth server functionality
-enabled = false
-# Path for OAuth consent flow UI
-authorization_url_path = "/oauth/consent"
-# Allow dynamic client registration
-allow_dynamic_registration = false
+enabled = true
+authorization_url_path = "/oauth-consent"
+# Claude registers a new public client on each fresh connection. Required for
+# the hosted Claude surfaces until CIMD is wired. Review registered clients.
+allow_dynamic_registration = true
 
 [edge_runtime]
 enabled = true
@@ -403,6 +412,16 @@ s3_region = "env(S3_REGION)"
 s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
+
+# MCP + consent pages must see unauthenticated traffic: Claude's first POST
+# has no token (we answer 401 + WWW-Authenticate), and the consent HTML is
+# a public page. Auth is enforced inside the function (user JWT / OAuth),
+# not at the gateway. See docs/02-architecture.md § Phase 3.
+[functions.mcp]
+verify_jwt = false
+
+[functions.oauth-consent]
+verify_jwt = false
 
 # pg-delta is the schema diff engine for db diff / db pull / db remote commit.
 # Set enabled = false to fall back to the legacy migra engine.

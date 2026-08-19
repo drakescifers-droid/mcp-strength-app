@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Connect MCP Strength</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="wrap">
+    <h1>Connect to MCP Strength</h1>
+    <p id="status">Loading…</p>
+    <p id="error" class="error hidden"></p>
+
+    <form id="login" class="hidden">
+      <p>Sign in with the same email you use in the app. This lets Claude read and write <em>your</em> workouts — nobody else’s.</p>
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="username" required />
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required />
+      <button class="sign-in" type="submit">Sign in</button>
+    </form>
+
+    <div id="consent" class="hidden">
+      <div class="client">
+        <p><strong id="client-name"></strong> wants access to your training data.</p>
+        <p id="redirect-line"></p>
+        <div id="scopes"></div>
+      </div>
+      <button class="approve" id="approve" type="button">Allow</button>
+      <button class="deny" id="deny" type="button">Deny</button>
+    </div>
+
+    <nav>
+      <a href="/privacy">Privacy</a>
+    </nav>
+  </main>
+  <script type="module" src="/oauth/consent/consent.js"></script>
+</body>
+</html>

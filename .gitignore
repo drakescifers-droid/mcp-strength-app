@@ -15,3 +15,7 @@ build/
 *.ipa
 *.dSYM.zip
 .swiftpm/
+
+# Cloudflare Wrangler local cache (contains account tokens)
+.wrangler/
+**/.wrangler/

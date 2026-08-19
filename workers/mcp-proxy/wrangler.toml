@@ -1,0 +1,9 @@
+name = "mcpstrength-mcp"
+main = "index.js"
+compatibility_date = "2026-08-19"
+
+# Claude pastes https://mcp.mcpstrength.com — this hostname must stay
+# the MCP resource. The website and Allow page stay on the apex.
+routes = [
+  { pattern = "mcp.mcpstrength.com", custom_domain = true }
+]

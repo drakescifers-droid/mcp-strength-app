@@ -42,8 +42,18 @@ Apple Health writes workouts when the in-app toggle is on, prefers Watch Active 
 exists, falls back to the flat-rate estimate, offers backfill for sessions Health never got,
 writes the four HealthKit measurement types and can import them back (banners + Add),
 and the custom number keypad is ON THE PHONE.**
-Phase 3 (the real MCP server) is the next **build**. What remains of Phase 2 is
-proving Watch-attach on a real session — a gym check, not a blocker.
+**Phase 3 has started.** The MCP Edge Function, `list_exercises`, and
+`create_exercise` landed 2026-08-19. Consent lives on **mcpstrength.com**
+(site in `web/`, Cloudflare Pages), not on the Edge Function — hosted
+`*.supabase.co` will not serve HTML. The site is live at
+https://mcpstrength.com (and www). Site URL and `/oauth/consent` are set
+on the live project. Claude's connector URL is **https://mcp.mcpstrength.com**.
+`get_templates` and `get_template` landed 2026-08-19 (notes included, weights
+in kg, `dropSet` not `drop_set`). `create_template` / `update_template` landed
+the same day: all-or-nothing, lbs→kg, name collision returns the existing id,
+notes + sticky notes. Remaining: history, logging, programs.
+What remains of Phase 2 is proving Watch-attach on a real session — a gym
+check, not a blocker.
 
 > ⚠️ **THE CLAIM BELOW IS WRONG, AND THE SUB-SCREEN HAS NOW BEEN LOOKED AT.** It was used to
 > delete a requirement. `Settings accessed from profile page/IMG_2990.PNG` has a
@@ -371,6 +381,20 @@ right.**
   Health lands a Weight on the Measure tab, and whether our own write does
   not echo back as a duplicate.**
 
+- **PHASE 3 SCAFFOLD — MCP Edge Function, 2026-08-19.** `supabase/functions/mcp`
+  serves Streamable HTTP, answers unauthenticated POSTs with a `401` that
+  points Claude at protected-resource metadata, and queries Postgres as the
+  caller (`ctx.supabase` only — `neverAdmin_test.ts` holds that). First tool
+  is `list_exercises` (search + category filter + body-part ranking hint;
+  matcher ported from `ExerciseMatcher.swift`) and `create_exercise` (fuzzy
+  match first, echo `matched_to_existing`, refuse to guess on ambiguity).
+  Consent is `web/` on Cloudflare Pages at mcpstrength.com (`/oauth/consent`),
+  because Edge Functions on `*.supabase.co` cannot serve HTML. Claude's
+  connector URL is `https://mcp.mcpstrength.com` (Worker in
+  `workers/mcp-proxy/`, `MCP_RESOURCE_URL` matches). The `oauth-consent`
+  function is leftover and not the live Allow page.
+  Remaining tools are history, logging, and programs.
+
 - **CUSTOM NUMBER KEYPAD — on the phone 2026-08-19, Drake approved it after two layout fixes.**
   Chip + pinned keypad (`Views/NumberKeypad.swift` + `Workout/NumberKeypadEditing.swift`), not
   `ToolbarItemGroup(placement: .keyboard)` and not a `UITextField` `inputView`. Hosted on the
@@ -644,10 +668,14 @@ underneath never changed — only whether the screen described it honestly.
 
 ### What is left, in order
 
-1. **Phase 3 — the real MCP server.** Contract in `03-mcp-tools.md`; host and
-   auth in `02-architecture.md` (Edge Functions first, query Postgres as the
-   user, RLS enforces). `spike/` is frozen. Drake confirmed this is in scope
-   for v1.
+1. **Phase 3 — remaining MCP tools, then Claude Connect.** Scaffold is in:
+   `supabase/functions/mcp` (Streamable HTTP, user-scoped client,
+   `list_exercises`, `create_exercise`, `get_templates`, `get_template`) and the site in `web/` (home, privacy,
+   Allow at `/oauth/consent`). Contract for the rest is `03-mcp-tools.md`.
+   `spike/` is frozen. Live Site URL is `https://mcpstrength.com`,
+   authorization path `/oauth/consent`. Claude Connect URL is
+   `https://mcp.mcpstrength.com`. Next tools: history (must return notes),
+   `log_workout`, programs.
 
 2. **Prove Watch-attach on a real session — gym check, does not block Phase 3.**
    Wired 2026-08-19: rate none → nothing;
