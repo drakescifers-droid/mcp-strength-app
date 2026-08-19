@@ -97,7 +97,7 @@ struct TemplateEditorScreen: View {
         /// `rest` is the exercise's default for NEW sets, from the menu.
         /// `setRest` is one existing set's own rest, from tapping its divider.
         /// Two different values on two different rows — see `RestDivider`.
-        enum Kind { case note, stickyNote, rest, setRest(Int), replace }
+        enum Kind { case note, stickyNote, rest, setRest(Int), preferences, replace }
         let id = UUID()
         let index: Int
         let kind: Kind
@@ -212,6 +212,34 @@ struct TemplateEditorScreen: View {
                     ) { exercises[option.index].sets[setIndex].restSeconds = $0 }
                 }
 
+            case .preferences:
+                // THE ONE ITEM ON THIS MENU THAT DOES NOT GO THROUGH THE
+                // DRAFT, and it is not an inconsistency. Everything else here
+                // edits a `DraftExercise` and lands only when the template is
+                // saved, because it is part of the template. A preference is
+                // not: it belongs to the EXERCISE and applies everywhere that
+                // exercise appears, so routing it through the draft would mean
+                // Cancel on the template silently reverting a bar type the
+                // user set for every workout they will ever log.
+                //
+                // It writes straight to the store, exactly as the live workout
+                // screen does, and `TemplateSaveDiff` never sees it.
+                ExercisePreferencesSheet(
+                    exerciseName: draft.exercise.name,
+                    globalUnit: globalWeightUnit,
+                    current: ExercisePreferenceEdit(
+                        weightUnitOverride: draft.exercise.preference?.weightUnitOverride,
+                        barType: draft.exercise.preference?.barType
+                    )
+                ) { edit in
+                    let preference = ExercisePreference.current(
+                        for: draft.exercise, in: context
+                    )
+                    preference.weightUnitOverride = edit.weightUnitOverride
+                    preference.barType = edit.barType
+                    preference.markEdited()
+                }
+
             case .replace:
                 // Swaps the movement and KEEPS the sets. Replacing an exercise
                 // means "I did this on a different machine", not "start over" —
@@ -240,6 +268,8 @@ struct TemplateEditorScreen: View {
             activeOption = ActiveOption(index: index, kind: .stickyNote)
         case .updateRestTimers:
             activeOption = ActiveOption(index: index, kind: .rest)
+        case .preferences:
+            activeOption = ActiveOption(index: index, kind: .preferences)
         case .replaceExercise:
             activeOption = ActiveOption(index: index, kind: .replace)
         case .addWarmupSets:

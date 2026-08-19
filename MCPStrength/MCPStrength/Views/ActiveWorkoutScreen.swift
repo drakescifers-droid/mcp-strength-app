@@ -32,7 +32,7 @@ struct ActiveWorkoutScreen: View {
     @State private var editingWorkoutNote = false
 
     struct ActiveOption: Identifiable {
-        enum Kind { case note, stickyNote, rest, replace }
+        enum Kind { case note, stickyNote, rest, preferences, replace }
         let id = UUID()
         let exercise: WorkoutExercise
         let kind: Kind
@@ -494,6 +494,8 @@ struct ActiveWorkoutScreen: View {
             activeOption = ActiveOption(exercise: exercise, kind: .stickyNote)
         case .updateRestTimers:
             activeOption = ActiveOption(exercise: exercise, kind: .rest)
+        case .preferences:
+            activeOption = ActiveOption(exercise: exercise, kind: .preferences)
         case .replaceExercise:
             activeOption = ActiveOption(exercise: exercise, kind: .replace)
         case .addWarmupSets:
@@ -631,6 +633,31 @@ struct ActiveWorkoutScreen: View {
                     // Every row whose value actually moved, or it silently
                     // stops syncing — AGENTS.md rule 3.
                     set.markEdited()
+                }
+            }
+        case .preferences:
+            // Only reachable with a real `Exercise` behind the row — a
+            // preference is keyed to one, and a `WorkoutExercise` whose
+            // exercise is nil is already corrupt. Nothing to edit rather than
+            // a fabricated target.
+            if let library = exercise.exercise {
+                ExercisePreferencesSheet(
+                    exerciseName: name,
+                    globalUnit: globalWeightUnit,
+                    current: ExercisePreferenceEdit(
+                        weightUnitOverride: library.preference?.weightUnitOverride,
+                        barType: library.preference?.barType
+                    )
+                ) { edit in
+                    // `current(for:in:)` CREATES on a miss, so it is called
+                    // only inside this closure — which the sheet only calls
+                    // when something actually changed. Opening Preferences and
+                    // tapping Save must leave the store untouched
+                    // (`ExercisePreferenceEditing`).
+                    let preference = ExercisePreference.current(for: library, in: context)
+                    preference.weightUnitOverride = edit.weightUnitOverride
+                    preference.barType = edit.barType
+                    preference.markEdited()
                 }
             }
         case .replace:

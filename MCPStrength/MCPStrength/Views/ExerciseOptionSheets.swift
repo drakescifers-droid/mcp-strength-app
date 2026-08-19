@@ -196,6 +196,232 @@ struct RestTimerSheet: View {
     }
 }
 
+// MARK: - Preferences
+
+/// Weight Unit and Bar Type, for one exercise. The eighth and last item of the
+/// reference app's per-exercise menu.
+///
+/// ## Two rows, not four
+///
+/// `ExercisePreference` carries four fields; this sheet edits two. `notes` has
+/// its own menu item already and `focusMetric` has no UI anywhere — putting
+/// them here because the model has them would invent a screen the reference
+/// does not have, which is the mistake `docs/04-status.md` records about the
+/// warm-up percentages settings model that turned out not to be a requirement.
+///
+/// ## Save, rather than committing on tap
+///
+/// `RestTimerSheet` commits the moment you tap a row, because it edits ONE
+/// value and tapping it is the whole interaction. This edits two, so a tap is
+/// only half an answer — and more importantly, committing on tap would have to
+/// resolve the preference row on the first tap, which is exactly the write
+/// this screen is supposed to be careful about. Holding the choice in `@State`
+/// and asking `ExercisePreferenceEditing.write` at Save means opening the
+/// sheet, looking, and tapping Save creates nothing.
+///
+/// ## The bar weights are shown in the unit chosen ABOVE them, live
+///
+/// A picker listing bar types without their weights is most of the way to
+/// useless — you pick "Short Bar" and still have to know what the app thinks
+/// that weighs. And the unit those weights are in is the one being chosen in
+/// the row above, so switching Weight Unit to Metric re-labels the bars in the
+/// same breath: 45 lb becomes 20 kg, which is a DIFFERENT BAR rather than a
+/// conversion (`BarType.weight(in:)` argues that at length).
+///
+/// > **This is the first screen in the app where the kilogram display path is
+/// > visible at all.** Every weight has been stored in kilograms since the
+/// > units conversion, and every screen renders pounds because nothing can
+/// > change the global setting yet — so the kg path has only ever been
+/// > exercised by tests (`docs/04-status.md`, item 2). Flipping this row to
+/// > Metric is the first time a human can see it.
+struct ExercisePreferencesSheet: View {
+    let exerciseName: String
+    /// What *Default* defers to, so the row can say which unit that is rather
+    /// than making the user remember.
+    let globalUnit: WeightUnit
+    let current: ExercisePreferenceEdit
+    /// Called ONLY when something actually changed. A Save that changed
+    /// nothing must not reach the store — see `ExercisePreferenceEditing`.
+    let onSave: (ExercisePreferenceEdit) -> Void
+
+    @State private var chosen: ExercisePreferenceEdit
+    @Environment(\.dismiss) private var dismiss
+
+    init(
+        exerciseName: String,
+        globalUnit: WeightUnit,
+        current: ExercisePreferenceEdit,
+        onSave: @escaping (ExercisePreferenceEdit) -> Void
+    ) {
+        self.exerciseName = exerciseName
+        self.globalUnit = globalUnit
+        self.current = current
+        self.onSave = onSave
+        self._chosen = State(initialValue: current)
+    }
+
+    /// The unit the bar weights below are quoted in — resolved through the
+    /// same function every other screen uses, with the PENDING choice as the
+    /// override. Reading `chosen` rather than `current` is what makes the list
+    /// re-label as soon as the unit row is tapped.
+    private var barUnit: WeightUnit {
+        WeightUnits.displayUnit(override: chosen.weightUnitOverride, global: globalUnit)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.spacious) {
+                    Text(exerciseName)
+                        .font(Typography.secondary)
+                        .foregroundStyle(Theme.textSecondary)
+                        .padding(.horizontal, Spacing.screenMargin)
+
+                    section("Weight Unit") {
+                        // nil FIRST, and it is the default rather than an
+                        // "or leave it blank" afterthought — almost nobody
+                        // sets a per-exercise unit, so the value most users
+                        // want is the one at the top.
+                        row(
+                            title: "Default",
+                            detail: globalUnit.displayName,
+                            isSelected: chosen.weightUnitOverride == nil
+                        ) { chosen.weightUnitOverride = nil }
+
+                        row(
+                            title: "Metric",
+                            detail: "kg",
+                            isSelected: chosen.weightUnitOverride == .kg
+                        ) { chosen.weightUnitOverride = .kg }
+
+                        row(
+                            title: "US/Imperial",
+                            detail: "lbs",
+                            isSelected: chosen.weightUnitOverride == .lbs,
+                            isLast: true
+                        ) { chosen.weightUnitOverride = .lbs }
+                    }
+
+                    section("Bar Type") {
+                        row(
+                            title: "Not set",
+                            detail: nil,
+                            isSelected: chosen.barType == nil
+                        ) { chosen.barType = nil }
+
+                        ForEach(Array(BarType.allCases.enumerated()), id: \.element) { index, bar in
+                            row(
+                                title: bar.displayName,
+                                detail: barWeightLabel(for: bar),
+                                isSelected: chosen.barType == bar,
+                                isLast: index == BarType.allCases.count - 1
+                            ) { chosen.barType = bar }
+                        }
+                    }
+                }
+                .padding(.vertical, Spacing.comfortable)
+            }
+            .background(Theme.surface)
+            .navigationTitle("Preferences")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Save") {
+                        if let write = ExercisePreferenceEditing.write(
+                            current: current, chosen: chosen
+                        ) {
+                            onSave(write)
+                        }
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    /// A bar's empty weight, or nothing at all for the two that have no bar.
+    ///
+    /// `dumbbell` and `other` weigh 0 in every unit because there is no bar,
+    /// and "0 lb" on those rows is the fabricated zero AGENTS.md rule 4
+    /// forbids — it reads as *this bar weighs nothing* rather than *there is
+    /// no bar to weigh*. Show nothing instead.
+    /// `formatWeight`, NOT `weightText`, and the difference matters here more
+    /// than anywhere else in the app. `weightText` converts from stored
+    /// kilograms; `bar.weight(in:)` is already in `barUnit` and is a
+    /// real-world constant that must never be converted — 45 lb and 20 kg are
+    /// different bars, not two spellings of one. Converting here would tell a
+    /// metric lifter to load a 20.41 kg bar.
+    private func barWeightLabel(for bar: BarType) -> String? {
+        let weight = bar.weight(in: barUnit)
+        guard weight > 0 else { return nil }
+        return "\(PreviousText.formatWeight(weight)) \(barUnit.abbreviation)"
+    }
+
+    @ViewBuilder
+    private func section(
+        _ title: String,
+        @ViewBuilder content: () -> some View
+    ) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.compact) {
+            Text(title)
+                .font(Typography.cardTitle)
+                .foregroundStyle(Theme.textPrimary)
+                .padding(.horizontal, Spacing.screenMargin)
+
+            VStack(spacing: 0) { content() }
+                .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.card))
+                .padding(.horizontal, Spacing.screenMargin)
+        }
+    }
+
+    @ViewBuilder
+    private func row(
+        title: String,
+        detail: String?,
+        isSelected: Bool,
+        isLast: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: Spacing.compact) {
+                Text(title)
+                    .font(Typography.body)
+                    .foregroundStyle(Theme.textPrimary)
+                if let detail {
+                    Text(detail)
+                        .font(Typography.secondary)
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(Theme.accent)
+                }
+            }
+            .padding(.vertical, Spacing.comfortable)
+            .padding(.horizontal, Spacing.screenMargin)
+            // The row is a Button, so the whole strip has to be hit-testable
+            // rather than just the glyphs on it — a tap in the empty middle
+            // landing on nothing is the same class of bug as the .clear
+            // folder background in docs/04-status.md.
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+
+        if !isLast {
+            Rectangle()
+                .fill(Theme.surface)
+                .frame(height: 1)
+                .padding(.leading, Spacing.screenMargin)
+        }
+    }
+}
+
 #Preview("Note") {
     ExerciseNoteSheet(
         isSticky: true,

@@ -20,26 +20,25 @@
 //  out mid-workout. The claim "the menu is the same in both places" was not
 //  true until the data could back it.
 //
-//  ## What is deliberately absent
+//  ## All eight items are here now
 //
-//  ONE of the eight items from the reference app is still absent, and that is
-//  a decision rather than an oversight:
+//  **Preferences** was the last one, and it was absent rather than disabled
+//  for two phases — a permanently grey row reads as a broken feature, which is
+//  worse than a menu that is honestly shorter. It landed once the four
+//  per-user fields moved off `Exercise` onto `ExercisePreference`
+//  (docs/06-sync.md), because until then a preference could not be stored in a
+//  way that could ever sync. `ExercisePreferencesSheet` is the editor and
+//  `ExercisePreference.current(for:in:)` is the write path.
 //
-//    * **Preferences** edits the per-exercise Weight Unit and Bar Type. The
-//      model it needs now EXISTS — the four fields moved off `Exercise` onto
-//      `ExercisePreference` (docs/06-sync.md § "Per-exercise preferences get
-//      their own local model"), and `ExercisePreference.current(for:in:)` is
-//      the write path waiting for this item to call it. What is left is the
-//      sheet, which is the last of the reference app's eight items.
-//
-//  Showing it disabled would be worse than omitting it: a permanently grey row
-//  reads as a broken feature.
-//
-//  **Add Warm-up Sets** is here now. It was previously blocked on "a settings
+//  **Add Warm-up Sets** was the one before it. It was blocked on "a settings
 //  model for percentages and rounding", which turned out not to exist as a
 //  requirement at all: the reference app offers no way to adjust them. You
 //  generate the sets and edit the SETS. So the ramp is hard-coded in
 //  `WarmupSets` and the whole settings model evaporated.
+//
+//  > **Both of those absences were right, and both were resolved by fixing the
+//  > thing underneath rather than by shipping the item greyed out.** That is
+//  > the pattern worth keeping when the ninth item shows up.
 //
 
 import SwiftUI
@@ -52,6 +51,7 @@ enum ExerciseOption: Equatable, Sendable {
     case addStickyNote
     case addWarmupSets
     case updateRestTimers
+    case preferences
     case replaceExercise
     case createSuperset
     case removeExercise
@@ -101,6 +101,12 @@ struct ExerciseOptionsMenu: View {
                 onSelect(.updateRestTimers)
             } label: {
                 Label("Update Rest Timers", systemImage: "timer")
+            }
+
+            Button {
+                onSelect(.preferences)
+            } label: {
+                Label("Preferences", systemImage: "slider.horizontal.3")
             }
 
             Button {

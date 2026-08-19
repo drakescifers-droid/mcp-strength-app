@@ -19,8 +19,9 @@ state, the traps, the decisions and the reasoning behind them. Don't re-derive f
 those files already explain, and don't duplicate them into new files.
 
 The one-line state: **the app is on Drake's phone, he is training on it, and Phase 2 is down to
-four items.** Sync proven end to end, canonical units done, and a round of bugs found by actually
-using it in a gym is fixed and confirmed. Swift suite green (480), SQL suite green.
+three items.** Sync proven end to end, canonical units done, a round of bugs found by actually
+using it in a gym is fixed and confirmed, and per-exercise Preferences — model and sheet — has
+landed. Swift suite green, SQL suite green.
 
 > **THE APP IS IN HIS HAND AND HE TESTS IT.** That changes how you work — see
 > `AGENTS.md` § "DRAKE DOES THE UI TESTING". Build, install, hand over. Do not drive the simulator
@@ -48,28 +49,39 @@ using it in a gym is fixed and confirmed. Swift suite green (480), SQL suite gre
 
 ## Next piece of work, in order
 
-1. **Per-exercise Preferences.** Design decided and approved — read `docs/06-sync.md` §
-   "Per-exercise preferences get their own local model" before writing any of it. The four fields
-   move off `Exercise` into their own `ExercisePreference` model, which is how the server already
-   stores them and dissolves three of the four sync problems rather than working around them. The
-   sheet is two rows (Weight Unit, Bar Type), not four.
-   > **The display half is already built.** Four call sites pass `exercise.weightUnitOverride` into
-   > `WeightUnits.displayUnit(override:global:)`; `04-status.md` names all four. Changing what they
-   > pass is the whole wiring job.
-2. **The settings screen's units rows**, off the profile page. Until these exist the unit can never
-   be changed, **so the kilogram display path has never been seen on a screen** — it is covered by
-   tests and nothing else.
-3. **Sync `AppSettings`** — no Postgres table yet, and one row per user means the key is `user_id`.
-   Same per-entity conflict-target work `06-sync.md` already specifies for `exercise_preferences`.
+1. **The settings screen's units rows**, off the profile page. Until these exist the GLOBAL unit
+   can never be changed.
+   > **The kilogram path is no longer completely unseen.** The Preferences sheet's per-exercise
+   > override reaches it — set one exercise to Metric and its weights render in kg. What the global
+   > setting still gates is every OTHER exercise, and `SetRow`'s `.onChange(of: unit)` reaction.
+2. **Sync `AppSettings` — and `ExercisePreference`, which now waits on the same one change.**
+   Neither is keyed on `id`: one row per user means `user_id`, a preference means
+   `(user_id, exercise_id)`, and `SyncClient.upsert` hard-codes `onConflict: "id"`. Making the
+   conflict target a per-entity fact on `SyncEntity` unblocks both. `AppSettings` also has no
+   Postgres table yet; `exercise_preferences` has had one since the first migration.
+   > **This now decides whether a bar type survives losing the phone.** Preferences became real
+   > user data today and they do not leave the device.
+   > **Do NOT turn either conformance on before the conflict target moves.** PostgREST rejects the
+   > batch and a rejected batch aborts the WHOLE run, so the pull stops too. That is what the 18
+   > seeded measurement types did.
    > **Do not sweep `StoreMigrations` into it.** It sits next to `AppSettings` and is the opposite
    > kind of thing: a device-local record of which data migrations this store has run.
-4. **Apple Health.** Last thing in Phase 2, and no longer blocked — the developer account is live.
+3. **Apple Health.** Last thing in Phase 2, and no longer blocked — the developer account is live.
    Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
 
-> **Item 1 is the one to route through Ringer**, and Drake asked why it had not been. The bug work
-> was all visual, which the routing rule excludes — but a model refactor with a compile check and
-> no visual judgement is exactly what a worker is for. Read the `ringer` skill before writing the
-> manifest.
+> **Per-exercise Preferences is DONE, and it went through Ringer — which answers the question this
+> file used to ask.** The model split ran as `mcpstrength-per-exercise-preferences` (grok-4.6,
+> passed first attempt, 619s); the sheet was built here, because the routing rule sends mechanical
+> checkable work out and keeps visual work in.
+>
+> **The property that made it routable is the reusable part.** `focusMetric` was a REQUIRED init
+> argument, so deleting it turned all ~65 stale construction sites into compile errors — which let
+> a sandbox that cannot run a test verify a 26-file sweep anyway. Look for that shape when deciding
+> whether a refactor can be delegated at all.
+>
+> It also CORRECTED the design doc rather than implementing it as written: `06-sync.md` called for
+> "an ordinary id" and there is no `id` column on the server to match one against, so the id is the
+> exercise's. Both docs now say so.
 
 > **`Add Warm-up Sets` has been looked at and is done.** It found one real bug — the Previous
 > column followed row position, so a generated ramp moved your last working set onto a warm-up.
@@ -79,10 +91,10 @@ using it in a gym is fixed and confirmed. Swift suite green (480), SQL suite gre
 
 - **The bar on logging real workouts is LIFTED** — the units conversion has landed, which is the
   only thing it was ever waiting on. What still blocks the phone is the item below.
-- **Work out what pushed to the live project on 2026-08-18 at 13:35 CDT.** Nothing in the session
-  was meant to sync. The leading hypothesis is that `xcodebuild test` launches the app as its own
-  test host, signed in, with no preview flag. If that is right it needs fixing before anyone trains
-  on this: running the tests would upload whatever is in the simulator.
+- ✅ **SOLVED — the 13:35 push was `xcodebuild test`.** The test bundle is hosted by the app, so a
+  test run launched the REAL app, signed in, and its launch trigger synced. Fixed in
+  `Auth/AutomatedLaunch.swift` and pinned by a test; `04-status.md` has the full story. Nothing is
+  waiting on this any more.
 - **The app is ON my iPhone 14 and running** (installed 2026-08-18, direct install, no TestFlight
   needed). The units conversion is proven on a real pounds-era store — see `04-status.md`.
 - **The App Store Connect app record does not exist yet**, so nothing can be uploaded even though
@@ -90,6 +102,11 @@ using it in a gym is fixed and confirmed. Swift suite green (480), SQL suite gre
 - **The template editor has still never been looked at by anyone.** It is the last completely
   unseen screen — and it no longer needs your hands: point
   `MCPStrengthUITests/WarmupRampWalkthroughTests` at it and read the screenshots.
+- **The PREFERENCES sheet needs a thumb, and it is the newest thing on the phone** (installed
+  2026-08-18). `⋯` on any exercise → Preferences. Two questions worth answering by using it: do the
+  bar weights re-label the moment you tap Metric, and does opening it and tapping Save with no
+  change feel like it should have done something? The second is deliberate — a no-change Save
+  writes nothing at all, so the table only ever holds preferences somebody actually set.
 - The tappable rest divider, the per-exercise menu and the sticky notes need a real thumb.
 - **Hammer Strength exercises.** The category is live in the app and the database; the actual
   movements land with the bigger exercise-library refresh I'm doing separately. Don't seed them.

@@ -37,8 +37,8 @@ true today — with the standing caveat that it should **not** hold real trainin
 provides sync and backup, because a local-only store has no recovery story.
 
 **Phase 2 — in progress. Sync is PROVEN against the real project, and storage is canonical
-kilograms.** What remains is the Preferences SHEET (its model landed 2026-08-18), the settings
-screen, syncing `AppSettings` and `ExercisePreference`, and Apple Health.
+kilograms, and per-exercise Preferences is DONE.** What remains is the settings screen, syncing
+`AppSettings` and `ExercisePreference`, and Apple Health.
 
 > **The settings model that used to be item 2 on this list no longer exists as a requirement.** It
 > was there to hold editable warm-up percentages — and the reference app offers no way to adjust
@@ -348,35 +348,38 @@ underneath never changed — only whether the screen described it honestly.
   > `AppSettings.current`'s tombstone behaviour, and said which future change owns the difference.
   > And it left `ExerciseOptionsMenu.swift`'s now-stale comment alone because the spec put that
   > file out of bounds, and recorded the staleness instead of silently fixing it.
+- **The Preferences sheet — the EIGHTH and last item of the reference app's per-exercise menu.**
+  Two rows (Weight Unit, Bar Type), Save rather than commit-on-tap, and the bar weights labelled in
+  whichever unit the row above is currently set to.
+  > **A Save that changed nothing writes nothing at all**, and that is a rule with tests rather
+  > than a property of the view. `ExercisePreference.current(for:in:)` CREATES on a miss, so a
+  > Save that resolved the row unconditionally would insert a row of pure defaults, dirty it, and
+  > eventually push it — for the completely ordinary act of opening the sheet and looking at it.
+  > `ExercisePreferenceEditing.write` is the decision; the load-bearing test is the one that
+  > expects `nil`.
+  > **The case that looks like a no-op and is not: CLEARING a preference back to Default.** A rule
+  > written as "write only when something is set" passes every other test and silently drops that
+  > one, leaving the old value on the row forever. The test names it.
+  > **The sheet is where the kilogram display path first became visible to a human.** Set an
+  > exercise to Metric and the bar list re-labels — 45 lb becomes 20 kg, which `BarType.weight(in:)`
+  > insists is a DIFFERENT BAR rather than a conversion. `PreviousText.formatWeight` is the right
+  > formatter there and `weightText` is the wrong one, because a bar weight is already in the
+  > display unit and must never be converted.
+  > **In the template editor it deliberately does NOT go through the draft**, unlike every other
+  > item on that menu. A preference belongs to the exercise, not the template, so routing it
+  > through the draft would let Cancel on a template silently revert a bar type the user set for
+  > every workout they will ever log.
 
 ### What is left, in order
 
-1. **Per-exercise Preferences — HALF DONE. The model landed 2026-08-18; the SHEET is what is
-   left.** `ExercisePreference` exists, `Exercise` is back to being purely what the library
-   defines, and all seven display sites read through `exercise.preference?.…`. 487 tests green.
-   What remains is the two-row sheet (Weight Unit, Bar Type) and the `Preferences` item in the
-   per-exercise `⋯` menu — the eighth and last item, still deliberately absent rather than
-   disabled.
-   > **Nothing creates a preference row yet, and that is correct.** The write path,
-   > `ExercisePreference.current(for:in:)`, has no caller in the app: the sheet is its only caller
-   > and the sheet is the work above. The table is sparse by construction (`06-sync.md`) — a read
-   > site that created a row would write pure defaults for every exercise on screen, which is the
-   > 43-fabricated-discards shape. Do not add a caller to make the write path feel used.
-   > **The prediction in this file held exactly.** "The change is what those four call sites PASS,
-   > not a hunt for screens that resolved the unit their own way" — it was seven sites rather than
-   > four (`barType` feeds the warm-up floor in two more places), and every one of them was a
-   > one-word edit. That is what `WeightUnits.displayUnit(override:global:)` was built for, and it
-   > is the strongest evidence yet for routing every screen through one resolver.
-   > **A PREFERENCE SET IN THE GYM DOES NOT BACK UP YET.** `ExercisePreference` deliberately does
-   > not conform to `Syncable` — see item 3, which is the same one fix. Until then it is on the
-   > phone and nowhere else.
-2. **Settings screen, units rows only**, off the profile page — reference screenshots are in
-   `Settings accessed from profile page/`. This is what makes canonical storage visible: without it
-   nobody can change the unit, **so the conversion is still only ever exercised in one direction.**
-   Every weight is stored in kilograms today and every screen renders pounds; the kg path is covered
-   by tests and has never been seen on a screen. `SetRow` already reacts to a unit change
-   (`.onChange(of: unit)`), and this screen is what proves that works.
-3. **Sync `AppSettings` — and `ExercisePreference`, which is now waiting on exactly the same
+1. **Settings screen, units rows only**, off the profile page — reference screenshots are in
+   `Settings accessed from profile page/`. This is what makes canonical storage fully visible:
+   without it nobody can change the GLOBAL unit.
+   > **The kg path is no longer entirely unseen, and this is the one item that changed.** The
+   > Preferences sheet's per-exercise override reaches it, so one exercise can be rendered in
+   > kilograms on a real screen today. What this screen still gates is every OTHER exercise, and
+   > `SetRow`'s `.onChange(of: unit)` reaction, which nothing has yet exercised.
+2. **Sync `AppSettings` — and `ExercisePreference`, which is now waiting on exactly the same
    thing.** Both carry the sync columns and deliberately do NOT conform to `Syncable`. `AppSettings`
    has no Postgres table yet (`05-database.md`); `exercise_preferences` has had one since the first
    migration. What they share is that neither is keyed on `id`: one row per user means `user_id`,
@@ -392,7 +395,7 @@ underneath never changed — only whether the screen described it honestly.
    > like more of the same. It is the opposite: a device-local record of which data migrations this
    > STORE has run. Syncing it would let one device tell another that its weights are already
    > converted.
-4. **Apple Health.** The last item in Phase 2, and no longer blocked — see the signing note below.
+3. **Apple Health.** The last item in Phase 2, and no longer blocked — see the signing note below.
 
 > **`Add Warm-up Sets` has now been looked at and is off this list.** It found one real bug, which
 > is recorded below rather than here because the shape of it is the reusable part.
@@ -559,6 +562,11 @@ ringer `docs/MODEL-NOTES.md`.
   > this state genuinely reachable. It is the same fix as the identity-linking note below, not a
   > separate one.
 - The per-exercise menu, sticky notes and truncation limits have not been used on a real device.
+- **The Preferences sheet has not been used on a real device either**, and it is the newest thing
+  on the phone (installed 2026-08-18). Two questions a test cannot answer: whether the bar list
+  re-labelling the instant you tap Metric reads as responsive or as flicker, and whether a Save
+  that deliberately writes nothing feels broken. The second is the sparse-table rule made visible,
+  and if it reads as a bug the fix is the wording, not the rule.
 - **The tappable rest divider has not been used on a real device either.** A hairline is far under
   the 44pt minimum target, so the hit area is expanded and then negated out of layout
   (`RestDivider`) — the divider should look unchanged and be comfortably tappable. Both halves of
