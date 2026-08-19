@@ -18,12 +18,16 @@ I'm not a developer — explain things in plain English. Code, commits and docs 
 state, the traps, the decisions and the reasoning behind them. Don't re-derive from the code what
 those files already explain, and don't duplicate them into new files.
 
-The one-line state: **the app is on Drake's phone, he is training on it, Phase 2 is down to proving Watch-attach on a real session — workouts go out (Watch energy + backfill), the four HealthKit measurement types write out and import back, and the custom keypad is DONE on the phone.** Sync proven end to end IN BOTH DIRECTIONS against the live project,
-canonical units done, a round of gym-found bugs fixed, per-exercise Preferences — model and sheet —
-landed, the settings screen makes the global weight unit changeable, **both settings and
-preferences SYNC**, the workout calorie rate is built on both sides, and **the warm-up ramp's
-percentages were found wrong and corrected** (40 / 60 / 80, not 50 / 60 / 75). Swift suite green
-after the keypad (548+ tests), SQL suite green.
+The one-line state: **the app is on Drake's phone, he is training on it, Phase 2's remaining
+build work is DONE, and Phase 3 (the real MCP server) is next.** Sync is proven both ways
+against the live project. Apple Health writes workouts (Watch energy preferred, backfill for
+what permission missed) and the four HealthKit measurement types travel both ways. The custom
+keypad is done. What Phase 2 still needs is a gym check, not a build: Watch-attach on a real
+session. Canonical units done, gym-found bugs fixed, Preferences and the units setting SYNC,
+calorie rate on both sides, warm-up ramp corrected to 40 / 60 / 80. Swift suite green, SQL
+suite green.
+
+> **There is no GitHub / internet copy of this repo.** This Mac is the save. Do not `git push`.
 
 > ✅ **THE KEYPAD IS COMMITTED.** Visual work, so it stayed here and did not go to Ringer.
 
@@ -53,12 +57,22 @@ after the keypad (548+ tests), SQL suite green.
 
 ## Next piece of work, in order
 
-1. **Prove Watch-attach on a real session.** Wired 2026-08-19. Decision is
-   `HealthEnergyAction` / `energyAction` (Ringer, grok-4.6, first try,
-   `mcpstrength-watch-energy`); HealthStore queries `[start, end]`, attaches,
-   falls back to the estimate if attach throws. Read entitlement is in
-   (`NSHealthShareUsageDescription`); Drake will get a **new read-permission
-   prompt** on next launch because workouts were already authorized.
+1. **Phase 3 — the real MCP server.** Drake has confirmed it is in scope for v1,
+   and this chat is starting it. Multi-user, OAuth, hosted, on top of Phase 2's
+   database. **Read `docs/03-mcp-tools.md` (the contract and what the spike
+   lost) and `docs/02-architecture.md` § Phase 3 + MCP auth + Edge Functions
+   before writing a line.** `spike/` is frozen and is not a starting point.
+
+   The host decision in `02`: Supabase Edge Functions first; if the Edge runtime
+   cannot serve MCP's transport for a long-lived connection, fall back to a
+   container (Fly / Railway / Render). The property worth protecting: the server
+   holds no privileged database credential — it queries Postgres **as the user**,
+   and RLS does the enforcement.
+
+2. **Prove Watch-attach on a real session — a gym check, not a build.** Wired
+   2026-08-19. Do not block Phase 3 on it. Decision is `HealthEnergyAction` /
+   `energyAction`; HealthStore queries `[start, end]`, attaches, falls back to
+   the estimate if attach throws.
    **Unverified:** whether HealthKit lets this app attach samples the Watch
    owns, and whether a Watch-on session in Apple Fitness now shows one energy
    number rather than two.
@@ -70,12 +84,9 @@ after the keypad (548+ tests), SQL suite green.
    - No existing samples → keep the flat-rate estimate.
    - If attaching **throws** → fall back to the estimate.
 
-2. ~~**Apple Health — import measurements FROM Health.**~~ **WIRED 2026-08-19.**
-   Write, read toggle, both yellow banners. Unverified on the phone: whether
-   Allow asks to read the four types, whether Add from Health lands a Weight
-   on Measure, and whether our own write does not echo back.
-
-Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
+~~**Apple Health — import measurements FROM Health.**~~ **COMMITTED 2026-08-19**
+(`e82f764`). Write, read toggle, both yellow banners. Still unverified on the
+phone — see Waiting on me.
 
 > ✅ **THE CUSTOM NUMBER KEYPAD IS DONE (2026-08-19), on the phone, Drake approved it after two
 > layout fixes.** Do not rebuild it. Chip + pinned keypad, not
@@ -127,11 +138,13 @@ Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
 
 ## Waiting on me
 
-- 🆕 **WATCH-ATTACH ON A REAL SESSION, and the new Health read prompt.** After
-  install, the app will ask to **read** Active Energy (workouts were already
-  allowed). Allow it, wear the Watch, finish a real-length session, and look
-  at Apple Fitness: one energy number, not our estimate sitting on top of the
-  Watch's. If the prompt never appears, open Profile → gear → Apple Health.
+- 🆕 **WATCH-ATTACH ON A REAL SESSION.** Wear the Watch, finish a real-length
+  session, look at Apple Fitness: one energy number, not our estimate sitting
+  on top of the Watch's. Does not block Phase 3.
+- 🆕 **MEASUREMENTS FROM APPLE HEALTH, a couch check.** Profile → gear → Apple
+  Health. Allow the new **read** prompt (Weight, Body Fat, calories, Waist).
+  Add from Health should land a Weight on the Measure tab, and a Weight logged
+  here should not come back as a second copy.
 - ✅ **FOUR QUESTIONS ABOUT THE KEYPAD, answered 2026-08-19 from the reference
   app, AND THE KEYPAD IS ON THE PHONE.** Weight has a decimal; rest and reps do
   not. − / + steps **2.5 lb / 1 rep / 10 seconds**. Next on reps of a non-last

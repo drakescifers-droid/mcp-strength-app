@@ -42,7 +42,8 @@ Apple Health writes workouts when the in-app toggle is on, prefers Watch Active 
 exists, falls back to the flat-rate estimate, offers backfill for sessions Health never got,
 writes the four HealthKit measurement types and can import them back (banners + Add),
 and the custom number keypad is ON THE PHONE.**
-What remains of Phase 2 is proving Watch-attach on a real session.
+Phase 3 (the real MCP server) is the next **build**. What remains of Phase 2 is
+proving Watch-attach on a real session — a gym check, not a blocker.
 
 > ⚠️ **THE CLAIM BELOW IS WRONG, AND THE SUB-SCREEN HAS NOW BEEN LOOKED AT.** It was used to
 > delete a requirement. `Settings accessed from profile page/IMG_2990.PNG` has a
@@ -643,13 +644,17 @@ underneath never changed — only whether the screen described it honestly.
 
 ### What is left, in order
 
-1. **Prove Watch-attach on a real session.** Wired 2026-08-19: rate none → nothing;
+1. **Phase 3 — the real MCP server.** Contract in `03-mcp-tools.md`; host and
+   auth in `02-architecture.md` (Edge Functions first, query Postgres as the
+   user, RLS enforces). `spike/` is frozen. Drake confirmed this is in scope
+   for v1.
+
+2. **Prove Watch-attach on a real session — gym check, does not block Phase 3.**
+   Wired 2026-08-19: rate none → nothing;
    existing `activeEnergyBurned` in the interval → `addSamples` those and skip our
    estimate; no samples → keep the flat rate; attach throw → fall back to the estimate.
    Read entitlement and prompt are in. **Unverified on a Watch-on session**, including
    whether HealthKit lets an app attach samples another source owns.
-
-Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
 
 > ~~**A cleared field does not travel.**~~ **FIXED 2026-08-19, all thirteen row structs.** Kept
 > below only as the record of what it was.
@@ -903,7 +908,7 @@ ringer `docs/MODEL-NOTES.md`.
 > A new provider treated as a fresh sign-up gives the user a second, empty account and their history
 > appears to have vanished.
 
-**Phases 3–4 — not started.** The real multi-user MCP server, then product.
+**Phases 3–4 — Phase 3 is next.** The real multi-user MCP server, then product.
 
 ---
 
@@ -915,7 +920,6 @@ These are not oversights. Each was cut with a reason, and the reason is the poin
 |---|---|
 | **Program UI** (rotation view, "what's next") | Post-launch. Not critical to the app succeeding, and with no plan to train on a half-built app, shipping it early teaches nothing. **The schema still landed in Phase 1** — see the note below. |
 | **Personal records / PR counts** | Real feature (compare against all prior history, per exercise, per rep count). Nothing computes them, and a hardcoded "0 PRs" reads as *you set no records* rather than *not implemented*. |
-| **Apple Health sync** | Phase 2. `02` decides it is bidirectional and flags an echo-loop trap; doing it half-way is worse than not doing it. The reference's "enable Health" hint is deliberately absent — it would point at a setting that does not exist. |
 | **Progression rules beyond linear** | One structured rule (hit all reps → add X) covers most intermediate programs. Percentage-of-training-max, RPE autoregulation and waves turn a field into a small programming language. |
 | **RIR** | Same information as RPE on an inverted scale. One scale is easier to coach against than two. |
 | **Supersets, plate calculator, exercise artwork, per-exercise overflow menus, calendar view, widget dashboard, accounts/avatars** | Scope. None block the core loop. |
