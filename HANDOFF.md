@@ -19,9 +19,10 @@ state, the traps, the decisions and the reasoning behind them. Don't re-derive f
 those files already explain, and don't duplicate them into new files.
 
 The one-line state: **the app is on Drake's phone, he is training on it, and Phase 2 is down to
-three items.** Sync proven end to end, canonical units done, a round of bugs found by actually
-using it in a gym is fixed and confirmed, and per-exercise Preferences — model and sheet — has
-landed. Swift suite green, SQL suite green.
+two items.** Sync proven end to end, canonical units done, a round of bugs found by actually
+using it in a gym is fixed and confirmed, per-exercise Preferences — model and sheet — has landed,
+and the settings screen now makes the global weight unit changeable. Swift suite green, SQL suite
+green.
 
 > **THE APP IS IN HIS HAND AND HE TESTS IT.** That changes how you work — see
 > `AGENTS.md` § "DRAKE DOES THE UI TESTING". Build, install, hand over. Do not drive the simulator
@@ -49,24 +50,19 @@ landed. Swift suite green, SQL suite green.
 
 ## Next piece of work, in order
 
-1. **The settings screen's units rows**, off the profile page. Until these exist the GLOBAL unit
-   can never be changed.
-   > **The kilogram path is no longer completely unseen.** The Preferences sheet's per-exercise
-   > override reaches it — set one exercise to Metric and its weights render in kg. What the global
-   > setting still gates is every OTHER exercise, and `SetRow`'s `.onChange(of: unit)` reaction.
-2. **Sync `AppSettings` — and `ExercisePreference`, which now waits on the same one change.**
+1. **Sync `AppSettings` — and `ExercisePreference`, which waits on the same one change.**
    Neither is keyed on `id`: one row per user means `user_id`, a preference means
    `(user_id, exercise_id)`, and `SyncClient.upsert` hard-codes `onConflict: "id"`. Making the
    conflict target a per-entity fact on `SyncEntity` unblocks both. `AppSettings` also has no
    Postgres table yet; `exercise_preferences` has had one since the first migration.
-   > **This now decides whether a bar type survives losing the phone.** Preferences became real
-   > user data today and they do not leave the device.
+   > **This decides whether a bar type and a unit choice survive losing the phone.** Both became
+   > real user data today and neither leaves the device.
    > **Do NOT turn either conformance on before the conflict target moves.** PostgREST rejects the
    > batch and a rejected batch aborts the WHOLE run, so the pull stops too. That is what the 18
    > seeded measurement types did.
    > **Do not sweep `StoreMigrations` into it.** It sits next to `AppSettings` and is the opposite
    > kind of thing: a device-local record of which data migrations this store has run.
-3. **Apple Health.** Last thing in Phase 2, and no longer blocked — the developer account is live.
+2. **Apple Health.** Last thing in Phase 2, and no longer blocked — the developer account is live.
    Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
 
 > **Per-exercise Preferences is DONE, and it went through Ringer — which answers the question this
@@ -102,6 +98,13 @@ landed. Swift suite green, SQL suite green.
 - **The template editor has still never been looked at by anyone.** It is the last completely
   unseen screen — and it no longer needs your hands: point
   `MCPStrengthUITests/WarmupRampWalkthroughTests` at it and read the screenshots.
+- **THE SETTINGS SCREEN needs a thumb — gear, top-left of Profile.** One row: Weight Unit. The
+  case worth trying is switching to Metric **with a workout open**, because `SetRow` reacts with
+  `.onChange(of: unit)` and nothing has ever been able to produce that change before. Every entry
+  chip on screen should re-render in kilograms, and nothing logged is altered.
+  > The other three unit rows from the reference are deliberately absent — nothing reads them yet,
+  > and a control that silently does nothing is the rest-timer bug again. Your call, made
+  > 2026-08-18.
 - **The PREFERENCES sheet needs a thumb, and it is the newest thing on the phone** (installed
   2026-08-18). `⋯` on any exercise → Preferences. Two questions worth answering by using it: do the
   bar weights re-label the moment you tap Metric, and does opening it and tapping Save with no

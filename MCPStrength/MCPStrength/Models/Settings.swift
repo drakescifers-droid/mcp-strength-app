@@ -212,4 +212,41 @@ extension AppSettings {
         context.insert(created)
         return created
     }
+
+    /// Change the global weight unit, marking the row only if it actually moved.
+    ///
+    /// A method rather than two lines in the settings screen, for the same
+    /// reason `ExercisePreferenceEditing.write` is a rule rather than a view
+    /// detail: the guard is the interesting part and a view cannot be tested.
+    ///
+    /// **Re-picking the unit that is already selected must not `markEdited`.**
+    /// It is an ordinary thing to do — open the picker, see which one has the
+    /// tick, tap it — and stamping `updatedAt` for it would make a row that
+    /// dirties itself every time somebody LOOKS at it. Once this syncs
+    /// (`04-status.md` item 2) that row would win last-write-wins against a
+    /// genuine edit made on another device, purely because this one was opened
+    /// more recently, and add a push per glance.
+    ///
+    /// The write itself must mark, or the row silently stops travelling —
+    /// AGENTS.md rule 3.
+    func setWeightUnit(_ unit: WeightUnit) {
+        guard weightUnit != unit else { return }
+        weightUnit = unit
+        markEdited()
+    }
+
+    /// Same bookkeeping as `Syncable.markEdited`. This type is not `Syncable`
+    /// yet — there is no settings table in Postgres and the key would be
+    /// `user_id` rather than `id` (see the sync note above) — so the method
+    /// lives here rather than arriving through the protocol. It goes away when
+    /// the conformance lands. `ExercisePreference` carries the same stopgap for
+    /// the same reason.
+    ///
+    /// MUST NOT be called when applying a row pulled FROM the server, once
+    /// there is one: that dirties everything a pull touches and the two ends
+    /// never settle. docs/06-sync.md § "The echo trap".
+    func markEdited(at date: Date = .now) {
+        updatedAt = date
+        needsSync = true
+    }
 }

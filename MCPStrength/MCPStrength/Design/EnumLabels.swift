@@ -67,8 +67,31 @@ extension BarType {
 }
 
 extension WeightUnit {
-    /// The full name, for a picker row. Not used yet — the settings screen that
-    /// needs it is the next piece of work after canonical units.
+    /// How a unit is named where a unit is being CHOSEN — the settings screen's
+    /// Weight Unit row and the per-exercise Preferences sheet.
+    ///
+    /// **One string for both screens, and the wording is the reference app's,
+    /// not ours.** The reference offers exactly `Default`, `Metric (kg)` and
+    /// `US/Imperial (lbs)` (docs/06-sync.md § "Per-exercise preferences"), and
+    /// its settings row renders the chosen value with the same words it offered.
+    /// Two screens that choose the same setting and name it differently read as
+    /// two different settings — which is the whole reason this is here rather
+    /// than spelled out at each call site.
+    ///
+    /// Deliberately NOT `abbreviation` or `columnHeader`. Those trail a number
+    /// (`135 lb`) or head a column (`lbs`); this one names a system to a person
+    /// who is picking between two of them, and "lb" alone does not say
+    /// *US/Imperial*.
+    var settingsLabel: String {
+        switch self {
+        case .lbs: "US/Imperial (lbs)"
+        case .kg:  "Metric (kg)"
+        }
+    }
+
+    /// The bare name of the unit, for prose. Used where the label sits next to
+    /// something that already supplies the context — the Preferences sheet's
+    /// *Default* row, which says which unit Default currently follows.
     var displayName: String {
         switch self {
         case .lbs: "Pounds"

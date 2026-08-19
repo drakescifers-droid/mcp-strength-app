@@ -288,15 +288,19 @@ struct ExercisePreferencesSheet: View {
                             isSelected: chosen.weightUnitOverride == nil
                         ) { chosen.weightUnitOverride = nil }
 
+                        // `settingsLabel`, the same string the settings screen's
+                        // Weight Unit row offers and displays. Two screens that
+                        // choose the same setting and name it differently read
+                        // as two different settings.
                         row(
-                            title: "Metric",
-                            detail: "kg",
+                            title: WeightUnit.kg.settingsLabel,
+                            detail: nil,
                             isSelected: chosen.weightUnitOverride == .kg
                         ) { chosen.weightUnitOverride = .kg }
 
                         row(
-                            title: "US/Imperial",
-                            detail: "lbs",
+                            title: WeightUnit.lbs.settingsLabel,
+                            detail: nil,
                             isSelected: chosen.weightUnitOverride == .lbs,
                             isLast: true
                         ) { chosen.weightUnitOverride = .lbs }

@@ -36,9 +36,22 @@ and a five-tab shell.
 true today — with the standing caveat that it should **not** hold real training data until Phase 2
 provides sync and backup, because a local-only store has no recovery story.
 
-**Phase 2 — in progress. Sync is PROVEN against the real project, and storage is canonical
-kilograms, and per-exercise Preferences is DONE.** What remains is the settings screen, syncing
-`AppSettings` and `ExercisePreference`, and Apple Health.
+**Phase 2 — in progress. Sync is PROVEN against the real project, storage is canonical
+kilograms, per-exercise Preferences is DONE, and the units setting is REACHABLE.** What remains is
+syncing `AppSettings` and `ExercisePreference`, and Apple Health.
+
+> ⚠️ **THE CLAIM BELOW IS PROBABLY WRONG, AND IT WAS USED TO DELETE A REQUIREMENT.** Building the
+> settings screen meant reading the reference's settings screenshots properly, and
+> `Settings accessed from profile page/IMG_2990.PNG` has a **`Warm-up Calculator >`** row under
+> LOG WORKOUT. Its sub-screen is not among the captured screenshots, so what it CONTAINS is still
+> unknown — but "the reference app offers no way to adjust them at all" is not supportable as
+> written. **Do not act on this without looking at that screen in the reference app**; the ramp is
+> shipped, used, and correct, and this is a note about the reasoning, not a bug.
+>
+> **The shape worth keeping either way: a requirement was deleted on the strength of an absence,
+> and an absence is only evidence if you looked where it would have been.** The original claim came
+> from the WORKOUT screens, where there is indeed no way to adjust percentages. Nobody had opened
+> the settings screenshots at that point.
 
 > **The settings model that used to be item 2 on this list no longer exists as a requirement.** It
 > was there to hold editable warm-up percentages — and the reference app offers no way to adjust
@@ -100,6 +113,14 @@ kilograms, and per-exercise Preferences is DONE.** What remains is the settings 
 > > beside a `TEST SUCCEEDED` from the other. It produced a reported "603 tests green" when the
 > > real figure was 415, and a log carrying both verdict lines. One unique log path per run, and
 > > check that exactly ONE verdict line exists before believing it.
+>
+> > **A per-test log line can go MISSING from a redirected `xcodebuild` log, so a passed count is
+> > a floor rather than a figure.** Two consecutive runs reported 495 and 504 where the real delta
+> > was 8 new tests; the extra one was `SyncStatusTests/aFreshAccountHasNoCursor`, a committed test
+> > that simply did not appear in the earlier log. Swift Testing runs in parallel and the lines
+> > interleave. **`** TEST SUCCEEDED **` plus zero failures is the signal; the count is not.** If a
+> > count must be trusted, diff the two runs BY SUITE rather than comparing totals — that is what
+> > located this in a minute.
 >
 > > **A dump diff told me preview mode was the culprit and it was wrong.** `pg_dump --data-only`
 > > does not emit rows in a stable ORDER, so a plain `diff` of two dumps reports changes that did
@@ -369,17 +390,35 @@ underneath never changed — only whether the screen described it honestly.
   > item on that menu. A preference belongs to the exercise, not the template, so routing it
   > through the draft would let Cancel on a template silently revert a bar type the user set for
   > every workout they will ever log.
+- **The settings screen, and with it the global weight unit — ONE ROW.** Gear on the Profile tab →
+  Settings → Weight Unit → Metric (kg) / US/Imperial (lbs). **This is what finally makes the
+  kilogram half of canonical storage reachable for every exercise**, rather than one at a time
+  through a per-exercise override.
+  > **The other three unit rows are ABSENT, and that was a decision Drake made explicitly.** The
+  > reference's UNITS AND LOCALIZATION section has six rows and `AppSettings` carries a field for
+  > every one — but only `weightUnit` has a READER. Shipping the rest would mean controls that
+  > write a value no screen consults, which is not a hypothetical: it is the rest-timer bug from
+  > the gym session, where a menu wrote `defaultRestSeconds` and the screen read a hardcoded 90.
+  > Same call as Archive and Share. Each row arrives with its reader.
+  > **`Measurement Weight Unit` and `Size Unit` carry a real undecided question**, which is why
+  > they are not a quick follow-up: measurements are NOT stored canonically the way weights are —
+  > `MeasurementEntry.unit` is a string on each row — so changing the setting either converts the
+  > history or leaves a mixed list, and nobody has decided which. `Distance Unit` has nothing to
+  > affect at all; there is no cardio logging screen.
+  > **Re-picking the unit that is already ticked must NOT mark the row edited**
+  > (`AppSettings.setWeightUnit`). Opening a picker to see which option is selected and tapping it
+  > is ordinary, and a row that dirties itself every time somebody LOOKS at it would — once this
+  > syncs — beat a genuine edit made on another device purely because this one was opened more
+  > recently. Same rule, same reason, as the Preferences sheet's no-change Save.
+  > **One label for both screens** (`WeightUnit.settingsLabel`), and the wording is the reference's:
+  > `Metric (kg)` / `US/Imperial (lbs)`. The Preferences sheet was corrected to match in the same
+  > change — two screens that choose one setting and name it differently read as two settings.
+  > Deliberately distinct from `abbreviation` (trails a number) and `columnHeader` (heads a
+  > column); a test fails if somebody collapses the three.
 
 ### What is left, in order
 
-1. **Settings screen, units rows only**, off the profile page — reference screenshots are in
-   `Settings accessed from profile page/`. This is what makes canonical storage fully visible:
-   without it nobody can change the GLOBAL unit.
-   > **The kg path is no longer entirely unseen, and this is the one item that changed.** The
-   > Preferences sheet's per-exercise override reaches it, so one exercise can be rendered in
-   > kilograms on a real screen today. What this screen still gates is every OTHER exercise, and
-   > `SetRow`'s `.onChange(of: unit)` reaction, which nothing has yet exercised.
-2. **Sync `AppSettings` — and `ExercisePreference`, which is now waiting on exactly the same
+1. **Sync `AppSettings` — and `ExercisePreference`, which is waiting on exactly the same
    thing.** Both carry the sync columns and deliberately do NOT conform to `Syncable`. `AppSettings`
    has no Postgres table yet (`05-database.md`); `exercise_preferences` has had one since the first
    migration. What they share is that neither is keyed on `id`: one row per user means `user_id`,
@@ -395,7 +434,7 @@ underneath never changed — only whether the screen described it honestly.
    > like more of the same. It is the opposite: a device-local record of which data migrations this
    > STORE has run. Syncing it would let one device tell another that its weights are already
    > converted.
-3. **Apple Health.** The last item in Phase 2, and no longer blocked — see the signing note below.
+2. **Apple Health.** The last item in Phase 2, and no longer blocked — see the signing note below.
 
 > **`Add Warm-up Sets` has now been looked at and is off this list.** It found one real bug, which
 > is recorded below rather than here because the shape of it is the reusable part.
@@ -562,6 +601,10 @@ ringer `docs/MODEL-NOTES.md`.
   > this state genuinely reachable. It is the same fix as the identity-linking note below, not a
   > separate one.
 - The per-exercise menu, sticky notes and truncation limits have not been used on a real device.
+- **The settings screen has not been used on a real device**, and it carries the one interaction
+  nothing has ever exercised: `SetRow` reacts to a unit change with `.onChange(of: unit)`, and
+  until this screen existed nothing could produce that change. Switching to Metric with a workout
+  open is the case to try — every entry chip on screen should re-render in kilograms.
 - **The Preferences sheet has not been used on a real device either**, and it is the newest thing
   on the phone (installed 2026-08-18). Two questions a test cannot answer: whether the bar list
   re-labelling the instant you tap Metric reads as responsive or as flicker, and whether a Save

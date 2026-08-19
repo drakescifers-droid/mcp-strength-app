@@ -29,6 +29,7 @@ struct ProfileTab: View {
     private var allWorkouts: [Workout]
 
     @State private var confirmingSignOut = false
+    @State private var showingSettings = false
 
     private var completedWorkouts: [Workout] {
         WorkoutStats.completedWorkouts(from: allWorkouts)
@@ -52,6 +53,27 @@ struct ProfileTab: View {
             .background(Theme.surface)
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.large)
+            // The gear sits above the title in the reference app, which on this
+            // platform is the leading toolbar slot. It is the ONLY way into
+            // settings — there is no second entry point to keep in step.
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                    }
+                    .accessibilityLabel("Settings")
+                }
+            }
+            // `isPresented` rather than `item:` deliberately, and this is the
+            // case AGENTS.md rule 6 does NOT cover: the rule is about a sheet
+            // that needs a VALUE, where companion `@State` written from inside
+            // a `Menu` action is lost. This sheet takes no arguments and the
+            // flag is set from an ordinary Button. Do not "fix" it.
+            .sheet(isPresented: $showingSettings) {
+                SettingsScreen()
+            }
             .confirmationDialog(
                 "Sign out?",
                 isPresented: $confirmingSignOut,
