@@ -215,6 +215,56 @@ cards, because "best set" required both weight and reps. Three sets of pull-ups 
 mentioned in the summary. That bug survived ~295 tests. **Use this before believing any UI is
 right.**
 
+### What turning sync on for real found — one outage, and the harness was hiding it
+
+**2026-08-19. The first sync after settings backup went live failed, and the failure was total:
+exactly ONE request left the phone.**
+
+    POST /rest/v1/app_settings → 403
+    postgres: permission denied for table app_settings
+
+`app_settings` is FIRST in `SyncEntity.allCases`, so the rejected batch aborted the whole run —
+no other table was attempted and the pull never happened. The account card said "Backup failed".
+
+**The cause: `grant … on all tables in schema public` is a ONE-TIME SNAPSHOT.**
+`20260815120200_rls.sql` granted `authenticated` on every table that existed in August 15.
+`app_settings` was created on August 18 and was never granted. RLS was correct and irrelevant —
+the role could not reach the table at all.
+
+> **The same file had already understood this and fixed HALF of it.** It ends with
+> `alter default privileges in schema public revoke all on tables from anon;` under a comment
+> saying *"Applies the same rule to tables added by later migrations."* The anon REVOKE was made
+> durable; the mirror-image GRANT to `authenticated` was not. So every table added since arrives
+> correctly locked down and also unreachable.
+
+> ⚠️ **THE TEST SUITE COULD NOT HAVE CAUGHT IT, AND THAT IS THE REAL LESSON.** `00_shim.sql` did
+> `alter default privileges in schema public grant all on tables to anon, authenticated,
+> service_role`, so in the throwaway container every new table was granted automatically. **The
+> harness was MORE PERMISSIVE THAN PRODUCTION, in exactly the dimension the bug lived in.** A test
+> environment more permissive than production cannot test authorization — it can only agree with
+> you. This is the same family as "tests build their Postgres from the local migration files, so
+> the schema is right there by construction", and worse, because that one is written down and this
+> one was a convenience nobody re-examined.
+>
+> Fixed by removing the blanket grant from the shim and adding `07_grants_test.sql`, which asserts
+> the four verbs for `authenticated` and none for `anon` on every synced table — **plus a canary
+> table created at test time**, to prove a table added TOMORROW inherits both rules. That last
+> assertion is the one that prevents a recurrence: the others describe today, and the bug lived in
+> tomorrow. Self-tested by removing the fix migration and watching it fail with
+> `authenticated lacks SELECT on public.app_settings`.
+
+> **Generalises past grants: `… on all tables` in ANY migration is a snapshot, not a rule.** If it
+> must hold for tables added later, it needs `alter default privileges` beside it.
+
+> **And the app made it harder than it needed to be.** `failureReason` flattened every non-offline
+> error to "Backup could not finish.", so a sentence that named both the table and the cause was
+> discarded and the answer had to be dug out of the project's server logs. The engine had even
+> logged it — the decision was "logged, not surfaced", on the reasoning that a user's sentence and
+> a developer's detail are different artefacts. True in general, empty here: there is one user and
+> he is also the person debugging it. A server's own refusal now reaches the screen, behind the
+> `ServerRefusal` protocol so `SyncEngine` stays free of the Supabase SDK. **Revisit when there are
+> users who are not Drake.**
+
 ### What running it for real found
 
 **Four bugs in about an hour, none of which the suite could see.** Kept because the *reasons* they

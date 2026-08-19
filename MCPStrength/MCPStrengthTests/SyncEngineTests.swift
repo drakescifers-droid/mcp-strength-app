@@ -542,6 +542,35 @@ struct SyncEngineTests {
         #expect(SyncEngine.failureReason(for: error) == "Backup could not finish.")
     }
 
+    // A server that explained its own refusal must have that sentence REACH
+    // the user.
+    //
+    // This is the 2026-08-19 outage as a test. PostgREST answered `permission
+    // denied for table app_settings` — naming the table and the cause — and
+    // the account card said "Backup could not finish." The real message had to
+    // be dug out of the project's server logs, and the app had it in hand the
+    // whole time.
+    //
+    // Conforming a stub here rather than importing the SDK's error is the point
+    // of `ServerRefusal` existing: the engine matches its OWN protocol, so this
+    // is testable with no network, no account and no Supabase types.
+    @Test func aServerRefusalCarriesTheServersOwnSentence() {
+        struct Refusal: ServerRefusal {
+            let serverMessage: String
+        }
+        let error = Refusal(serverMessage: "permission denied for table app_settings")
+        #expect(
+            SyncEngine.failureReason(for: error)
+                == "The server refused it: permission denied for table app_settings"
+        )
+    }
+
+    // Offline still wins over the server-refusal branch, because a URLError is
+    // not a refusal and "No connection." is both truer and more actionable.
+    @Test func offlineStillOutranksEverythingElse() {
+        #expect(SyncEngine.failureReason(for: URLError(.timedOut)) == "No connection.")
+    }
+
     // MARK: - Orphaned children
 
     @Test func aChildThatCannotBeEncodedIsLeftDirty() async throws {

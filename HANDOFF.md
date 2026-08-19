@@ -97,11 +97,12 @@ conformances on). Swift suite green, SQL suite green.
 - **The template editor has still never been looked at by anyone.** It is the last completely
   unseen screen — and it no longer needs your hands: point
   `MCPStrengthUITests/WarmupRampWalkthroughTests` at it and read the screenshots.
-- **SYNC IS ON FOR SETTINGS AND PREFERENCES as of 2026-08-18 evening, and has NEVER RUN AGAINST
-  THE LIVE PROJECT.** The table is live and verified, the suite is green, and the two hazards are
-  pinned by test — but no real round trip has happened. **The first launch after installing is the
-  moment to watch**, and the thing that would tell you it went wrong is the Profile tab still
-  saying it is not backed up, or a unit choice changing on its own.
+- ⚠️ **SYNC HAS RUN AGAINST THE LIVE PROJECT AND FAILED ONCE, 2026-08-19 — cause found and
+  fixed, but the SUCCESS is still unwitnessed.** `permission denied for table app_settings`: a
+  table created after `grant … on all tables` had never been granted, and because it is first in
+  the push order the whole run aborted. Migration `20260819140000` fixes it and is applied.
+  **What is still unproven is a run that WORKS** — tap `Back Up Now` on the Profile tab and the
+  card should go to "Backed up". If it fails again it will now say what the server said.
 - **THE SETTINGS SCREEN needs a thumb — gear, top-left of Profile.** One row: Weight Unit. The
   case worth trying is switching to Metric **with a workout open**, because `SetRow` reacts with
   `.onChange(of: unit)` and nothing has ever been able to produce that change before. Every entry

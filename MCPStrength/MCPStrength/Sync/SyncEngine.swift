@@ -147,17 +147,27 @@ final class SyncEngine {
         } catch let error as ClaimMismatch {
             status.failRun(reason: error.reason, pending: (try? pendingCount()) ?? 0)
         } catch {
-            // The UNDERLYING error, not the sentence shown to the user.
-            // `failureReason` deliberately flattens everything into something
-            // reassuring ("Backup could not finish."), which is right on the
-            // Profile tab and useless when a sync is failing and nobody knows
-            // why. The first real round trip failed on
-            // `PostgrestError(code: 42501, …)` and the app's own UI could not
-            // have told anyone that; it took a temporary NSLog to find it.
+            // The UNDERLYING error, in full, for a developer.
             //
-            // Logged, not surfaced: docs/02-architecture.md § Observability
-            // asks for diagnosability, and the sentence a user reads and the
-            // detail a developer needs are different artefacts.
+            // > **"Logged, not surfaced" was the rule here and it has been
+            // > PARTLY REVERSED, on 2026-08-19, because it failed its own
+            // > test.** A sync died with PostgREST's
+            // > `permission denied for table app_settings` — a sentence naming
+            // > both the table and the cause — and the account card said
+            // > "Backup could not finish." Finding the real message meant
+            // > opening the project's server logs. The reasoning had been that
+            // > the sentence a user reads and the detail a developer needs are
+            // > different artefacts, which is true in general and empty here:
+            // > the app has ONE user and he is also the person debugging it.
+            // >
+            // > `failureReason` now passes a server's own refusal through.
+            // > Everything else still flattens, and this log still carries the
+            // > whole error, which is more than any sentence should.
+            // >
+            // > **Revisit when there are users who are not Drake** — at that
+            // > point "The server refused it: permission denied for table
+            // > app_settings" is frightening and unactionable, and the right
+            // > shape is a calm sentence with the detail behind a tap.
             failureLogger.error("sync run failed: \(String(describing: error), privacy: .public)")
             status.failRun(reason: Self.failureReason(for: error), pending: (try? pendingCount()) ?? 0)
         }
@@ -916,8 +926,48 @@ final class SyncEngine {
            offlineCodes.contains(underlying.code) {
             return "No connection."
         }
+
+        // THE SERVER'S OWN WORDS, when it gave any. This used to collapse every
+        // non-offline failure to "Backup could not finish.", and that cost a
+        // real outage on 2026-08-19: PostgREST answered
+        // `permission denied for table app_settings` — a sentence that names
+        // the table AND the cause — and the app threw it away and said nothing.
+        // Finding it meant going to the project's server logs.
+        //
+        // `02-architecture.md` asks for a failed push to be diagnosable rather
+        // than spooky. A message the server wrote about ITS OWN refusal is the
+        // most diagnosable thing available, and withholding it protects nobody:
+        // the alternative on screen is not a gentler explanation, it is no
+        // explanation.
+        //
+        // Still typed, never `String(describing:)` — AGENTS.md rule 5. A
+        // `PostgrestError` is matched as a type and its `message` read as a
+        // field, so this cannot become the string-scanning branch that could
+        // never fire.
+        if let refusal = error as? ServerRefusal {
+            // The message is one line and already reads as a sentence.
+            // `details`/`hint` are deliberately NOT surfaced: that is where
+            // PostgREST puts row contents, and the account card is not the
+            // place to print somebody's own data back at them.
+            return "The server refused it: \(refusal.serverMessage)"
+        }
+
         return "Backup could not finish."
     }
+}
+
+/// An error the SERVER produced about its own refusal, carrying a sentence
+/// worth showing a person.
+///
+/// Declared here, and conformed in `SyncClient.swift`, so this file stays free
+/// of the Supabase SDK. That is the same boundary the `SyncTransport` protocol
+/// draws and for the same reason: the engine's rules are testable precisely
+/// because they do not know what library is underneath. A fake can conform to
+/// this in a test without a network or an account.
+protocol ServerRefusal: Error {
+    /// One line, written by the server about why it said no. Not a dump, and
+    /// not the row contents.
+    var serverMessage: String { get }
 }
 
 // MARK: - Identity

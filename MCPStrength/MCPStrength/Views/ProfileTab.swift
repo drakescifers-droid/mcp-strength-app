@@ -5,10 +5,10 @@
 //  A small, honest profile: a total completed-workout count, a Swift Charts bar
 //  chart of workouts per week over the last 8 weeks, and the account card.
 //
-//  There is still no avatar and no settings screen. The account card is here
-//  because sign-out has to live SOMEWHERE — an app you can sign into and not
-//  out of is a bug, and this is the only tab that is about you rather than
-//  about training.
+//  There is still no avatar. The gear in the toolbar opens `SettingsScreen`;
+//  the account card is here because sign-out has to live SOMEWHERE — an app you
+//  can sign into and not out of is a bug, and this is the only tab that is
+//  about you rather than about training.
 //
 //  The weekly bucketing is the pure `WeeklyWorkoutBuckets.buckets` function in
 //  Workout/, never arithmetic inside the chart builder. Weeks with zero
@@ -23,6 +23,7 @@ import Charts
 struct ProfileTab: View {
     @Environment(AuthController.self) private var auth
     @Environment(SyncStatus.self) private var sync
+    @Environment(SyncEngine.self) private var engine: SyncEngine?
 
     @Query(filter: #Predicate<Workout> { $0.deletedAt == nil },
            sort: [SortDescriptor(\Workout.startedAt, order: .reverse)])
@@ -115,6 +116,34 @@ struct ProfileTab: View {
 
             backupRow
 
+            // BACK UP NOW — Drake asked for it the first time a sync failed,
+            // which is exactly the moment it earns its place.
+            //
+            // Sync is otherwise invisible and untriggerable: it runs on launch,
+            // on foreground, and after finishing a workout. When it fails there
+            // is no way to retry except backgrounding the app or logging a
+            // workout you did not do, and no way to tell "it failed and stayed
+            // failed" from "it has not tried since". A control that answers
+            // *is it still broken?* in one tap is worth more than the screen
+            // real estate.
+            //
+            // It is also the only way a fix gets confirmed without a rebuild:
+            // the run that proved the permission fix landed was started from
+            // this button.
+            Button {
+                Task { await syncNow() }
+            } label: {
+                // Says what it does to the DATA, not what it does to the app.
+                // "Sync" is jargon for a thing whose whole purpose is that your
+                // training is not only on this phone.
+                Text(sync.state == .syncing ? "Backing Up…" : "Back Up Now")
+            }
+            .buttonStyle(.tintedAccent)
+            // Disabled while a run is in flight, matching the engine, which
+            // ignores a second call anyway. Two sources of truth for "busy"
+            // would drift; this reads the same state the row above shows.
+            .disabled(sync.state == .syncing || engine == nil)
+
             Button("Sign Out") { confirmingSignOut = true }
                 .buttonStyle(.tintedDestructive)
                 .disabled(auth.isBusy)
@@ -124,6 +153,22 @@ struct ProfileTab: View {
         .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.card))
     }
 
+    /// Run a sync on demand.
+    ///
+    /// Reads the user from `auth.state` rather than storing one: the engine is
+    /// per-device and the account can change underneath it, and a stale id here
+    /// would push one person's rows into another's account — the thing the
+    /// engine's claim step exists to refuse.
+    ///
+    /// No completion handling and no alert. The account card above IS the
+    /// result — it moves to "Backing up…", then to "Backed up" or "Backup
+    /// failed" with the reason. A second channel saying the same thing would
+    /// be one more place for the two to disagree.
+    private func syncNow() async {
+        guard let engine, case .signedIn(let userID, _) = auth.state else { return }
+        await engine.run(as: userID)
+    }
+
     // MARK: - Backup state
     //
     // The whole point of docs/02-architecture.md § Observability: a failed push
@@ -131,8 +176,12 @@ struct ProfileTab: View {
     // is the detailed view; a failure ALSO shows a marker on the card title, so
     // it is noticed without coming looking.
     //
-    // Today this reads "Not backed up yet", and that is the truth rather than a
-    // placeholder — nothing syncs, so anything more reassuring would be a lie.
+    // It stopped reading "Not backed up yet" on 2026-08-18, when sync landed.
+    // The failure branch now carries the SERVER'S OWN sentence where there is
+    // one ("The server refused it: permission denied for table app_settings"),
+    // because the first real failure said "Backup could not finish." and the
+    // answer had to be dug out of the project's server logs. See
+    // `SyncEngine.failureReason`.
 
     private var backupRow: some View {
         HStack(alignment: .top, spacing: Spacing.compact) {

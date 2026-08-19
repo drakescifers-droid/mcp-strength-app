@@ -171,6 +171,21 @@ extension SyncEntity {
     }
 }
 
+// MARK: - The server's own words
+
+/// `PostgrestError` is the SDK's shape for "the server said no and told you
+/// why". Conformed here rather than in `SyncEngine.swift` because this is the
+/// file that imports Supabase — the engine matches on the protocol and stays
+/// SDK-free.
+///
+/// This exists because of a real outage: PostgREST answered `permission denied
+/// for table app_settings`, naming both the table and the cause, and the app
+/// discarded it and reported "Backup could not finish." The answer was sitting
+/// in the error object the whole time.
+extension PostgrestError: ServerRefusal {
+    var serverMessage: String { message }
+}
+
 // MARK: - Live client
 
 /// The one `SyncTransport` that talks to the hosted project.
