@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- HealthKit is a RESTRICTED capability: Apple does not grant it to free
+	     accounts at all, which is why this waited for the paid team
+	     (docs/04-status.md § "Shipping to a device").
+
+	     `health-records` is deliberately ABSENT. That is the clinical-records
+	     entitlement — lab results, medications, immunisations — and it needs a
+	     separate Apple review. This app writes workouts; asking for medical
+	     records would be an unexplainable permission prompt and a rejection
+	     risk. -->
+	<key>com.apple.developer.healthkit</key>
+	<true/>
+</dict>
+</plist>

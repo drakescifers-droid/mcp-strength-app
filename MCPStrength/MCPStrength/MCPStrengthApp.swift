@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import UserNotifications
+import HealthKit
 
 @main
 struct MCPStrengthApp: App {
@@ -120,6 +121,7 @@ struct MCPStrengthApp: App {
     /// at the finish site in ActiveWorkoutScreen, which another worker
     /// owns this round.
     @State private var engine: SyncEngine?
+    @State private var health: HealthStore?
 
     /// Presents the rest alert even while the app is frontmost. Held here so
     /// it outlives every view rebuild — `UNUserNotificationCenter` holds its
@@ -142,6 +144,7 @@ struct MCPStrengthApp: App {
                 .environment(auth)
                 .environment(sync)
                 .optionalEnvironment(engine)
+                .optionalEnvironment(health)
                 // The design tokens are a dark-only palette, sampled from the dark reference
                 // app (see Design/Theme.swift). System-provided chrome — navigation titles,
                 // pickers, keyboards — takes its colours from the environment colour scheme,
@@ -175,6 +178,12 @@ struct MCPStrengthApp: App {
                     }
                 }
                 .task {
+                    // One store for the app. `HKHealthStore` is documented as
+                    // cheap to hold and expensive to churn, and authorization
+                    // state is read off it on every Settings appearance.
+                    if health == nil, HKHealthStore.isHealthDataAvailable() {
+                        health = HealthStore()
+                    }
                     if engine == nil {
                         engine = SyncEngine(
                             context: sharedModelContainer.mainContext,
@@ -233,6 +242,20 @@ private extension View {
     func optionalEnvironment(_ engine: SyncEngine?) -> some View {
         if let engine {
             self.environment(engine)
+        } else {
+            self
+        }
+    }
+
+    /// Same shape for the Health store, and it is optional for a SECOND reason
+    /// on top of the timing one: `HKHealthStore` is only created where
+    /// HealthKit exists at all. On a device without it — iPad, some simulators
+    /// — there is no store to put in the environment and the Settings screen
+    /// says so rather than offering a button that cannot work.
+    @ViewBuilder
+    func optionalEnvironment(_ health: HealthStore?) -> some View {
+        if let health {
+            self.environment(health)
         } else {
             self
         }

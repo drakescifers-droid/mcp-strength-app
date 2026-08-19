@@ -19,7 +19,7 @@ state, the traps, the decisions and the reasoning behind them. Don't re-derive f
 those files already explain, and don't duplicate them into new files.
 
 The one-line state: **the app is on Drake's phone, he is training on it, and Phase 2 is down to
-ONE item — Apple Health.** Sync proven end to end IN BOTH DIRECTIONS against the live project,
+ONE item — the Apple Health MEASUREMENTS half; workouts already go out.** Sync proven end to end IN BOTH DIRECTIONS against the live project,
 canonical units done, a round of gym-found bugs fixed,
 per-exercise Preferences — model and sheet — landed, the settings screen makes the global weight
 unit changeable, and **both settings and preferences now SYNC** (table live on the project, client
@@ -51,7 +51,14 @@ conformances on). Swift suite green, SQL suite green.
 
 ## Next piece of work, in order
 
-1. **Apple Health.** Last thing in Phase 2, and no longer blocked — the developer account is live.
+1. **Apple Health — the MEASUREMENTS half.** Workouts already go out (2026-08-19). What remains is
+   the bidirectional part and its echo-loop trap: write a weight to Health, Health notifies
+   observers, the app re-imports its own write as a new entry, duplicates forever.
+   `MeasurementEntry.source` exists for that guard and `02-architecture.md` says get it right the
+   first time.
+   > **Only 4 of the 18 measurement types exist in HealthKit** — Weight, Body Fat %, Caloric
+   > Intake, Waist. The other fourteen are limb and torso circumferences with no HealthKit type,
+   > so the screen must say which rows can travel rather than implying all of them do.
    Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
 
 > **Per-exercise Preferences is DONE, and it went through Ringer — which answers the question this

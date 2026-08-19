@@ -231,6 +231,29 @@ right.**
   > PRESENT. The absence is the case nobody wrote — the same shape as the warm-up ramp bug, where
   > every test used a set list with no warm-ups in it.
 
+- **Apple Health, the WORKOUTS half — one direction, out only.** A finished workout is added to
+  Apple Health, so training counts toward Activity. `Health/HealthWorkoutRule.swift` is the pure
+  eligibility rule and `Health/HealthStore.swift` is the framework behind a protocol, the same
+  split as SyncPlanning versus SyncClient and for the same reason: HealthKit cannot be exercised in
+  a unit test, so everything that DECIDES sits where a test can reach it.
+  > **The entitlement provisioned automatically** with `-allowProvisioningUpdates` on the paid
+  > team — no portal work — and was verified by reading it back out of the SIGNED app
+  > (`codesign -d --entitlements`), not from the build log.
+  > **Idempotency is `HKMetadataKeyExternalUUID`, not a flag on `Workout`.** A `didWriteToHealth`
+  > column would be a stored property on a synced model, would need a Postgres column to travel,
+  > and would still be wrong across devices — Health syncs via iCloud, so the entry can already be
+  > there while a second phone's flag says otherwise. Ask Health what Health has.
+  > **No energy burned and no total volume**, deliberately. Nothing computes calories, so any
+  > number is invented, and `0` is worse than absent: Apple Fitness would render "0 calories"
+  > against an hour of squatting. Rule 4 applied to somebody else's UI, where we cannot add a
+  > caveat.
+  > **Authorization IS the switch** — no stored preference, because HealthKit already keeps a
+  > per-device answer and a second flag is a second source of truth. The cost is that turning it
+  > off happens in Health, and the settings row says exactly where.
+  > **`HKWorkoutBuilder`, not the `HKWorkout` initialisers** — all of them are
+  > `API_DEPRECATED("Use HKWorkoutBuilder", ios(8.0, 17.0))`, read out of `HKWorkout.h` rather than
+  > recalled.
+
 ### What turning sync on for real found — one outage, and the harness was hiding it
 
 **2026-08-19. The first sync after settings backup went live failed, and the failure was total:
@@ -492,7 +515,14 @@ underneath never changed — only whether the screen described it honestly.
 
 ### What is left, in order
 
-1. **Apple Health.** The last item in Phase 2, and no longer blocked — see the signing note below.
+1. **Apple Health — the MEASUREMENTS half.** Workouts already go out (see Landed). What remains is
+   the genuinely bidirectional part, and with it the echo-loop trap `02-architecture.md` flags:
+   write a weight to Health, Health notifies observers, the app re-imports its own write as a new
+   entry, duplicates forever. `MeasurementEntry.source` exists for exactly that guard.
+   > **Only 4 of the 18 seeded measurement types exist in HealthKit** — Weight, Body Fat %,
+   > Caloric Intake and Waist. The other fourteen are limb and torso circumferences with no
+   > HealthKit type at all, so the screen has to say which rows can travel rather than implying
+   > all of them do.
    Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
 
 > ~~**A cleared field does not travel.**~~ **FIXED 2026-08-19, all thirteen row structs.** Kept
@@ -688,6 +718,11 @@ ringer `docs/MODEL-NOTES.md`.
   nothing has ever exercised: `SetRow` reacts to a unit change with `.onChange(of: unit)`, and
   until this screen existed nothing could produce that change. Switching to Metric with a workout
   open is the case to try — every entry chip on screen should re-render in kilograms.
+- **APPLE HEALTH HAS NEVER WRITTEN A WORKOUT.** The rule is tested, the entitlement is verified
+  in the signed app, and NOTHING has actually reached Health — a unit test cannot grant a
+  permission or write a sample. What needs a thumb: Settings → Apple Health → Allow, then finish a
+  workout, then look in Apple Fitness. And the idempotency claim specifically: finishing the SAME
+  workout twice must produce ONE entry, which is the whole reason for the external-uuid lookup.
 - **The Preferences sheet has not been used on a real device either**, and it is the newest thing
   on the phone (installed 2026-08-18). Two questions a test cannot answer: whether the bar list
   re-labelling the instant you tap Metric reads as responsive or as flicker, and whether a Save

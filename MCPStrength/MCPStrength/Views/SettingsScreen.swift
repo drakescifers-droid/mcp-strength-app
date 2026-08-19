@@ -61,6 +61,7 @@ import SwiftData
 struct SettingsScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(HealthStore.self) private var health: HealthStore?
 
     /// The settings row itself, so this screen re-renders when the value
     /// changes. Reading `@Environment(\.weightUnit)` would work for display,
@@ -109,6 +110,8 @@ struct SettingsScreen: View {
                         .font(Typography.secondary)
                         .foregroundStyle(Theme.textSecondary)
                         .padding(.horizontal, Spacing.screenMargin)
+
+                    healthSection
                 }
                 .padding(.vertical, Spacing.comfortable)
             }
@@ -130,6 +133,82 @@ struct SettingsScreen: View {
             }
         }
         .preferredColorScheme(.dark)
+    }
+
+    // MARK: - Apple Health
+    //
+    // ONE ROW, and it is a permission rather than a preference. There is no
+    // stored "write workouts to Health" flag anywhere — HealthKit already keeps
+    // a per-device answer and iOS already owns the UI for changing it, so a
+    // second flag would be a second source of truth that can disagree with the
+    // first (see HealthStore.swift).
+    //
+    // The four states are genuinely different sentences with different next
+    // steps, which is exactly why `.notDetermined` is not collapsed into
+    // "denied": one is a button, the other is an instruction to go somewhere
+    // else. Getting that wrong would be a control that looks tappable and
+    // cannot work — the rest-timer bug's shape.
+
+    @ViewBuilder
+    private var healthSection: some View {
+        let status = health?.workoutSharingStatus ?? .unavailable
+
+        VStack(alignment: .leading, spacing: Spacing.compact) {
+            Text("APPLE HEALTH")
+                .font(Typography.secondary)
+                .foregroundStyle(Theme.textSecondary)
+                .padding(.horizontal, Spacing.screenMargin)
+
+            VStack(spacing: 0) {
+                if status == .notDetermined {
+                    Button {
+                        Task { try? await health?.requestWorkoutAuthorization() }
+                    } label: {
+                        SettingsValueRow(title: "Workouts", value: "Allow")
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    // Not a button: nothing here can change it. iOS never lets
+                    // an app grant or revoke its own permission, so a tappable
+                    // row would be a control that does nothing.
+                    SettingsValueRow(title: "Workouts", value: healthValue(status))
+                }
+            }
+            .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.card))
+            .padding(.horizontal, Spacing.screenMargin)
+
+            Text(healthExplanation(status))
+                .font(Typography.secondary)
+                .foregroundStyle(Theme.textSecondary)
+                .padding(.horizontal, Spacing.screenMargin)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func healthValue(_ status: HealthSharingStatus) -> String {
+        switch status {
+        case .notDetermined: "Allow"
+        case .authorized:    "On"
+        case .denied:        "Off"
+        case .unavailable:   "Unavailable"
+        }
+    }
+
+    /// Each state gets the sentence that names the NEXT STEP, because three of
+    /// the four have one and it is not the same step.
+    private func healthExplanation(_ status: HealthSharingStatus) -> String {
+        switch status {
+        case .notDetermined:
+            return "Finished workouts can be added to Apple Health, so your training counts toward your activity. Nothing is read from Health."
+        case .authorized:
+            return "Workouts you finish are added to Apple Health. To stop, turn MCP Strength off in Health under Sharing."
+        case .denied:
+            // The only place that can change it is Health itself, so say so
+            // rather than leaving a dead "Off" with no route back.
+            return "Turned off. To allow it, open Health, then Sharing, then Apps, and turn on MCP Strength."
+        case .unavailable:
+            return "Apple Health is not available on this device."
+        }
     }
 
     /// Write the chosen unit, creating the settings row if this is somehow the

@@ -276,6 +276,44 @@ touches how an in-progress workout is represented.
 
 **Apple Health is bidirectional.** Measurements import from Health *and* write back to it.
 
+> **Scope fact found when this was built: only 4 of the 18 seeded measurement types exist in
+> HealthKit** — Weight (`bodyMass`), Body Fat % (`bodyFatPercentage`), Caloric Intake
+> (`dietaryEnergyConsumed`) and Waist (`waistCircumference`). The other fourteen are limb and torso
+> circumferences and HealthKit has no type for any of them. "Measurements sync" is therefore
+> narrower than it sounds, and the measurements screen will have to say which rows can travel
+> rather than implying all of them do.
+
+> ✅ **WORKOUTS → HEALTH SHIPPED 2026-08-19, one direction.** Drake's call on sequencing, and it
+> makes the echo loop below *structurally impossible for this half*: nothing is ever read, so
+> nothing can be re-imported. Measurements — the genuinely bidirectional part — land afterwards on
+> permission and settings plumbing that is already proven.
+>
+> **Decisions worth not re-deriving:**
+>
+> * **Idempotency comes from `HKMetadataKeyExternalUUID`, not a local flag.** The workout's own id
+>   goes in that metadata field and the writer asks Health whether it already has it. A
+>   `didWriteToHealth` column was rejected: it is a stored property on a synced model (the
+>   crash-on-launch rule), it needs a Postgres column to travel, and it would still be WRONG across
+>   devices, because Health syncs via iCloud and the entry can already be there while a second
+>   phone's flag says otherwise. Ask Health what Health has.
+> * **No energy burned, and no total volume.** Nothing computes calories — no heart rate, no body
+>   mass on the workout, no METs table — so any number would be invented, and `0` is worse than
+>   absent because Apple Fitness would render "0 calories" against an hour of squatting. That is
+>   AGENTS.md rule 4 applied to somebody else's UI, where we cannot add a caveat. Revisit if a
+>   defensible estimate ever exists.
+> * **Authorization IS the on/off switch.** No stored preference: HealthKit already keeps a
+>   per-device answer and iOS owns the UI for it, so a second flag is a second source of truth that
+>   can disagree. The consequence is real and is stated on the settings row — turning it back off
+>   happens in Health, not here.
+> * **Write-only, and the entitlement says so.** `NSHealthShareUsageDescription` is absent and the
+>   read set is empty. Asking to read Health data while never reading it is a permission prompt
+>   that cannot be honestly explained.
+> * **`HKWorkoutBuilder`, not `HKWorkout(activityType:start:end:)`.** Every one of those
+>   initialisers is `API_DEPRECATED("Use HKWorkoutBuilder", ios(8.0, 17.0))` — read out of
+>   `HKWorkout.h` in the SDK rather than recalled.
+> * **Eligibility mirrors `PushFilter.shouldPush(_ workout:)`** and a test asserts the two agree. If
+>   they diverge, the app is telling Health something different from what it tells its own server.
+
 > ⚠️ **Bidirectional Health has one trap worth designing for up front: the echo loop.** Write a
 > weight entry to HealthKit → Health notifies observers of new data → the app imports it back as
 > a *new* entry → duplicate. The fix is the `source` field already in the data model: tag

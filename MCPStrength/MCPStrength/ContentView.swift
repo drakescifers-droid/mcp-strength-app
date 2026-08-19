@@ -25,6 +25,7 @@ struct ContentView: View {
     /// Optional because `MCPStrengthApp` creates the engine in a `.task`, so
     /// it is absent on the first frame (see `optionalEnvironment` there).
     @Environment(SyncEngine.self) private var engine: SyncEngine?
+    @Environment(HealthStore.self) private var health: HealthStore?
     @Environment(AuthController.self) private var auth
 
     // Start Workout is the middle tab (index 2 of 5) and the app's home.
@@ -69,8 +70,14 @@ struct ContentView: View {
                     restNotifications: restNotifications,
                     workout: activeWorkout,
                     onFinish: {
+                        // Capture BEFORE clearing. `activeWorkout` here is
+                        // the unwrapped binding from the `if let` above, and
+                        // `self.activeWorkout` goes nil on the next line — the
+                        // Health write needs the workout that was just finished.
+                        let finished = activeWorkout
                         self.activeWorkout = nil
                         syncAfterFinish()
+                        writeFinishedWorkoutToHealth(finished)
                     },
                     onCancel: { self.activeWorkout = nil }
                 )
@@ -110,6 +117,31 @@ struct ContentView: View {
         guard let engine else { return }
         guard case .signedIn(let userID, _) = auth.state else { return }
         Task { await engine.run(as: userID) }
+    }
+
+    /// Add the finished workout to Apple Health.
+    ///
+    /// Alongside the sync trigger rather than inside it, because they answer to
+    /// different things: sync needs an account, Health needs a per-device
+    /// permission, and either can be unavailable while the other works. Folding
+    /// them together would make a signed-out user's Health write fail for a
+    /// reason that has nothing to do with Health.
+    ///
+    /// Same two guards at the top for the same reasons: a test run must not
+    /// reach outside the process (AutomatedLaunch — it is what put rows in the
+    /// live project), and preview mode is fixtures rather than training.
+    ///
+    /// SILENT ON PURPOSE when there is no permission. `writeWorkout` returns
+    /// false rather than throwing, and nothing is surfaced: a person who has
+    /// not granted Health access has not asked for this, and interrupting the
+    /// end of a workout to say so would be nagging for a feature they did not
+    /// turn on. The Settings screen is where the state is legible.
+    private func writeFinishedWorkoutToHealth(_ workout: Workout) {
+        guard !AutomatedLaunch.isRunningTests else { return }
+        guard !UIPreviewMode.isEnabled else { return }
+        guard let health else { return }
+        guard case .success(let plan) = HealthWorkoutRule.plan(for: workout) else { return }
+        Task { try? await health.writeWorkout(plan) }
     }
 
     // MARK: - Tab view
