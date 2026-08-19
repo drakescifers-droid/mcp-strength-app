@@ -15,6 +15,8 @@
 //  DOUBLE COUNTS against a worn Apple Watch** in the Activity rings. That is a
 //  fact about how Apple merges energy from two sources, so no test here can
 //  reach it — it has to be looked at in Apple Fitness after a real workout.
+//  The source *decision* (attach vs estimate vs none) is testable here; the
+//  query and the attach are not.
 //
 
 import Testing
@@ -129,6 +131,107 @@ struct HealthWorkoutRuleTests {
         #expect(low.activeEnergyKilocalories == 75)
         #expect(high.activeEnergyKilocalories == 125)
         #expect(low != high)
+    }
+
+    // MARK: - Energy source
+    //
+    // Where the calories come from once the workout is eligible: attach the
+    // Watch's existing samples, write our estimate, or write nothing. The
+    // interesting cases are the ABSENCES and the substitutions — a rule
+    // written as "if samples exist, attach; else estimate" passes every
+    // test except the one that makes None mean off.
+    //
+    // The Bool is a parameter, not a query. No HealthKit types here.
+
+    // THE LOAD-BEARING ONE for the source decision, the same shape as
+    // `noneWritesNoEnergySampleAtAllRatherThanZero` for the plan. None is
+    // the setting that turns energy off, not merely our estimate. If this
+    // were wrong, attaching Watch samples when the user picked None would
+    // ignore that setting, and the None row in Settings would stop meaning
+    // off.
+    @Test func noneProducesNoEnergyEvenWhenSamplesExist() {
+        let action = HealthWorkoutRule.energyAction(
+            rate: .none,
+            existingSamplesInInterval: true,
+            forSeconds: 45 * 60
+        )
+
+        #expect(action == HealthEnergyAction.none)
+        // Not attach, and not a 0 kcal estimate: both would put energy in
+        // Apple Fitness after the user asked for none.
+        #expect(action != .attachExisting(fallbackKilocalories: 150))
+        #expect(action != .writeEstimate(kilocalories: 150))
+        #expect(action != .writeEstimate(kilocalories: 0))
+    }
+
+    @Test func existingSamplesPreferAttachOverTheEstimate() {
+        let action = HealthWorkoutRule.energyAction(
+            rate: .medium,
+            existingSamplesInInterval: true,
+            forSeconds: 45 * 60
+        )
+
+        // Same 150 that `energyIsTheChosenRateProRatedByDuration` pins on
+        // the plan. The fallback is the estimate, not a second calorie rule.
+        #expect(action == .attachExisting(fallbackKilocalories: 150))
+        #expect(action != .writeEstimate(kilocalories: 150))
+        #expect(action != HealthEnergyAction.none)
+    }
+
+    @Test func noSamplesKeepsTheFlatRateEstimate() {
+        let action = HealthWorkoutRule.energyAction(
+            rate: .medium,
+            existingSamplesInInterval: false,
+            forSeconds: 45 * 60
+        )
+
+        // Same 150. Not none: "no Watch samples" is not the user asking
+        // for no energy.
+        #expect(action == .writeEstimate(kilocalories: 150))
+        #expect(action != HealthEnergyAction.none)
+        #expect(action != .attachExisting(fallbackKilocalories: 150))
+    }
+
+    @Test func attachFailureFallsBackToTheEstimateNotToNone() {
+        let action = HealthWorkoutRule.energyAction(
+            rate: .medium,
+            existingSamplesInInterval: true,
+            forSeconds: 45 * 60
+        )
+        let after = HealthWorkoutRule.afterAttachFailure(action)
+
+        // "Attach failed" is an unproven HealthKit fact, not a user choice.
+        // Staying on attach would retry a throw; becoming none would drop
+        // the number they picked silently.
+        #expect(after == .writeEstimate(kilocalories: 150))
+        #expect(after != HealthEnergyAction.none)
+        #expect(after != .attachExisting(fallbackKilocalories: 150))
+    }
+
+    // A failed attach is not how `none` happens. The HealthKit layer can
+    // apply `afterAttachFailure` without first asking which case it has,
+    // and None has to survive that.
+    @Test func noneSurvivesAnAttachFailureMapping() {
+        let none = HealthWorkoutRule.energyAction(
+            rate: .none,
+            existingSamplesInInterval: true,
+            forSeconds: 45 * 60
+        )
+        #expect(HealthWorkoutRule.afterAttachFailure(none) == HealthEnergyAction.none)
+    }
+
+    // Zero duration already makes `energy(forSeconds:at:)` return nil, and
+    // the plan already rejects a non-positive interval. The source decision
+    // has to agree: a number we would not write as an estimate must not
+    // become an attach either, even if Health happens to have samples.
+    @Test func aNilEstimateWritesNoEnergyAndDoesNotAttach() {
+        let action = HealthWorkoutRule.energyAction(
+            rate: .medium,
+            existingSamplesInInterval: true,
+            forSeconds: 0
+        )
+        #expect(action == HealthEnergyAction.none)
+        #expect(HealthWorkoutRule.afterAttachFailure(action) == HealthEnergyAction.none)
     }
 
     // A workout that is not written at all has no energy question to answer,

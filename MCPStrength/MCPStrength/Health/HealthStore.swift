@@ -26,12 +26,19 @@
 //  appears, that is the moment to add it — see the reference app's Apple Health
 //  screen, which does carry per-type switches.
 //
-//  ## Why write-only, and why that shows up in the entitlement
+//  ## Why we now READ Active Energy, and only that
 //
-//  Workouts go out; nothing comes in. `NSHealthShareUsageDescription` is
-//  therefore ABSENT from the build settings and the read set below is empty —
-//  asking to READ Health data while never reading it is a permission prompt
-//  that cannot be honestly explained.
+//  Workouts still go OUT and never come back. What we read is
+//  `activeEnergyBurned` in the workout's own interval, so a Watch that was
+//  already recording can be ASSOCIATED with our entry rather than doubled
+//  by our estimate. `HealthWorkoutRule.energyAction` is the decision;
+//  this file is the query, the attach, and the fallback if attach throws.
+//
+//  `NSHealthShareUsageDescription` is therefore present, and the read set
+//  below is that one type. Asking to read anything we do not query is a
+//  permission prompt that cannot be honestly explained. Read status is
+//  NOT checkable — `authorizationStatus(for:)` only reports sharing —
+//  so a denied read looks like "no samples" and we keep the estimate.
 //
 //  ## TWO write types, and they are authorized separately
 //
@@ -84,10 +91,16 @@ protocol HealthWriting: AnyObject {
 
     /// Write this workout, unless Health already has it.
     ///
+    /// `rate` is required so this layer can ask `energyAction` rather than
+    /// re-deriving attach-vs-estimate from the plan's estimate field. The
+    /// plan still carries that field because a nil there is `none`; the
+    /// Bool about existing samples is a query this protocol's caller cannot
+    /// run.
+    ///
     /// Returns whether anything was written, so a caller can tell a real write
     /// from a correctly-skipped duplicate.
     @discardableResult
-    func writeWorkout(_ plan: HealthWorkoutPlan) async throws -> Bool
+    func writeWorkout(_ plan: HealthWorkoutPlan, rate: WorkoutCalorieRate) async throws -> Bool
 }
 
 /// Mirrors `HKAuthorizationStatus` without exposing HealthKit to the rest of
@@ -139,19 +152,18 @@ final class HealthStore: HealthWriting {
 
     func requestWorkoutAuthorization() async throws {
         guard isAvailable else { return }
-        // BOTH types in ONE prompt. Asking for energy later, at the moment a
-        // workout is being written, would put a permission sheet on top of the
-        // end of a training session.
-        //
-        // Empty read set: this app does not read Health. See the file comment.
+        // Write types and the one read type in ONE prompt. Asking for energy
+        // later, at the moment a workout is being written, would put a
+        // permission sheet on top of the end of a training session. The read
+        // is Active Energy only — see the file comment.
         try await store.requestAuthorization(
             toShare: [Self.workoutType, Self.activeEnergyType],
-            read: []
+            read: [Self.activeEnergyType]
         )
     }
 
     @discardableResult
-    func writeWorkout(_ plan: HealthWorkoutPlan) async throws -> Bool {
+    func writeWorkout(_ plan: HealthWorkoutPlan, rate: WorkoutCalorieRate) async throws -> Bool {
         guard isAvailable else { return false }
         guard workoutSharingStatus == .authorized else { return false }
 
@@ -175,34 +187,102 @@ final class HealthStore: HealthWriting {
 
         try await builder.beginCollection(at: plan.start)
 
-        // ENERGY, when the user has asked for it and Health permits it. Both
-        // conditions are real and neither implies the other: `nil` is
-        // `WorkoutCalorieRate.none` (the user's choice), `.denied` is the
-        // permission (the system's). Skipping rather than throwing is the
-        // decision argued in the file comment — losing the workout over its
-        // energy would be trading a record for an estimate.
-        //
-        // No distance sample: nothing here measures distance, and that number
-        // WOULD be invented (AGENTS.md rule 4).
-        if let kilocalories = plan.activeEnergyKilocalories,
-           activeEnergySharingStatus == .authorized {
-            let sample = HKQuantitySample(
-                type: Self.activeEnergyType,
-                quantity: HKQuantity(unit: .kilocalorie(), doubleValue: kilocalories),
-                // Spread across the whole workout rather than stamped at one
-                // instant: Apple Fitness reads energy against the period it was
-                // spent in, and a sample an hour wide that claims one second is
-                // a spike in somebody's day that never happened.
-                start: plan.start,
-                end: plan.end
-            )
-            try await builder.addSamples([sample])
-        }
+        // ENERGY. The rule decides; this layer queries, attaches, or writes.
+        // Skipping rather than throwing is the decision in the file comment —
+        // losing the workout over its energy would be trading a record for an
+        // estimate. No distance sample: nothing here measures distance
+        // (AGENTS.md rule 4).
+        try await addEnergy(to: builder, plan: plan, rate: rate)
 
         try await builder.addMetadata([HKMetadataKeyExternalUUID: plan.externalID.uuidString])
         try await builder.endCollection(at: plan.end)
         _ = try await builder.finishWorkout()
         return true
+    }
+
+    /// Query, then follow `HealthWorkoutRule.energyAction`. Attach-throw is
+    /// the unproven HealthKit fact: we catch it and write the estimate rather
+    /// than losing energy, or the workout. A failed query is treated as no
+    /// samples — same as a denied read, which iOS will not report as a status.
+    private func addEnergy(
+        to builder: HKWorkoutBuilder,
+        plan: HealthWorkoutPlan,
+        rate: WorkoutCalorieRate
+    ) async throws {
+        let existing: [HKSample]
+        do {
+            existing = try await activeEnergySamples(from: plan.start, to: plan.end)
+        } catch {
+            existing = []
+        }
+
+        var action = HealthWorkoutRule.energyAction(
+            rate: rate,
+            existingSamplesInInterval: !existing.isEmpty,
+            forSeconds: plan.duration
+        )
+
+        if case .attachExisting = action {
+            do {
+                try await builder.addSamples(existing)
+                return
+            } catch {
+                action = HealthWorkoutRule.afterAttachFailure(action)
+            }
+        }
+
+        switch action {
+        case .none, .attachExisting:
+            return
+        case .writeEstimate(let kilocalories):
+            try await addEstimate(to: builder, kilocalories: kilocalories, plan: plan)
+        }
+    }
+
+    /// Our flat-rate sample, only when Health permits writing energy.
+    /// Permission is checked here rather than before attach: associating
+    /// Watch samples is not writing a number of our own, so a denied share
+    /// should not block attach, only the fallback.
+    private func addEstimate(
+        to builder: HKWorkoutBuilder,
+        kilocalories: Double,
+        plan: HealthWorkoutPlan
+    ) async throws {
+        guard activeEnergySharingStatus == .authorized else { return }
+        let sample = HKQuantitySample(
+            type: Self.activeEnergyType,
+            quantity: HKQuantity(unit: .kilocalorie(), doubleValue: kilocalories),
+            // Spread across the whole workout rather than stamped at one
+            // instant: Apple Fitness reads energy against the period it was
+            // spent in, and a sample an hour wide that claims one second is
+            // a spike in somebody's day that never happened.
+            start: plan.start,
+            end: plan.end
+        )
+        try await builder.addSamples([sample])
+    }
+
+    /// `activeEnergyBurned` overlapping `[start, end]`. Empty options mean
+    /// overlap rather than a strict start, because Watch samples are a
+    /// continuous stream and a sample that began a few seconds before the
+    /// workout still belongs to it.
+    private func activeEnergySamples(from start: Date, to end: Date) async throws -> [HKSample] {
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [])
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: Self.activeEnergyType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: nil
+            ) { _, samples, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: samples ?? [])
+                }
+            }
+            store.execute(query)
+        }
     }
 
     /// Whether Health already holds a workout this app wrote for this id.

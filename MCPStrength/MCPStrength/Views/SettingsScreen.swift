@@ -276,16 +276,16 @@ struct SettingsScreen: View {
     private func calorieExplanation(_ energyStatus: HealthSharingStatus) -> String {
         switch energyStatus {
         case .authorized:
-            // Says it is an ESTIMATE and whose estimate it is. The app measures
-            // nothing here and must not sound as though it does.
-            return "An estimate you choose, added to each workout so it counts toward your activity. Nothing is measured."
+            // The rate is the FALLBACK. Watch samples, when present, are
+            // used instead — that is the whole point of the read permission.
+            return "If Apple Watch already recorded energy for the session, those calories are used. Otherwise this rate is the estimate. None writes no energy."
         case .denied:
             return "Energy is turned off for MCP Strength in Health, so no calories are added. To allow it, open Health, then Sharing, then Apps."
         case .notDetermined:
-            // The upgrade path: workouts were allowed before this feature
-            // existed, so Health has never been asked about energy. Say what
-            // tapping does rather than describing a state.
-            return "Allow Active Energy to have an estimate of the calories burned added to each workout."
+            // Same prompt now asks to READ Active Energy as well as write
+            // it. Say both, or the sheet Drake sees will ask for something
+            // this sentence did not mention.
+            return "Allow Active Energy so workouts can use calories Apple Watch already recorded, or this estimate when it has not."
         case .unavailable:
             return "Apple Health is not available on this device."
         }
@@ -519,13 +519,9 @@ struct WorkoutCalorieRatePickerScreen: View {
         .navigationTitle("Workout Calories")
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
-            // WHAT THIS IS, said where it is chosen. Two sentences, and the
-            // second is the one that matters: a Watch worn while lifting is
-            // already recording energy, and whether Apple deduplicates ours
-            // against it in the Activity rings is NOT established
-            // (docs/02-architecture.md). `None` is the honest setting for a
-            // Watch wearer until somebody checks.
-            Text("Lifting energy is estimated from this rate, not measured. If you wear an Apple Watch while training it is already recording energy, and this may be counted on top — pick None if your rings look too high.")
+            // WHAT THIS IS, said where it is chosen. Watch samples win when
+            // they exist; this rate is the fallback; None still means off.
+            Text("If Apple Watch already recorded Active Energy during the session, that number is used and this rate is ignored. Otherwise this rate is the estimate. None means no calories from this app at all.")
                 .font(Typography.secondary)
                 .foregroundStyle(Theme.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)

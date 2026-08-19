@@ -38,10 +38,10 @@ provides sync and backup, because a local-only store has no recovery story.
 
 **Phase 2 — in progress. Sync is PROVEN against the real project, storage is canonical
 kilograms, per-exercise Preferences is DONE, the units setting is REACHABLE, both of them SYNC,
-Apple Health now writes an energy sample at a rate the user picks, and the custom number keypad
-is ON THE PHONE.** What remains of Phase 2 is attaching the Watch's existing energy samples
-(next), then the measurements half of Health, plus the two corrections the reference screens
-forced (a per-type toggle, and backfill).
+Apple Health writes workouts, prefers Watch Active Energy when it exists, and falls back to
+the flat-rate estimate, and the custom number keypad is ON THE PHONE.** What remains of Phase 2
+is proving Watch-attach on a real session, then the measurements half of Health, plus the two
+corrections the reference screens forced (a per-type toggle, and backfill).
 
 > ⚠️ **THE CLAIM BELOW IS WRONG, AND THE SUB-SCREEN HAS NOW BEEN LOOKED AT.** It was used to
 > delete a requirement. `Settings accessed from profile page/IMG_2990.PNG` has a
@@ -328,8 +328,15 @@ right.**
   > **The client default is `medium` because the SERVER's default is `medium`.** A client
   > defaulting to `none` against a column defaulting to `medium` means a device that never touched
   > the setting disagrees with the row the server hands its next device.
-  > ⚠️ **ENERGY WRITES — verified 2026-08-19 on a sub-minute session (0.25 kcal).** Double
-  > counting against a worn Watch is the thing that is still unchecked; see "Not verified".
+  > ⚠️ **ENERGY WRITES — verified 2026-08-19 on a sub-minute session (0.25 kcal).** Watch-attach
+  > is wired (see Landed below) and still unverified on a Watch-on session.
+
+- **WATCH ACTIVE ENERGY — prefer existing samples over our estimate.** `HealthEnergyAction`
+  decides none / attach / estimate; `HealthStore` queries `activeEnergyBurned` in `[start, end]`,
+  `addSamples` those when present, and falls back to the flat rate if the query is empty or
+  attach throws. `NSHealthShareUsageDescription` is in the plist; the read set is that one type.
+  Written as a Ringer job for the rule (`mcpstrength-watch-energy`, grok-4.6, first try) and
+  wired here. **Unverified on a Watch-on session.**
 
 - **CUSTOM NUMBER KEYPAD — on the phone 2026-08-19, Drake approved it after two layout fixes.**
   Chip + pinned keypad (`Views/NumberKeypad.swift` + `Workout/NumberKeypadEditing.swift`), not
@@ -604,12 +611,11 @@ underneath never changed — only whether the screen described it honestly.
 
 ### What is left, in order
 
-1. **Attach the Watch's EXISTING Active Energy samples.** Drake's preference, and next. Rate
-   none → nothing. Existing `activeEnergyBurned` in the workout interval → associate those via
-   `HKWorkoutBuilder.addSamples` and skip our estimate. No samples → keep the flat rate. Attach
-   throw → fall back to the estimate (unproven on device). Needs a read entitlement that does
-   not exist yet. Split: Ringer does the pure plan/rule; this agent does HealthKit, the plist,
-   and the phone. Details in `HANDOFF.md` item 1.
+1. **Prove Watch-attach on a real session.** Wired 2026-08-19: rate none → nothing;
+   existing `activeEnergyBurned` in the interval → `addSamples` those and skip our
+   estimate; no samples → keep the flat rate; attach throw → fall back to the estimate.
+   Read entitlement and prompt are in. **Unverified on a Watch-on session**, including
+   whether HealthKit lets an app attach samples another source owns.
 
 2. **The two corrections the reference screens forced, and neither is built.** A per-type
    **TOGGLE** separate from the permission — `HealthStore.swift`'s "authorization is the only
@@ -824,14 +830,14 @@ ringer `docs/MODEL-NOTES.md`.
   nothing has ever exercised: `SetRow` reacts to a unit change with `.onChange(of: unit)`, and
   until this screen existed nothing could produce that change. Switching to Metric with a workout
   open is the case to try — every entry chip on screen should re-render in kilograms.
-- ⚠️ **THE CALORIE NUMBER IS UNVERIFIED FOR DOUBLE COUNTING.** Energy itself DID write
-  (Drake, 2026-08-19): a sub-minute test session showed **0.25 kcal** in Apple Fitness, which is
-  the flat rate pro-rated by duration (Medium is 200 kcal/hour; a few seconds of that is a
-  fraction of a calorie), not a fabricated zero. What remains is whether a Watch worn during a
-  REAL session causes that sample to land in the Move ring on TOP of the Watch's own. If it
-  double-counts, `None` is the honest setting for a Watch wearer and the real answer is attaching
-  the Watch's EXISTING samples instead of adding our own (HANDOFF.md item 1).
-  > The picker screen says this to the user in its own footer, so nobody has to find it here first.
+- ⚠️ **WATCH-ATTACH IS UNVERIFIED ON A REAL SESSION.** The decision and the
+  HealthKit wiring landed 2026-08-19. Energy itself DID write earlier (a
+  sub-minute test session showed **0.25 kcal** in Apple Fitness). What remains
+  is whether a Watch worn during a REAL session has its samples associated with
+  our workout instead of sitting beside our estimate. If attach throws or the
+  read is denied, we still write the estimate — so a session that looks
+  double-counted is a failed attach, not a missing fallback.
+  > The picker footer now says Watch numbers win when they exist.
 - ~~**APPLE HEALTH HAS NEVER WRITTEN A WORKOUT.**~~ **VERIFIED 2026-08-19 — a finished session
   appeared in Apple Fitness.** Kept so the next session does not re-ask. What remains is
   double-counting (above) and idempotency: finishing the SAME workout twice must produce ONE

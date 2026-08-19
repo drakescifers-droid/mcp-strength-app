@@ -19,9 +19,10 @@ state, the traps, the decisions and the reasoning behind them. Don't re-derive f
 those files already explain, and don't duplicate them into new files.
 
 The one-line state: **the app is on Drake's phone, he is training on it, Phase 2 is down to Apple
-Health — workouts and their calories go out, measurements do not — and the custom keypad is DONE
-on the phone.** Next is attaching the Watch's existing Active Energy samples instead of (or before)
-writing our estimate. Sync proven end to end IN BOTH DIRECTIONS against the live project,
+Health — workouts go out, Watch Active Energy is attached when it exists otherwise the estimate
+is used, measurements do not travel — and the custom keypad is DONE on the phone.** Next is
+proving Watch-attach on a real session, then the per-type Health toggle and backfill, then
+measurements. Sync proven end to end IN BOTH DIRECTIONS against the live project,
 canonical units done, a round of gym-found bugs fixed, per-exercise Preferences — model and sheet —
 landed, the settings screen makes the global weight unit changeable, **both settings and
 preferences SYNC**, the workout calorie rate is built on both sides, and **the warm-up ramp's
@@ -56,43 +57,22 @@ after the keypad (548+ tests), SQL suite green.
 
 ## Next piece of work, in order
 
-1. **Attach the Watch's EXISTING Active Energy samples — Drake's stated preference, and the
-   thing we were about to start when this chat filled up.** `HKWorkoutBuilder.addSamples`
-   documents that samples *"will be saved to the database if they have not already been saved"*,
-   so already-recorded energy can be ASSOCIATED with our workout rather than duplicated: real
-   measured numbers, no estimate, no Watch app.
+1. **Prove Watch-attach on a real session.** Wired 2026-08-19. Decision is
+   `HealthEnergyAction` / `energyAction` (Ringer, grok-4.6, first try,
+   `mcpstrength-watch-energy`); HealthStore queries `[start, end]`, attaches,
+   falls back to the estimate if attach throws. Read entitlement is in
+   (`NSHealthShareUsageDescription`); Drake will get a **new read-permission
+   prompt** on next launch because workouts were already authorized.
+   **Unverified:** whether HealthKit lets this app attach samples the Watch
+   owns, and whether a Watch-on session in Apple Fitness now shows one energy
+   number rather than two.
 
-   **Intended behaviour:**
+   Intended behaviour, still the contract:
    - Rate **none** → no energy sample, no attach.
-   - Watch/Health already has `activeEnergyBurned` in `[start, end]` → `builder.addSamples` those
-     and **do not** write our estimate.
+   - Watch/Health already has `activeEnergyBurned` in `[start, end]` → attach
+     those and **do not** write our estimate.
    - No existing samples → keep the flat-rate estimate.
-   - If attaching another source's samples **throws** → fall back to the estimate. **This
-     HealthKit fact is unproven on device.**
-
-   **Split Drake asked for (use Ringer for the rule, keep HealthKit here):**
-   - **Ringer:** a pure energy-source decision on `HealthWorkoutPlan` / `HealthWorkoutRule` +
-     tests (when attach vs estimate vs none). Do **not** give the worker `HealthStore.swift`,
-     settings UI, or the plist — a check cannot talk to HealthKit. Copy `verify_compile.sh` from
-     `~/ringer/run-areas/mcpstrength-preferences/`. `check_timeout_s` ~300–500. Run
-     `~/ringer/scripts/check_selftest.sh` **before** blessing any check. Suggested `run_name`:
-     `mcpstrength-watch-energy` (one job, same name across rounds). Worker must not git commit;
-     export the patch + notes.md out of the worktree.
-   - **Here:** `NSHealthShareUsageDescription` in the pbxproj
-     (`INFOPLIST_KEY_NSHealthShareUsageDescription`; the write key already exists), a non-empty
-     **read** set in `requestAuthorization`, query samples in `[start, end]`, `addSamples`,
-     settings footer if needed, install to the phone. Drake will get a **new read-permission
-     prompt.**
-
-   **Model:** Drake was asked and had not picked when this chat filled. Recommendation is
-   **Grok 4.6** (landed per-exercise Preferences first try). Codex is stronger and more expensive;
-   GLM is cheaper and weaker first-try on code-feature. Scoreboard at the time:
-   `./ringer.py models --task-type code-feature` — grok-4.6, 17 tasks, first-try 0.59, pass 0.82.
-   This chat was told to keep going without a pick, so Grok 4.6 is the worker.
-
-   Two things that stay true until this lands: Health is still **write-only**
-   (`NSHealthShareUsageDescription` absent, empty read set), and attaching samples another
-   source owns has never been proven on this phone.
+   - If attaching **throws** → fall back to the estimate.
 
 2. **Two more corrections the reference screens forced, and NEITHER IS BUILT** — both recorded in
    `02-architecture.md`: an explicit per-type **toggle** separate from the permission (so
@@ -165,8 +145,11 @@ Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
 
 ## Waiting on me
 
-- ✅ **WATCH-ENERGY RINGER MODEL: Grok 4.6.** Asked 2026-08-19; this chat was told to keep
-  going without a pick, so the recommendation stands.
+- 🆕 **WATCH-ATTACH ON A REAL SESSION, and the new Health read prompt.** After
+  install, the app will ask to **read** Active Energy (workouts were already
+  allowed). Allow it, wear the Watch, finish a real-length session, and look
+  at Apple Fitness: one energy number, not our estimate sitting on top of the
+  Watch's. If the prompt never appears, open Profile → gear → Apple Health.
 - ✅ **FOUR QUESTIONS ABOUT THE KEYPAD, answered 2026-08-19 from the reference
   app, AND THE KEYPAD IS ON THE PHONE.** Weight has a decimal; rest and reps do
   not. − / + steps **2.5 lb / 1 rep / 10 seconds**. Next on reps of a non-last

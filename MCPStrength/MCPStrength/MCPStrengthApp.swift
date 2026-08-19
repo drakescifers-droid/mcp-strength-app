@@ -184,6 +184,19 @@ struct MCPStrengthApp: App {
                     if health == nil, HKHealthStore.isHealthDataAvailable() {
                         health = HealthStore()
                     }
+                    // UPGRADE PATH for the Active Energy *read*. Anyone who
+                    // granted write before this build already has Workouts
+                    // On, so the Settings Allow button never shows again.
+                    // iOS shows the sheet at most once per type; after the
+                    // first answer this is a no-op. Not called from
+                    // writeWorkout — that would put a permission sheet on
+                    // the end of a session.
+                    if !AutomatedLaunch.isRunningTests,
+                       !UIPreviewMode.isEnabled,
+                       let health,
+                       health.workoutSharingStatus == .authorized {
+                        try? await health.requestWorkoutAuthorization()
+                    }
                     if engine == nil {
                         engine = SyncEngine(
                             context: sharedModelContainer.mainContext,

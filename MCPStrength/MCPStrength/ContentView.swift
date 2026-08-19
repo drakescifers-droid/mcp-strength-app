@@ -149,7 +149,7 @@ struct ContentView: View {
         let rate = settings.first?.workoutCalorieRate ?? .medium
         guard case .success(let plan) = HealthWorkoutRule.plan(for: workout, rate: rate)
         else { return }
-        Task { try? await health.writeWorkout(plan) }
+        Task { try? await health.writeWorkout(plan, rate: rate) }
     }
 
     // MARK: - Tab view

@@ -305,9 +305,11 @@ touches how an in-progress workout is represented.
 >   per-device answer and iOS owns the UI for it, so a second flag is a second source of truth that
 >   can disagree. The consequence is real and is stated on the settings row — turning it back off
 >   happens in Health, not here.
-> * **Write-only, and the entitlement says so.** `NSHealthShareUsageDescription` is absent and the
->   read set is empty. Asking to read Health data while never reading it is a permission prompt
->   that cannot be honestly explained.
+> * **Read Active Energy in the workout interval; workouts still go out only.**
+>   `NSHealthShareUsageDescription` is present and the read set is that one type.
+>   The query exists so a Watch that was already recording can be associated with
+>   our entry rather than doubled by our estimate. Asking to read anything we do
+>   not query is a permission prompt that cannot be honestly explained.
 > * **`HKWorkoutBuilder`, not `HKWorkout(activityType:start:end:)`.** Every one of those
 >   initialisers is `API_DEPRECATED("Use HKWorkoutBuilder", ios(8.0, 17.0))` — read out of
 >   `HKWorkout.h` in the SDK rather than recalled.
@@ -342,22 +344,20 @@ touches how an in-progress workout is represented.
 > lifting at roughly this" — and the screen says exactly what it does. `none` stays first-class and
 > is what the app did before.
 >
-> ⚠️ **UNVERIFIED RISK, and it is the thing to check first: DOUBLE COUNTING.** If a Watch is worn
-> while lifting it is ALREADY writing `activeEnergyBurned` continuously. Writing our own sample on
-> top may add to the Activity rings twice. The reference app's copy only claims the setting is
-> ignored when logging *via its Watch app* — it says nothing about merely wearing one. Whether
-> Apple deduplicates energy across sources for the rings was NOT established; check on a device
-> before trusting the number.
+> ⚠️ **UNVERIFIED ON DEVICE: whether attaching another source's samples actually
+> works.** The decision and the HealthKit wiring are in; the fact is not. If
+> `addSamples` of Watch energy throws, we fall back to the estimate. If the query
+> returns empty (denied read looks identical), we keep the estimate. Check a real
+> Watch-on session in Apple Fitness before trusting that the rings now show one
+> number rather than two.
 >
-> **The better long-term answer, and Drake's preference — THIS IS NEXT (HANDOFF.md item 1):**
-> attach the Watch's EXISTING samples. `HKWorkoutBuilder.addSamples` documents that samples "will
-> be saved to the database if they have not already been saved" — so already-recorded energy can
-> be ASSOCIATED with our workout rather than duplicated. Real measured numbers, no estimate, no
-> Watch app. Two things still true until it lands: Health is still **write-only**
-> (`NSHealthShareUsageDescription` absent, empty read set), and it is NOT established that
-> HealthKit lets an app attach samples ANOTHER SOURCE owns. Test that on a device. Intended
-> behaviour: none → no energy; existing samples in `[start, end]` → attach those and skip the
-> estimate; none found → keep the flat rate; attach throws → fall back to the estimate.
+> **Watch samples are preferred over the estimate (HANDOFF.md item 1, wired
+> 2026-08-19).** `HealthEnergyAction` / `energyAction` is the pure decision
+> (Ringer, grok-4.6, first try); `HealthStore` queries `[start, end]`, attaches,
+> or writes the estimate. Rate `none` still means no energy, even if samples
+> exist. Intended behaviour: none → no energy; existing samples → attach those
+> and skip the estimate; none found → keep the flat rate; attach throws → fall
+> back to the estimate.
 
 > **Two more corrections the reference screens forced, beyond energy — BOTH STILL OUTSTANDING:**
 >
