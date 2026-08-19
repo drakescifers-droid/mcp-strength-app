@@ -41,12 +41,7 @@ struct ActiveWorkoutScreen: View {
     /// Which set's own rest is being edited, opened by tapping its divider.
     /// Holds the SET rather than an index for the same reason `ActiveOption`
     /// holds the exercise: this list reorders mid-session.
-    @State private var editingSetRest: SetRestEdit?
-
-    struct SetRestEdit: Identifiable {
-        let id = UUID()
-        let set: WorkoutSet
-    }
+    @State private var keypad = NumberKeypadSession()
 
     @Environment(\.modelContext) private var context
 
@@ -131,14 +126,15 @@ struct ActiveWorkoutScreen: View {
                             onStartRest: { setID, seconds in
                                 startRest(for: setID, seconds: seconds)
                             },
-                            onOpenRestControls: {
-                                showingRestControls = true
-                            },
                             onOption: { option in
                                 handleOption(option, for: workoutExercise)
                             },
                             onEditRest: { set in
-                                editingSetRest = SetRestEdit(set: set)
+                                keypad.focus(
+                                    NumberKeypadAddress(setID: set.id, slot: .rest),
+                                    kind: .rest,
+                                    display: "\(set.restSeconds)"
+                                )
                             }
                         )
                         // The insertion marker. `.draggable`/`.dropDestination`
@@ -206,6 +202,20 @@ struct ActiveWorkoutScreen: View {
             }
         }
         .background(Theme.surface)
+        .environment(keypad)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let editing = keypad.editing, keypad.isPresented {
+                NumberKeypad(
+                    kind: editing.kind,
+                    onInput: { keypad.apply($0) },
+                    onNext: advanceKeypad,
+                    onDismiss: { keypad.dismiss() }
+                )
+            }
+        }
+        .onChange(of: keypad.editing?.text) { _, _ in
+            commitRestFromKeypad()
+        }
         // THE ONLY PLACE the rest notification is decided. Every way a rest can
         // change — start, pause, resume, ±15, reset, skip — changes this value,
         // so watching the value covers all of them and any that get added
@@ -229,12 +239,6 @@ struct ActiveWorkoutScreen: View {
         }
         .sheet(item: $activeOption) { option in
             optionSheet(for: option)
-        }
-        .sheet(item: $editingSetRest) { edit in
-            RestTimerSheet(scope: .oneSet, current: edit.set.restSeconds) {
-                edit.set.restSeconds = $0
-                edit.set.markEdited()
-            }
         }
         .sheet(isPresented: $editingWorkoutNote) {
             ExerciseNoteSheet(
@@ -771,6 +775,112 @@ struct ActiveWorkoutScreen: View {
         restCompletionSignalled = false
     }
 
+    // MARK: - Custom keypad
+
+    private var keypadLayout: NumberKeypadLayout {
+        NumberKeypadLayout(exercises: sortedExercises.map { $0.liveSets.map(\.id) })
+    }
+
+    private func workoutSet(id: UUID) -> WorkoutSet? {
+        for exercise in sortedExercises {
+            if let set = exercise.liveSets.first(where: { $0.id == id }) {
+                return set
+            }
+        }
+        return nil
+    }
+
+    private func workoutExercise(containing setID: UUID) -> WorkoutExercise? {
+        sortedExercises.first { $0.liveSets.contains { $0.id == setID } }
+    }
+
+    private func displayUnit(for exercise: WorkoutExercise) -> WeightUnit {
+        WeightUnits.displayUnit(
+            override: exercise.exercise?.preference?.weightUnitOverride,
+            global: globalWeightUnit
+        )
+    }
+
+    /// Next on the workout screen completes things: reps ticks the set and
+    /// starts rest; rest skips the running timer. The rule is
+    /// `NumberKeypadEditing.advance`; this performs the side effects.
+    private func advanceKeypad() {
+        guard let address = keypad.address else { return }
+        switch NumberKeypadEditing.advance(from: address, in: keypadLayout, completesSets: true) {
+        case .focus(let next):
+            focusKeypad(next)
+        case .completeSet(let focusRest, let then):
+            if let set = workoutSet(id: address.setID) {
+                completeSetFromKeypad(set)
+            }
+            if focusRest, let rest = then {
+                focusKeypad(rest)
+            } else if let then {
+                focusKeypad(then)
+            } else {
+                keypad.dismiss()
+            }
+        case .finishRest(let then):
+            if restingSetID == address.setID {
+                restTimer.skip()
+            }
+            if let then {
+                focusKeypad(then)
+            } else {
+                keypad.dismiss()
+            }
+        case .dismiss:
+            keypad.dismiss()
+        }
+    }
+
+    /// Tick without toggling — Next must never un-complete a set that is
+    /// already ticked. Rest still starts, matching the checkmark's own path.
+    private func completeSetFromKeypad(_ set: WorkoutSet) {
+        guard !set.isCompleted else { return }
+        set.isCompleted = true
+        set.completedAt = Date()
+        set.markEdited()
+        startRest(for: set.id, seconds: set.restSeconds)
+    }
+
+    private func focusKeypad(_ address: NumberKeypadAddress) {
+        guard let set = workoutSet(id: address.setID),
+              let exercise = workoutExercise(containing: address.setID)
+        else {
+            keypad.dismiss()
+            return
+        }
+        let unit = displayUnit(for: exercise)
+        switch address.slot {
+        case .weight:
+            let display = set.weight.map {
+                PreviousText.formatWeight(PreviousText.displayValue(kilograms: $0, in: unit))
+            } ?? ""
+            keypad.focus(address, kind: .weight(unit: unit), display: display)
+        case .reps:
+            keypad.focus(address, kind: .reps(allowRange: false), display: set.reps.map(String.init) ?? "")
+        case .rest:
+            keypad.focus(address, kind: .rest, display: "\(set.restSeconds)")
+        }
+    }
+
+    private func commitRestFromKeypad() {
+        guard let address = keypad.address, address.slot == .rest,
+              let editing = keypad.editing,
+              let set = workoutSet(id: address.setID)
+        else { return }
+        let trimmed = editing.text.trimmingCharacters(in: .whitespaces)
+        let seconds = max(0, Int(trimmed) ?? 0)
+        let delta = seconds - set.restSeconds
+        guard delta != 0 || (trimmed.isEmpty && set.restSeconds != 0) else { return }
+        set.restSeconds = seconds
+        set.markEdited()
+        if restingSetID == set.id {
+            restTimer.adjust(by: TimeInterval(delta), at: now)
+        }
+    }
+
     /// Drop onto an exercise row: insert at that row's position after the
     /// dragged id has been removed (the ListOrdering index convention).
     /// Same-list — source and destination are the workout's ordered ids.
@@ -839,12 +949,13 @@ private struct ExerciseBlock: View {
     var onReorderLift: () -> Void = {}
     var onReorderEnded: () -> Void = {}
     let onStartRest: (UUID, Int) -> Void
-    let onOpenRestControls: () -> Void
     /// The menu selection, handled by the screen — this block owns no
     /// behaviour of its own.
     var onOption: (ExerciseOption) -> Void = { _ in }
     /// A rest divider was tapped. Handled by the screen for the same reason.
     var onEditRest: (WorkoutSet) -> Void = { _ in }
+
+    @Environment(NumberKeypadSession.self) private var keypad
 
     /// The user's global weight unit, published by `ContentView`. Combined
     /// with this exercise's own override in `displayUnit` below.
@@ -909,6 +1020,7 @@ private struct ExerciseBlock: View {
                 VStack(spacing: 0) {
                     ForEach(Array(sortedSets.enumerated()), id: \.element.id) { index, set in
                         SetRow(
+                            setID: set.id,
                             setType: Binding(get: { set.setType }, set: { set.setType = $0; set.markEdited() }),
                             setNumber: workingNumbers[index],
                             previousText: previousText(for: set, position: previousPositions[index]),
@@ -1014,7 +1126,8 @@ private struct ExerciseBlock: View {
             RestProgressBar(
                 timer: restTimer,
                 now: now,
-                onTap: onOpenRestControls
+                isFocused: keypad.address == NumberKeypadAddress(setID: set.id, slot: .rest),
+                onTap: { onEditRest(set) }
             )
         } else {
             // Green once the set above it is ticked — the rest was taken, so it
@@ -1022,7 +1135,11 @@ private struct ExerciseBlock: View {
             RestDivider(
                 restSeconds: set.restSeconds,
                 isCompleted: set.isCompleted,
-                onTap: { onEditRest(set) }
+                onTap: { onEditRest(set) },
+                isFocused: keypad.address == NumberKeypadAddress(setID: set.id, slot: .rest),
+                focusedText: keypad.address?.setID == set.id && keypad.address?.slot == .rest
+                    ? keypad.editing?.chipText
+                    : nil
             )
         }
     }
@@ -1203,10 +1320,13 @@ private func formatTime(_ total: Int) -> String {
 /// Replaces a set's rest divider while that set's rest countdown is running:
 /// a full-width accent bar that drains right-to-left as time runs out, with
 /// the remaining time centred on it in `m:ss`. A thin light border outlines
-/// it. Tapping the bar presents the timer controls.
+/// it. Tapping the bar focuses the custom keypad on this rest — Next skips
+/// the countdown, matching the reference. Pause / ±15 / Reset still live on
+/// the top-bar timer button.
 private struct RestProgressBar: View {
     let timer: RestTimer
     let now: Date
+    var isFocused: Bool = false
     var onTap: () -> Void = {}
 
     private var remainingSeconds: Int {
@@ -1233,18 +1353,24 @@ private struct RestProgressBar: View {
                     .animation(.linear(duration: 1), value: progress)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .clipShape(.rect(cornerRadius: Radius.chip))
             .overlay {
                 Text(formatTime(remainingSeconds))
                     .font(Typography.body.weight(.semibold))
                     .foregroundStyle(Theme.textPrimary)
                     .monospacedDigit()
             }
-            .overlay(
-                // Thin light border.
-                Rectangle()
-                    .stroke(Theme.textSecondary.opacity(0.4), lineWidth: 1)
-            )
-            .clipShape(.rect(cornerRadius: Radius.chip))
+            .overlay {
+                // A RoundedRectangle, not a `Rectangle` clipped round: a square
+                // stroke plus clipShape left a blue line along the empty end
+                // when this bar was focused (same accent as the fill). The
+                // selection ring is white so it cannot be read as leftover fill.
+                RoundedRectangle(cornerRadius: Radius.chip)
+                    .strokeBorder(
+                        isFocused ? Theme.textPrimary : Theme.textSecondary.opacity(0.4),
+                        lineWidth: isFocused ? 2 : 1
+                    )
+            }
             .contentShape(Rectangle())
             .onTapGesture { onTap() }
         }
@@ -1256,8 +1382,7 @@ private struct RestProgressBar: View {
 // MARK: - RestControlsSheet
 
 /// The timer control panel: a large Pause/Resume button, −15s / +15s, Reset,
-/// and Skip. Presented from the top-bar timer button or by tapping a live
-/// progress bar. Deliberately simple — a plain sheet, no alerts.
+/// and Skip. Presented from the top-bar timer button. Deliberately simple —
 private struct RestControlsSheet: View {
     @Binding var restTimer: RestTimer
     let now: Date

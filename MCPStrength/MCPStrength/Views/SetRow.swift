@@ -53,7 +53,15 @@ enum SetRowTrailing {
 /// to the binding on every change that parses (or clear when empty). Invalid
 /// reps text is left as-is and flagged with a destructive tint so the user can
 /// fix the typo — nothing wrong is ever written.
+///
+/// Entry is the custom keypad, not a `TextField`. The row is a tap-target that
+/// focuses `NumberKeypadSession`; writes still go through `commitWeight` /
+/// `commitReps` so `markEdited()` stays on the binding the caller provided.
 struct SetRow: View {
+    /// Identity of the set this row is editing, so the keypad can address it
+    /// after warm-ups are inserted above it.
+    let setID: UUID
+
     @Binding var setType: SetType
     let setNumber: Int?
     let previousText: String
@@ -88,6 +96,8 @@ struct SetRow: View {
     @State private var repsText: String = ""
     @State private var repsValid: Bool = true
     @State private var didSync: Bool = false
+
+    @Environment(NumberKeypadSession.self) private var keypad
 
     /// How far the row is currently dragged left, 0 ... `revealWidth`.
     @State private var revealed: CGFloat = 0
@@ -200,13 +210,16 @@ struct SetRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .lineLimit(1)
 
-            TextField("", text: $weightText)
-                .keyboardType(.decimalPad)
-                .textInputAutocapitalization(.never)
-                .foregroundStyle(Theme.textPrimary)
-                .entryChipStyle()
-                .frame(width: 56)
-                .onChange(of: weightText) { _, newValue in commitWeight(newValue) }
+            entryChip(
+                text: displayedWeight,
+                isFocused: isFocused(.weight),
+                isValid: true,
+                identifier: "Weight",
+                accessibilityLabel: "Weight"
+            ) {
+                focus(.weight)
+            }
+            .frame(width: 56)
 
             repsField
                 .frame(width: 52)
@@ -227,6 +240,23 @@ struct SetRow: View {
         .onChange(of: unit) { _, _ in
             didSync = false
             syncFromModel()
+        }
+        .onChange(of: keypad.editing?.text) { _, newValue in
+            guard let newValue else { return }
+            switch keypad.address?.slot {
+            case .weight where keypad.address?.setID == setID:
+                // Skip the focus assignment, which republishes the current
+                // value and would `markEdited()` a row the user only opened.
+                guard newValue != weightText else { return }
+                weightText = newValue
+                commitWeight(newValue)
+            case .reps where keypad.address?.setID == setID:
+                guard newValue != repsText else { return }
+                repsText = newValue
+                commitReps(newValue)
+            default:
+                break
+            }
         }
     }
 
@@ -270,18 +300,75 @@ struct SetRow: View {
     // Invalid text is kept locally and tinted destructive; a wrong value is
     // never written.
     private var repsField: some View {
-        TextField("", text: $repsText)
-            .keyboardType(allowRange ? .default : .numberPad)
-            .textInputAutocapitalization(.never)
-            .foregroundStyle(repsValid ? Theme.textPrimary : Theme.destructive)
-            .entryChipStyle()
-            .overlay {
-                if !repsValid {
+        entryChip(
+            text: displayedReps,
+            isFocused: isFocused(.reps),
+            isValid: repsValid,
+            identifier: "Reps",
+            accessibilityLabel: "Reps"
+        ) {
+            focus(.reps)
+        }
+    }
+
+    // MARK: - Entry chips
+
+    /// A tap-target that LOOKS like the old `TextField` chip and FOCUSES the
+    /// custom keypad. No system keyboard, so there is no caret to land in the
+    /// wrong half of a right-aligned value.
+    private func entryChip(
+        text: String,
+        isFocused: Bool,
+        isValid: Bool,
+        identifier: String,
+        accessibilityLabel: String,
+        onTap: @escaping () -> Void
+    ) -> some View {
+        Button(action: onTap) {
+            Text(text)
+                .font(Typography.chipValue)
+                .foregroundStyle(isValid ? Theme.textPrimary : Theme.destructive)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Spacing.compact)
+                .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.chip))
+                .overlay {
                     RoundedRectangle(cornerRadius: Radius.chip)
-                        .stroke(Theme.destructive, lineWidth: 1)
+                        .stroke(
+                            isFocused ? Theme.accent : (isValid ? Color.clear : Theme.destructive),
+                            lineWidth: isFocused || !isValid ? 1.5 : 0
+                        )
                 }
-            }
-            .onChange(of: repsText) { _, newValue in commitReps(newValue) }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(text)
+    }
+
+    private func isFocused(_ slot: NumberKeypadAddress.Slot) -> Bool {
+        keypad.address == NumberKeypadAddress(setID: setID, slot: slot)
+    }
+
+    private var displayedWeight: String {
+        if isFocused(.weight), let live = keypad.editing?.chipText { return live }
+        return weightText
+    }
+
+    private var displayedReps: String {
+        if isFocused(.reps), let live = keypad.editing?.chipText { return live }
+        return repsText
+    }
+
+    private func focus(_ slot: NumberKeypadAddress.Slot) {
+        let address = NumberKeypadAddress(setID: setID, slot: slot)
+        switch slot {
+        case .weight:
+            keypad.focus(address, kind: .weight(unit: unit), display: weightText)
+        case .reps:
+            keypad.focus(address, kind: .reps(allowRange: allowRange), display: repsText)
+        case .rest:
+            break
+        }
     }
 
     // MARK: - RPE field
@@ -464,6 +551,14 @@ struct RestDivider: View {
     /// tap target at all, rather than a dead one.
     var onTap: (() -> Void)?
 
+    /// Highlighted while the custom keypad is editing this rest. The divider
+    /// is a field in the reference, not only a label.
+    var isFocused: Bool = false
+
+    /// When focused, the keypad's live `m:ss` rather than `restSeconds`, so
+    /// − / + and typed seconds show up on the divider as they happen.
+    var focusedText: String? = nil
+
     var body: some View {
         if let onTap {
             Button(action: onTap) { divider }
@@ -488,10 +583,22 @@ struct RestDivider: View {
             Rectangle()
                 .fill(Theme.fieldFill)
                 .frame(height: 1)
-            Text(formatMinutesSeconds(restSeconds))
+            Text(focusedText ?? formatMinutesSeconds(restSeconds))
                 .font(Typography.secondary)
                 .foregroundStyle(isCompleted ? Theme.success : Theme.accent)
                 .monospacedDigit()
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(
+                    isFocused ? Theme.accent.opacity(0.25) : Color.clear,
+                    in: .rect(cornerRadius: Radius.chip)
+                )
+                .overlay {
+                    if isFocused {
+                        RoundedRectangle(cornerRadius: Radius.chip)
+                            .stroke(Theme.accent, lineWidth: 1.5)
+                    }
+                }
             Rectangle()
                 .fill(Theme.fieldFill)
                 .frame(height: 1)

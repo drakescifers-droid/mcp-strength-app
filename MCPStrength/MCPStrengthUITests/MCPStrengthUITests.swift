@@ -175,67 +175,48 @@ final class WarmupRampWalkthroughTests: XCTestCase {
         item.tap()
     }
 
-    /// Set rows carry unlabelled TextFields, so they are addressed by order:
-    /// each row contributes weight then reps. Deliberately index-based rather
-    /// than adding accessibility identifiers to the app for a harness's
-    /// convenience.
+    /// Set rows are tap-targets that focus the custom keypad, addressed by
+    /// accessibility identifier. Weight then reps per row, in order.
     @MainActor
     private func type(
         _ text: String,
         intoTextFieldAt index: Int,
-        of app: XCUIApplication,
-        clearFirst: Bool = false
+        of app: XCUIApplication
     ) throws {
-        let field = app.textFields.element(boundBy: index)
+        let identifier = index % 2 == 0 ? "Weight" : "Reps"
+        let ordinal = index / 2
+        let field = app.buttons.matching(identifier: identifier).element(boundBy: ordinal)
         XCTAssertTrue(field.waitForExistence(timeout: 10), tree(app))
-        try focus(field, of: app)
-        if clearFirst, let existing = field.value as? String, !existing.isEmpty {
-            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count))
-            // Asserted, not assumed. A silent failure to clear is what turned
-            // 135 into 13590 last run, and the screenshot still looked sane.
-            XCTAssertEqual(field.value as? String ?? "", "", tree(app))
-        }
-        field.typeText(text)
+        field.tap()
+        try typeOnKeypad(text, of: app)
     }
 
     /// The working set's weight field, wherever the ramp has pushed it.
     ///
-    /// Two fields per row (weight, reps) and the working set is last, so the
-    /// weight field is the second-to-last. An absolute index would silently
-    /// address a warm-up the moment one exists — which is exactly how the
-    /// first run of this harness failed.
+    /// Weight chips are identifier "Weight" in row order, and the working set
+    /// is last, so this is the last Weight button. An absolute index would
+    /// silently address a warm-up the moment one exists — which is exactly how
+    /// the first run of this harness failed.
     @MainActor
     private func typeIntoWorkingWeight(_ text: String, of app: XCUIApplication) throws {
-        let count = app.textFields.count
-        XCTAssertGreaterThanOrEqual(count, 2, tree(app))
-        try type(text, intoTextFieldAt: count - 2, of: app, clearFirst: true)
+        let weights = app.buttons.matching(identifier: "Weight")
+        XCTAssertGreaterThanOrEqual(weights.count, 1, tree(app))
+        let field = weights.element(boundBy: weights.count - 1)
+        XCTAssertTrue(field.waitForExistence(timeout: 10), tree(app))
+        field.tap()
+        try typeOnKeypad(text, of: app)
     }
 
-    /// Tap until the field actually holds keyboard focus, with the caret at the
-    /// END of the existing text.
-    ///
-    /// Two things learned from earlier runs of this harness, both of which
-    /// produced a plausible-looking screenshot of the wrong thing:
-    ///
-    ///   * `tap()` returning is not the same as the field being focused. Run
-    ///     one typed into a field that had never taken focus and failed with
-    ///     "Neither element nor any descendant has keyboard focus".
-    ///   * Tapping the ELEMENT puts the caret where the tap landed, which for a
-    ///     right-aligned entry chip is before the text. Run two sent backspaces
-    ///     that deleted nothing and then typed 135 in front of 90, so the ramp
-    ///     was generated from 13590 lb. The numbers were all self-consistent
-    ///     and completely wrong — the same trap as reading a hand-edited ramp
-    ///     as a generated one (docs/04-status.md).
+    /// Tap digits on the custom keypad. First tap after focusing a chip
+    /// replaces the value, so there is no caret to clear — that was the
+    /// harness bug that turned 135 into 13590.
     @MainActor
-    private func focus(_ field: XCUIElement, of app: XCUIApplication) throws {
-        let focused = NSPredicate(format: "hasKeyboardFocus == true")
-        let rightEdge = field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5))
-        for _ in 0..<3 {
-            rightEdge.tap()
-            let check = XCTNSPredicateExpectation(predicate: focused, object: field)
-            if XCTWaiter().wait(for: [check], timeout: 3) == .completed { return }
+    private func typeOnKeypad(_ text: String, of app: XCUIApplication) throws {
+        for character in text {
+            let key = app.buttons["keypad-\(character)"].firstMatch
+            XCTAssertTrue(key.waitForExistence(timeout: 5), tree(app))
+            key.tap()
         }
-        XCTFail("Field never took keyboard focus.\n" + tree(app))
     }
 
     @MainActor
@@ -299,13 +280,13 @@ final class SwipeToDeleteSetWalkthroughTests: XCTestCase {
         addSet.tap()
         addSet.tap()
 
-        let before = app.textFields.count
+        let before = app.buttons.matching(identifier: "Weight").count
         shot("01-three-sets-before", self)
 
         // Half-open, to photograph the affordance mid-reveal rather than only
         // its end state. `press(forDuration:thenDragTo:)` keeps the drag slow
         // enough to be a drag rather than a flick.
-        let firstField = app.textFields.element(boundBy: 0)
+        let firstField = app.buttons.matching(identifier: "Weight").element(boundBy: 0)
         XCTAssertTrue(firstField.exists, app.debugDescription)
 
         let rowStart = firstField.coordinate(withNormalizedOffset: CGVector(dx: -0.6, dy: 0.5))
@@ -322,10 +303,10 @@ final class SwipeToDeleteSetWalkthroughTests: XCTestCase {
         deleteButton.tap()
         shot("03-after-delete", self)
 
-        // The assertion a picture cannot make. Two text fields per set (weight
-        // and reps), so one fewer set is two fewer fields.
+        // The assertion a picture cannot make. One Weight chip per set, so
+        // one fewer set is one fewer Weight button.
         XCTAssertLessThan(
-            app.textFields.count, before,
+            app.buttons.matching(identifier: "Weight").count, before,
             "Set count did not drop after tapping Delete."
         )
     }

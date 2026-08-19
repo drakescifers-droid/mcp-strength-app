@@ -86,6 +86,10 @@ struct TemplateEditorScreen: View {
     @State private var exercises: [DraftExercise] = []
     @State private var showingExercisePicker = false
 
+    /// The custom number keypad. One session for the whole editor so Next can
+    /// walk off the last set of one exercise onto the first of the next.
+    @State private var keypad = NumberKeypadSession()
+
     /// Which option sheet is open, and for which exercise.
     ///
     /// One identifiable value rather than a boolean per sheet: the index and
@@ -122,6 +126,20 @@ struct TemplateEditorScreen: View {
             }
         }
         .background(Theme.surface)
+        .environment(keypad)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let editing = keypad.editing, keypad.isPresented {
+                NumberKeypad(
+                    kind: editing.kind,
+                    onInput: { keypad.apply($0) },
+                    onNext: advanceTemplateKeypad,
+                    onDismiss: { keypad.dismiss() }
+                )
+            }
+        }
+        .onChange(of: keypad.editing?.text) { _, _ in
+            commitTemplateRestFromKeypad()
+        }
         .sheet(item: $activeOption) { option in
             optionSheet(for: option)
         }
@@ -411,6 +429,7 @@ struct TemplateEditorScreen: View {
             VStack(spacing: 0) {
                 ForEach(Array(draft.sets.enumerated()), id: \.element.id) { setIndex, set in
                     SetRow(
+                        setID: set.id,
                         setType: bindingForSetType(exercise: index, set: setIndex),
                         setNumber: workingNumbers[setIndex],
                         previousText: previousText(
@@ -431,12 +450,20 @@ struct TemplateEditorScreen: View {
                     // screen, and for the same two reasons: the rest after the
                     // final set is a real rest, and the divider is the only way
                     // to edit one.
-                    RestDivider(restSeconds: set.restSeconds) {
-                        activeOption = ActiveOption(
-                            index: index,
-                            kind: .setRest(setIndex)
-                        )
-                    }
+                    RestDivider(
+                        restSeconds: set.restSeconds,
+                        onTap: {
+                            keypad.focus(
+                                NumberKeypadAddress(setID: set.id, slot: .rest),
+                                kind: .rest,
+                                display: "\(set.restSeconds)"
+                            )
+                        },
+                        isFocused: keypad.address == NumberKeypadAddress(setID: set.id, slot: .rest),
+                        focusedText: keypad.address?.setID == set.id && keypad.address?.slot == .rest
+                            ? keypad.editing?.chipText
+                            : nil
+                    )
                 }
             }
 
@@ -444,6 +471,71 @@ struct TemplateEditorScreen: View {
                 addSet(to: index)
             }
         }
+    }
+
+    // MARK: - Custom keypad
+
+    private var templateKeypadLayout: NumberKeypadLayout {
+        NumberKeypadLayout(exercises: exercises.map { $0.sets.map(\.id) })
+    }
+
+    private func draftLocation(of setID: UUID) -> (exercise: Int, set: Int)? {
+        for e in exercises.indices {
+            if let s = exercises[e].sets.firstIndex(where: { $0.id == setID }) {
+                return (e, s)
+            }
+        }
+        return nil
+    }
+
+    private func advanceTemplateKeypad() {
+        guard let address = keypad.address else { return }
+        switch NumberKeypadEditing.advance(from: address, in: templateKeypadLayout, completesSets: false) {
+        case .focus(let next):
+            focusTemplateKeypad(next)
+        case .completeSet, .finishRest:
+            // Template path never asks to complete a set.
+            keypad.dismiss()
+        case .dismiss:
+            keypad.dismiss()
+        }
+    }
+
+    private func focusTemplateKeypad(_ address: NumberKeypadAddress) {
+        guard let place = draftLocation(of: address.setID) else {
+            keypad.dismiss()
+            return
+        }
+        let set = exercises[place.exercise].sets[place.set]
+        let unit = displayUnit(for: exercises[place.exercise].exercise)
+        switch address.slot {
+        case .weight:
+            let display = set.weight.map {
+                PreviousText.formatWeight(PreviousText.displayValue(kilograms: $0, in: unit))
+            } ?? ""
+            keypad.focus(address, kind: .weight(unit: unit), display: display)
+        case .reps:
+            let prescription = RepRange.fromTemplate(
+                reps: set.reps, start: set.repRangeStart, end: set.repRangeEnd
+            )
+            keypad.focus(
+                address,
+                kind: .reps(allowRange: true),
+                display: prescription.map { RepRangeParser.format($0) } ?? ""
+            )
+        case .rest:
+            keypad.focus(address, kind: .rest, display: "\(set.restSeconds)")
+        }
+    }
+
+    private func commitTemplateRestFromKeypad() {
+        guard let address = keypad.address, address.slot == .rest,
+              let editing = keypad.editing,
+              let place = draftLocation(of: address.setID)
+        else { return }
+        let seconds = max(0, Int(editing.text.trimmingCharacters(in: .whitespaces)) ?? 0)
+        guard exercises[place.exercise].sets[place.set].restSeconds != seconds else { return }
+        exercises[place.exercise].sets[place.set].restSeconds = seconds
     }
 
     // MARK: - Bindings into draft state

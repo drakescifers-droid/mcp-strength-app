@@ -19,13 +19,16 @@ state, the traps, the decisions and the reasoning behind them. Don't re-derive f
 those files already explain, and don't duplicate them into new files.
 
 The one-line state: **the app is on Drake's phone, he is training on it, Phase 2 is down to Apple
-Health — workouts and their calories go out, measurements do not — and the next thing he has asked
-for is a CUSTOM KEYPAD.** Sync proven end to end IN BOTH DIRECTIONS against the live project,
+Health — workouts and their calories go out, measurements do not — and the custom keypad is DONE
+on the phone.** Next is attaching the Watch's existing Active Energy samples instead of (or before)
+writing our estimate. Sync proven end to end IN BOTH DIRECTIONS against the live project,
 canonical units done, a round of gym-found bugs fixed, per-exercise Preferences — model and sheet —
 landed, the settings screen makes the global weight unit changeable, **both settings and
 preferences SYNC**, the workout calorie rate is built on both sides, and **the warm-up ramp's
 percentages were found wrong and corrected** (40 / 60 / 80, not 50 / 60 / 75). Swift suite green
-(548 tests), SQL suite green.
+after the keypad (548+ tests), SQL suite green.
+
+> ✅ **THE KEYPAD IS COMMITTED.** Visual work, so it stayed here and did not go to Ringer.
 
 > **THE APP IS IN HIS HAND AND HE TESTS IT.** That changes how you work — see
 > `AGENTS.md` § "DRAKE DOES THE UI TESTING". Build, install, hand over. Do not drive the simulator
@@ -53,57 +56,45 @@ percentages were found wrong and corrected** (40 / 60 / 80, not 50 / 60 / 75). S
 
 ## Next piece of work, in order
 
-1. **THE CUSTOM NUMBER KEYPAD — Drake asked for it directly on 2026-08-19, and it is the next
-   thing to build.** Match the reference app's: digits, `⌫`, a dismiss-keyboard button, a **− / +**
-   pair, and a blue **Next**. Today every entry field is a plain `TextField` on the SYSTEM keypad
-   (`SetRow.swift`: weight `.decimalPad`, reps `.numberPad` or `.default` when a range is allowed,
-   RPE; plus `RestDivider`, `RecordMeasurementSheet` and the template editor, which reuses
-   `SetRow`).
+1. **Attach the Watch's EXISTING Active Energy samples — Drake's stated preference, and the
+   thing we were about to start when this chat filled up.** `HKWorkoutBuilder.addSamples`
+   documents that samples *"will be saved to the database if they have not already been saved"*,
+   so already-recorded energy can be ASSOCIATED with our workout rather than duplicated: real
+   measured numbers, no estimate, no Watch app.
 
-   > ⚠️ **LOOK AT THE REFERENCE BEFORE DESIGNING IT, because the one screenshot we have may not be
-   > the keypad you think it is.** In Drake's 2026-08-19 photo the REST BAR is what is selected
-   > (`2:30`, highlighted blue) — not a weight field — and the keypad shown **has no decimal
-   > point**. A weight field needs one (2.5 kg jumps, a 137.5 lb working set), so either the layout
-   > changes per field or something else is going on. This is the same trap as everything else on
-   > this ramp: *which* thing am I looking at. Four questions, all answerable in a minute in the
-   > reference app:
-   >   1. Does the WEIGHT field's keypad have a decimal key, and is the layout otherwise identical?
-   >   2. What do **−** and **+** step by — the plate increment (5 lb / 2.5 kg), 1 rep, 15 s of rest?
-   >      Does it depend on the field?
-   >   3. What does **Next** do at the LAST field of the LAST set — dismiss, add a set, nothing?
-   >   4. Does **Next** also tick the set complete, or only move focus?
+   **Intended behaviour:**
+   - Rate **none** → no energy sample, no attach.
+   - Watch/Health already has `activeEnergyBurned` in `[start, end]` → `builder.addSamples` those
+     and **do not** write our estimate.
+   - No existing samples → keep the flat-rate estimate.
+   - If attaching another source's samples **throws** → fall back to the estimate. **This
+     HealthKit fact is unproven on device.**
 
-   > **The implementation route is the part with a real decision in it.** SwiftUI's `TextField` has
-   > no `inputView`, so a genuinely custom keyboard means either a `UIViewRepresentable` around
-   > `UITextField` (which gets `inputView` / `inputAccessoryView` for free) or abandoning
-   > `TextField` for a tap-target that drives `@FocusState` and a pinned keypad view. Do NOT reach
-   > for `ToolbarItemGroup(placement: .keyboard)` and call it done — that adds a bar ABOVE the
-   > system keypad rather than replacing it, which is a different design.
+   **Split Drake asked for (use Ringer for the rule, keep HealthKit here):**
+   - **Ringer:** a pure energy-source decision on `HealthWorkoutPlan` / `HealthWorkoutRule` +
+     tests (when attach vs estimate vs none). Do **not** give the worker `HealthStore.swift`,
+     settings UI, or the plist — a check cannot talk to HealthKit. Copy `verify_compile.sh` from
+     `~/ringer/run-areas/mcpstrength-preferences/`. `check_timeout_s` ~300–500. Run
+     `~/ringer/scripts/check_selftest.sh` **before** blessing any check. Suggested `run_name`:
+     `mcpstrength-watch-energy` (one job, same name across rounds). Worker must not git commit;
+     export the patch + notes.md out of the worktree.
+   - **Here:** `NSHealthShareUsageDescription` in the pbxproj
+     (`INFOPLIST_KEY_NSHealthShareUsageDescription`; the write key already exists), a non-empty
+     **read** set in `requestAuthorization`, query samples in `[start, end]`, `addSamples`,
+     settings footer if needed, install to the phone. Drake will get a **new read-permission
+     prompt.**
 
-   > **Three things that must survive the change**, all of which currently work:
-   >   * **Every write still goes through `commitWeight` / `commitReps`**, which is where
-   >     `markEdited()` lives. A keypad that mutates the model directly silently stops the row
-   >     syncing — AGENTS.md rule 3, and it would pass every test.
-   >   * **The template screen's reps field accepts a RANGE (`6-8`)**, which is why it asks for
-   >     `.default` rather than `.numberPad` today. A digits-only keypad breaks it unless it grows
-   >     a hyphen or a range affordance.
-   >   * **The caret.** `04-status.md` records a harness bug where tapping the middle of a
-   >     right-aligned chip put the caret BEFORE the text, so backspaces deleted nothing and "135"
-   >     was typed in front of "90". A keypad that replaces-on-first-digit avoids it; check.
+   **Model:** Drake was asked and had not picked when this chat filled. Recommendation is
+   **Grok 4.6** (landed per-exercise Preferences first try). Codex is stronger and more expensive;
+   GLM is cheaper and weaker first-try on code-feature. Scoreboard at the time:
+   `./ringer.py models --task-type code-feature` — grok-4.6, 17 tasks, first-try 0.59, pass 0.82.
+   This chat was told to keep going without a pick, so Grok 4.6 is the worker.
 
-   **Visual work, so it stays here and does not go to Ringer** (`AGENTS.md` § routing), and Drake
-   tests it on the phone.
+   Two things that stay true until this lands: Health is still **write-only**
+   (`NSHealthShareUsageDescription` absent, empty read set), and attaching samples another
+   source owns has never been proven on this phone.
 
-2. **The better energy answer, and Drake's stated preference — attach the Watch's EXISTING
-   samples.** `HKWorkoutBuilder.addSamples` documents that samples *"will be saved to the database
-   if they have not already been saved"*, so already-recorded energy can be ASSOCIATED with our
-   workout rather than duplicated: real measured numbers, no estimate, no Watch app. **Two things
-   to settle before building it:** it needs READ permission (so `NSHealthShareUsageDescription` and
-   a non-empty read set, widening today's deliberately write-only entitlement), and **it is NOT
-   established that HealthKit lets an app attach samples ANOTHER SOURCE owns.** Test that on a
-   device first. Drake said the flat rate "is fine for now" and this is where it should end up.
-
-3. **Two more corrections the reference screens forced, and NEITHER IS BUILT** — both recorded in
+2. **Two more corrections the reference screens forced, and NEITHER IS BUILT** — both recorded in
    `02-architecture.md`: an explicit per-type **toggle** separate from the permission (so
    `HealthStore.swift`'s "authorization is the only switch" reasoning is wrong — iOS cannot revoke
    its own permission, so without a toggle there is no way to turn it off from inside the app), and
@@ -112,9 +103,10 @@ percentages were found wrong and corrected** (40 / 60 / 80, not 50 / 60 / 75). S
    missing.
    > The calorie rate made the toggle MORE pressing: somebody who dislikes the energy number can
    > now only stop it by picking `None` or by leaving the app for Health, and `None` turns off
-   > energy, not workouts.
+   > energy, not workouts. `04-status.md` used to list this before Watch-attach; Drake's order is
+   > Watch first.
 
-4. **Apple Health — the MEASUREMENTS half.** The genuinely bidirectional part, and the echo-loop
+3. **Apple Health — the MEASUREMENTS half.** The genuinely bidirectional part, and the echo-loop
    trap: write a weight to Health, Health notifies observers, the app re-imports its own write as a
    new entry, duplicates forever. `MeasurementEntry.source` exists for that guard.
    > **Only 4 of the 18 measurement types exist in HealthKit** — Weight, Body Fat %, Caloric
@@ -122,6 +114,36 @@ percentages were found wrong and corrected** (40 / 60 / 80, not 50 / 60 / 75). S
    > the screen must say which rows can travel rather than implying all of them do.
 
 Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
+
+> ✅ **THE CUSTOM NUMBER KEYPAD IS DONE (2026-08-19), on the phone, Drake approved it after two
+> layout fixes.** Do not rebuild it. Chip + pinned keypad, not
+> `ToolbarItemGroup(placement: .keyboard)` and not a `UITextField` `inputView`. Writes still go
+> through `commitWeight` / `commitReps`. Hosted on `ActiveWorkoutScreen`, `TemplateEditorScreen`,
+> `RecordMeasurementSheet` via `.environment(keypad)` + `safeAreaInset`. Per-set rest **sheet
+> removed**; divider tap focuses the keypad. `⋯` menu still uses `RestTimerSheet` for
+> whole-exercise rest.
+>
+> **Reference facts, answered 2026-08-19:** weight has a decimal; rest and reps do not. − / + is
+> **2.5 lb / 1 rep / 10 s**; metric weight step is **1.25 kg** (`WeightUnits.keypadStep`,
+> separate from `plateIncrement` which is 5 lb / 2.5 kg and warm-up rounding only). Next on
+> weight → same set's reps (no tick). Next on reps (not last set of exercise) → tick, start rest,
+> focus rest bar. Next on rest → skip running rest, next set's weight (crosses into the next
+> exercise). Next on last set of an exercise → tick, jump to **next exercise's first weight**
+> (do not focus that exercise's rest). Last set of last exercise → complete and dismiss.
+> Template: no ticks, no rest start; reps has a hyphen for ranges (`6-8`). First input after
+> focus **replaces**.
+>
+> **Two bugs Drake caught, both fixed, do not re-introduce:**
+> 1. Keypad filled the screen — Next had `maxHeight: .infinity` and `safeAreaInset` offered the
+>    leftover height. Next is now two key-heights; keypad uses
+>    `.fixedSize(horizontal: false, vertical: true)`.
+> 2. Blue ring on the empty end of the rest bar — focused `RestProgressBar` stroked a
+>    `Rectangle` with `Theme.accent` (same blue as the fill). Clip the fill first; focus ring is
+>    **white** (`Theme.textPrimary`) via `RoundedRectangle.strokeBorder`.
+>
+> Pure rules: `Workout/NumberKeypadEditing.swift`. UI: `Views/NumberKeypad.swift`. Tests:
+> `MCPStrengthTests/NumberKeypadEditingTests.swift`. Walkthrough UITests type via `keypad-N`
+> buttons. Visual work, so it stayed here and did not go to Ringer.
 
 > **Per-exercise Preferences is DONE, and it went through Ringer — which answers the question this
 > file used to ask.** The model split ran as `mcpstrength-per-exercise-preferences` (grok-4.6,
@@ -143,13 +165,16 @@ Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
 
 ## Waiting on me
 
-- 🆕 **FOUR QUESTIONS ABOUT THE KEYPAD, and only I can answer them — they need the reference app
-  open** (the whole item is #1 above). Open Strong, start a workout, and tap into the fields:
-  1. does the **weight** field's keypad have a **decimal point**? The photo I sent has none, and I
-     had the REST BAR selected when I took it, so it may not be the same keypad;
-  2. what do **−** and **+** step by, and does it change per field?
-  3. what does **Next** do on the last field of the last set?
-  4. does **Next** also tick the set complete, or only move the cursor?
+- ✅ **WATCH-ENERGY RINGER MODEL: Grok 4.6.** Asked 2026-08-19; this chat was told to keep
+  going without a pick, so the recommendation stands.
+- ✅ **FOUR QUESTIONS ABOUT THE KEYPAD, answered 2026-08-19 from the reference
+  app, AND THE KEYPAD IS ON THE PHONE.** Weight has a decimal; rest and reps do
+  not. − / + steps **2.5 lb / 1 rep / 10 seconds**. Next on reps of a non-last
+  set ticks the set, starts rest, and focuses the timer; Next on the timer skips
+  rest and moves to the next set's weight; Next on the last set of an exercise
+  ticks it and jumps to the next exercise's weight. Metric keypad step is 1.25 kg
+  (matching smallest change plate), not a conversion of 2.5 lb. Drake: “That
+  works great” after the Next-height and rest-bar outline fixes.
 - **The bar on logging real workouts is LIFTED** — the units conversion has landed, which is the
   only thing it was ever waiting on. What still blocks the phone is the item below.
 - ✅ **SOLVED — the 13:35 push was `xcodebuild test`.** The test bundle is hosted by the app, so a
@@ -166,22 +191,17 @@ Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
 - ✅ **SYNC IS PROVEN IN BOTH DIRECTIONS against the live project** (2026-08-19). A settings
   change uploaded — `POST /rest/v1/app_settings → 200` — and a full pull of all thirteen tables
   came back 200. Read out of the project's own request logs, not inferred from the UI.
-- ⚠️ **APPLE HEALTH HAS NEVER WRITTEN A WORKOUT.** The rule is tested and the entitlement is
-  verified in the SIGNED app, but no sample has reached Health — a unit test cannot grant a
-  permission or write one. **Settings → Apple Health → Allow, finish a workout, look in Apple
-  Fitness.** Three things to look at, in this order:
-  1. the workout is there at all;
-  2. **the calories.** The permission sheet now asks for Active Energy as well as Workouts —
-     allow both. Then check the day's Move ring: if you were wearing the Watch, our estimate may
-     be counted ON TOP of what the Watch already recorded. That is the one unverified thing in
-     this feature, and `None` in Settings → Apple Health → Workout Active Calories Rate is the
-     honest setting until it is answered;
-  3. finishing the SAME workout twice must produce ONE entry, which is the whole point of the
-     external-uuid lookup.
-- **The calorie rate picker is new and has never been tapped.** Settings → Apple Health → Workout
-  Active Calories Rate. It only appears once Health is allowed — deliberate, and the reasoning is
-  in `04-status.md`. Worth saying whether the row title reads as too long on the phone; it is the
-  reference app's own wording and it wraps to two lines.
+- ✅ **APPLE HEALTH WROTE A WORKOUT** (2026-08-19), **and it wrote energy.** A sub-minute test
+  session appeared in Apple Fitness with **0.25 kcal** — the flat rate scaled by duration, not a
+  fabricated zero. What is still unverified:
+  1. **double counting against a worn Watch** on a real-length session. `None` is the honest
+     setting until that is answered;
+  2. finishing the SAME workout twice must produce ONE entry — the external-uuid lookup has
+     never been watched on a device.
+- **The calorie rate picker may still never have been tapped** (Settings → Apple Health → Workout
+  Active Calories Rate). Default Medium is what wrote the 0.25 kcal. Worth saying whether the row
+  title reads as too long on the phone; it is the reference app's own wording and it wraps to two
+  lines. It only appears once Health is allowed — deliberate.
 - ~~SYNC HAS FAILED ONCE~~ — the 2026-08-19 outage is fixed and explained below. `permission denied for table app_settings`: a
   table created after `grant … on all tables` had never been granted, and because it is first in
   the push order the whole run aborted. Migration `20260819140000` fixes it and is applied.
@@ -273,7 +293,8 @@ resolutions. I chose to leave it and note it.
 - **Write checks that are strict on substance and tolerant of format.** A check of mine demanded the
   literal text `0.4` and failed a worker that had written `40 / 100` — same behaviour, wasted retry.
 - Run areas worth copying rather than rewriting: `~/ringer/run-areas/mcpstrength-transport/`,
-  `mcpstrength-lww/`, `mcpstrength-warmup/`, `mcpstrength-equipment/`.
+  `mcpstrength-lww/`, `mcpstrength-warmup/`, `mcpstrength-equipment/`,
+  **`mcpstrength-preferences/`** (the compile check to copy for Watch energy).
 
 ## Reading Apple's signing output — wrong twice in one session
 

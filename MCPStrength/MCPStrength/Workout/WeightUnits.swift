@@ -91,6 +91,21 @@ enum WeightUnits {
         }
     }
 
+    /// What the custom keypad's − / + pair adds to a WEIGHT field.
+    ///
+    /// Not `plateIncrement`. That one is for loads the APP invents (the warm-up
+    /// ramp) and matches the reference's Warm-up Calculator `Strict` rounding
+    /// (5 lb / 2.5 kg). This one is what a thumb tap does to a number you are
+    /// already looking at, measured in Strong on 2026-08-19: **2.5 lb**.
+    /// 1.25 kg is the matching smallest change plate in a metric gym — the same
+    /// "two stocking conventions, not a conversion" argument as `plateIncrement`.
+    static func keypadStep(for unit: WeightUnit) -> Double {
+        switch unit {
+        case .lbs: 2.5
+        case .kg:  1.25
+        }
+    }
+
     /// Nearest `increment`, ties to the heavier plate.
     ///
     /// `.toNearestOrAwayFromZero` is named on purpose, exactly as it is in

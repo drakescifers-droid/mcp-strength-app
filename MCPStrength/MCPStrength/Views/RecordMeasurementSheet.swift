@@ -18,6 +18,7 @@ struct RecordMeasurementSheet: View {
 
     @State private var valueText: String = ""
     @State private var date: Date = Date()
+    @State private var keypad = NumberKeypadSession()
 
     private var unit: String {
         MeasurementSeedImporter.defaultUnit(for: type.id) ?? ""
@@ -37,15 +38,28 @@ struct RecordMeasurementSheet: View {
                 Spacer()
 
                 HStack(spacing: Spacing.compact) {
-                    TextField("Value", text: $valueText)
-                        .font(Typography.chipValue)
-                        .foregroundStyle(Theme.textPrimary)
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 160)
-                        .padding(.horizontal, Spacing.comfortable)
-                        .padding(.vertical, Spacing.compact)
-                        .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.chip))
+                    Button {
+                        keypad.focus(
+                            NumberKeypadAddress(setID: type.id, slot: .weight),
+                            kind: .decimal,
+                            display: valueText
+                        )
+                    } label: {
+                        Text(keypad.isPresented ? (keypad.editing?.chipText ?? valueText) : valueText)
+                            .font(Typography.chipValue)
+                            .foregroundStyle(Theme.textPrimary)
+                            .frame(maxWidth: 160)
+                            .padding(.horizontal, Spacing.comfortable)
+                            .padding(.vertical, Spacing.compact)
+                            .background(Theme.fieldFill, in: .rect(cornerRadius: Radius.chip))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: Radius.chip)
+                                    .stroke(keypad.isPresented ? Theme.accent : Color.clear, lineWidth: 1.5)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("Measurement")
+                    .accessibilityLabel("Value")
 
                     Text(unit)
                         .font(Typography.body)
@@ -64,6 +78,27 @@ struct RecordMeasurementSheet: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Theme.surface)
+            .environment(keypad)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if let editing = keypad.editing, keypad.isPresented {
+                    NumberKeypad(
+                        kind: editing.kind,
+                        onInput: { keypad.apply($0) },
+                        onNext: { keypad.dismiss() },
+                        onDismiss: { keypad.dismiss() }
+                    )
+                }
+            }
+            .onChange(of: keypad.editing?.text) { _, newValue in
+                if let newValue { valueText = newValue }
+            }
+            .onAppear {
+                keypad.focus(
+                    NumberKeypadAddress(setID: type.id, slot: .weight),
+                    kind: .decimal,
+                    display: valueText
+                )
+            }
             .navigationTitle(type.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

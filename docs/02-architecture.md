@@ -349,13 +349,15 @@ touches how an in-progress workout is represented.
 > Apple deduplicates energy across sources for the rings was NOT established; check on a device
 > before trusting the number.
 >
-> **The better long-term answer, and Drake's preference: attach the Watch's EXISTING samples.**
-> `HKWorkoutBuilder.addSamples` documents that samples "will be saved to the database if they have
-> not already been saved" — so already-recorded energy can be ASSOCIATED with our workout rather
-> than duplicated. Real measured numbers, no estimate, no Watch app. Two things to settle first:
-> it needs READ permission (so `NSHealthShareUsageDescription` and a non-empty read set, widening
-> the write-only entitlement), and it is NOT established that HealthKit lets an app attach samples
-> ANOTHER SOURCE owns. Test that on a device before committing to it.
+> **The better long-term answer, and Drake's preference — THIS IS NEXT (HANDOFF.md item 1):**
+> attach the Watch's EXISTING samples. `HKWorkoutBuilder.addSamples` documents that samples "will
+> be saved to the database if they have not already been saved" — so already-recorded energy can
+> be ASSOCIATED with our workout rather than duplicated. Real measured numbers, no estimate, no
+> Watch app. Two things still true until it lands: Health is still **write-only**
+> (`NSHealthShareUsageDescription` absent, empty read set), and it is NOT established that
+> HealthKit lets an app attach samples ANOTHER SOURCE owns. Test that on a device. Intended
+> behaviour: none → no energy; existing samples in `[start, end]` → attach those and skip the
+> estimate; none found → keep the flat rate; attach throws → fall back to the estimate.
 
 > **Two more corrections the reference screens forced, beyond energy — BOTH STILL OUTSTANDING:**
 >
@@ -378,18 +380,15 @@ touches how an in-progress workout is represented.
 
 ## Open questions
 
-> **NEWEST, AND IT IS A REQUEST RATHER THAN A QUESTION — A CUSTOM NUMBER KEYPAD, asked for by
-> Drake 2026-08-19.** Match the reference app's — digits, `⌫`, dismiss, a **− / +** pair and a
-> blue **Next** — replacing the system keypad on every entry field. **It is an architectural choice rather than a styling one:**
-> SwiftUI's `TextField` has no `inputView`, so it needs either a `UIViewRepresentable` around
-> `UITextField` or a tap-target driving `@FocusState` and a pinned keypad view.
-> `ToolbarItemGroup(placement: .keyboard)` is NOT it — that sits above the system keypad rather
-> than replacing it.
->
-> `HANDOFF.md` item 1 carries the four facts about the reference that must be established before
-> any of it is designed — starting with whether the weight field's keypad even has a decimal point
-> — and the three behaviours that must survive it: `markEdited` on the commit path, the template
-> screen's `6-8` rep RANGE, and the caret-position trap.
+> ✅ **CUSTOM NUMBER KEYPAD — LANDED 2026-08-19 on the phone.** Chip + pinned keypad view, not a
+> `UITextField` `inputView` and not `ToolbarItemGroup(placement: .keyboard)`. Facts from the
+> reference: weight has a decimal (rest and reps do not); − / + steps 2.5 lb / 1 rep / 10 s
+> (`WeightUnits.keypadStep`; metric is 1.25 kg); Next on reps ticks the set (non-last set starts
+> rest and focuses the timer; last set of an exercise jumps to the next exercise's weight);
+> Next on the timer skips rest. `markEdited` stays on the commit path; template reps keep the
+> `6-8` hyphen range; first input after focus replaces. Two layout traps: Next must not take
+> `maxHeight: .infinity` inside `safeAreaInset`, and the rest-bar focus ring is white on a
+> clipped fill. Next work is Watch energy, not another keypad.
 
 
 1. **Seeding the exercise library.** Need a source for the initial library. Licensing matters

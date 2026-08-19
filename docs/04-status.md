@@ -38,9 +38,10 @@ provides sync and backup, because a local-only store has no recovery story.
 
 **Phase 2 — in progress. Sync is PROVEN against the real project, storage is canonical
 kilograms, per-exercise Preferences is DONE, the units setting is REACHABLE, both of them SYNC,
-and Apple Health now writes an energy sample at a rate the user picks.** What remains of Phase 2 is
-the measurements half of Health, plus the two corrections the reference screens forced (a per-type
-toggle, and backfill).
+Apple Health now writes an energy sample at a rate the user picks, and the custom number keypad
+is ON THE PHONE.** What remains of Phase 2 is attaching the Watch's existing energy samples
+(next), then the measurements half of Health, plus the two corrections the reference screens
+forced (a per-type toggle, and backfill).
 
 > ⚠️ **THE CLAIM BELOW IS WRONG, AND THE SUB-SCREEN HAS NOW BEEN LOOKED AT.** It was used to
 > delete a requirement. `Settings accessed from profile page/IMG_2990.PNG` has a
@@ -327,9 +328,20 @@ right.**
   > **The client default is `medium` because the SERVER's default is `medium`.** A client
   > defaulting to `none` against a column defaulting to `medium` means a device that never touched
   > the setting disagrees with the row the server hands its next device.
-  > ⚠️ **THE NUMBER IS NOT VERIFIED — see "Not verified".** Whether our sample double-counts
-  > against a worn Apple Watch in the Activity rings is a fact about how Apple merges energy, and
-  > no test anywhere can reach it.
+  > ⚠️ **ENERGY WRITES — verified 2026-08-19 on a sub-minute session (0.25 kcal).** Double
+  > counting against a worn Watch is the thing that is still unchecked; see "Not verified".
+
+- **CUSTOM NUMBER KEYPAD — on the phone 2026-08-19, Drake approved it after two layout fixes.**
+  Chip + pinned keypad (`Views/NumberKeypad.swift` + `Workout/NumberKeypadEditing.swift`), not
+  `ToolbarItemGroup(placement: .keyboard)` and not a `UITextField` `inputView`. Hosted on the
+  live workout, the template editor, and the measurement sheet. Per-set rest sheet removed;
+  divider tap focuses the keypad. Writes still go through `commitWeight` / `commitReps`.
+  `WeightUnits.keypadStep` is 2.5 lb / 1.25 kg and is **not** `plateIncrement`.
+  > The two layout bugs that must not come back: Next must not take `maxHeight: .infinity`
+  > inside a `safeAreaInset` (it filled the screen), and the rest-bar focus ring is white
+  > on a clipped fill, not `Theme.accent` on a `Rectangle` (that painted the empty end of
+  > the bar blue). Reference facts and Next-walk rules are in `HANDOFF.md` and
+  > `02-architecture.md`.
 
 ### What turning sync on for real found — one outage, and the harness was hiding it
 
@@ -592,7 +604,14 @@ underneath never changed — only whether the screen described it honestly.
 
 ### What is left, in order
 
-1. **The two corrections the reference screens forced, and neither is built.** A per-type
+1. **Attach the Watch's EXISTING Active Energy samples.** Drake's preference, and next. Rate
+   none → nothing. Existing `activeEnergyBurned` in the workout interval → associate those via
+   `HKWorkoutBuilder.addSamples` and skip our estimate. No samples → keep the flat rate. Attach
+   throw → fall back to the estimate (unproven on device). Needs a read entitlement that does
+   not exist yet. Split: Ringer does the pure plan/rule; this agent does HealthKit, the plist,
+   and the phone. Details in `HANDOFF.md` item 1.
+
+2. **The two corrections the reference screens forced, and neither is built.** A per-type
    **TOGGLE** separate from the permission — `HealthStore.swift`'s "authorization is the only
    switch" reasoning is wrong for that model, because iOS cannot revoke its own permission and so
    there is no way to turn the feature off from inside the app at all. And **BACKFILL** ("14
@@ -602,7 +621,7 @@ underneath never changed — only whether the screen described it honestly.
    > number can now only stop it by picking `None` or by leaving the app for Health — and `None`
    > turns off energy, not workouts.
 
-2. **Apple Health — the MEASUREMENTS half.** Workouts already go out (see Landed). What remains is
+3. **Apple Health — the MEASUREMENTS half.** Workouts already go out (see Landed). What remains is
    the genuinely bidirectional part, and with it the echo-loop trap `02-architecture.md` flags:
    write a weight to Health, Health notifies observers, the app re-imports its own write as a new
    entry, duplicates forever. `MeasurementEntry.source` exists for exactly that guard.
@@ -805,20 +824,18 @@ ringer `docs/MODEL-NOTES.md`.
   nothing has ever exercised: `SetRow` reacts to a unit change with `.onChange(of: unit)`, and
   until this screen existed nothing could produce that change. Switching to Metric with a workout
   open is the case to try — every entry chip on screen should re-render in kilograms.
-- ⚠️ **THE CALORIE NUMBER IS UNVERIFIED, AND DOUBLE COUNTING IS THE THING TO CHECK.** A Watch worn
-  while lifting is ALREADY writing `activeEnergyBurned` continuously; our sample on top may land in
-  the Activity rings twice. The reference app's copy only claims its setting is ignored when
-  logging *via its Watch app* — it says nothing about merely wearing one, and whether Apple
-  deduplicates energy across sources for the rings was never established. **Finish a workout, then
-  look at the day's Move ring and at the workout's own calorie figure in Apple Fitness.** If it
+- ⚠️ **THE CALORIE NUMBER IS UNVERIFIED FOR DOUBLE COUNTING.** Energy itself DID write
+  (Drake, 2026-08-19): a sub-minute test session showed **0.25 kcal** in Apple Fitness, which is
+  the flat rate pro-rated by duration (Medium is 200 kcal/hour; a few seconds of that is a
+  fraction of a calorie), not a fabricated zero. What remains is whether a Watch worn during a
+  REAL session causes that sample to land in the Move ring on TOP of the Watch's own. If it
   double-counts, `None` is the honest setting for a Watch wearer and the real answer is attaching
-  the Watch's EXISTING samples instead of adding our own (HANDOFF.md item 2).
+  the Watch's EXISTING samples instead of adding our own (HANDOFF.md item 1).
   > The picker screen says this to the user in its own footer, so nobody has to find it here first.
-- **APPLE HEALTH HAS NEVER WRITTEN A WORKOUT.** The rule is tested, the entitlement is verified
-  in the signed app, and NOTHING has actually reached Health — a unit test cannot grant a
-  permission or write a sample. What needs a thumb: Settings → Apple Health → Allow, then finish a
-  workout, then look in Apple Fitness. And the idempotency claim specifically: finishing the SAME
-  workout twice must produce ONE entry, which is the whole reason for the external-uuid lookup.
+- ~~**APPLE HEALTH HAS NEVER WRITTEN A WORKOUT.**~~ **VERIFIED 2026-08-19 — a finished session
+  appeared in Apple Fitness.** Kept so the next session does not re-ask. What remains is
+  double-counting (above) and idempotency: finishing the SAME workout twice must produce ONE
+  entry, which is the whole reason for the external-uuid lookup.
 - **The Preferences sheet has not been used on a real device either**, and it is the newest thing
   on the phone (installed 2026-08-18). Two questions a test cannot answer: whether the bar list
   re-labelling the instant you tap Metric reads as responsive or as flicker, and whether a Save

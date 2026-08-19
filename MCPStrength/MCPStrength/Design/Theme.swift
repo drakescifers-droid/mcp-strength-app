@@ -21,6 +21,9 @@ enum Theme {
     static let surface = Color(red: 0.160784, green: 0.192157, blue: 0.211765)
     /// Weight/reps entry chips — slightly darker than the surface.
     static let fieldFill = Color(red: 0.121569, green: 0.145098, blue: 0.164706)
+    /// Custom number-keypad keys — lighter than `fieldFill` so they read as
+    /// buttons on the pad, not as more of the pad.
+    static let keypadKey = Color(red: 0.220, green: 0.247, blue: 0.271)
 
     // Accents
     /// Exercise names, rest-timer text, links.
