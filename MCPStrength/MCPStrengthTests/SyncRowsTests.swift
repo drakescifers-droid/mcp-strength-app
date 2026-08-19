@@ -429,7 +429,7 @@ struct SyncRowsTests {
 
         let exerciseJSON = try encodedJSON(SyncExerciseRow(
             id: id, userID: nil, name: "E", aliases: [],
-            bodyPart: .arms, category: .barbell, isCustom: true,
+            bodyPart: .arms, secondaryBodyParts: [], category: .barbell, isCustom: true,
             updatedAt: when, deletedAt: nil, serverUpdatedAt: nil
         ))
         for key in SyncExerciseRow.CodingKeys.allCases {

@@ -23,7 +23,8 @@ The library entry. Reusable across templates and workouts.
 | `id` | UUID | For seeded exercises this is a **permanent contract** — see below |
 | `name` | String | e.g. "HS Shoulder Press" |
 | `aliases` | [String] | Common alternate names ("pec deck"). Deliberately **not** unique across exercises — see below |
-| `bodyPart` | enum | Arms, Back, Cardio, Chest, Core, Full Body, Legs, Olympic, Other, Shoulders |
+| `bodyPart` | enum | Arms, Back, Cardio, Chest, Core, Full Body, Legs, Olympic, Other, Shoulders — the PRIMARY, never repeated in `secondaryBodyParts` |
+| `secondaryBodyParts` | [enum] | Other body parts this exercise also trains. Deadlift is `bodyPart: .back, secondaryBodyParts: [.legs]` — see "Secondary body parts" below |
 | `category` | enum | **Determines what fields a set has** — see below |
 | `isCustom` | Bool | User-created vs. seeded library |
 | `weightUnitOverride` | enum? | Per-exercise override (lbs/kg) |
@@ -73,6 +74,27 @@ four exercises, that is not a bug: it produces *ambiguity*, and ambiguity is alr
 correctly (return candidates, write nothing, let the caller choose). A sloppy alias degrades into
 "which one did you mean?" rather than into a wrong answer, so the list can stay small and informal.
 
+### Secondary body parts
+
+`bodyPart` is one value, and some real movements genuinely train two — Deadlift is filed under
+Back but also loads the legs. Asked directly (2026-08-19): should Deadlift be able to show up
+under both Back and Legs? Yes, as a real feature rather than a spreadsheet workaround.
+
+**`bodyPart` stays the single PRIMARY value.** `secondaryBodyParts` is what it does not capture —
+Deadlift is `bodyPart: .back, secondaryBodyParts: [.legs]`, never `[.back, .legs]` with no
+primary. Every reader still has one unambiguous "main" answer plus a set of others: the library
+filter pills (`ExercisesScreen`, both Back and Legs show it), the matcher's body-part hint (below),
+and the MCP tools' `list_exercises` / `create_exercise` output (`03-mcp-tools.md`) all read
+`Exercise.trains(_:)` — the one predicate, so "does Deadlift count as Legs" has exactly one answer
+in the app. The Postgres column is `body_part[]`, matching the existing `text[] not null default
+'{}'` shape of `aliases` on the same table (`20260819220000_exercise_secondary_body_parts.sql`).
+
+**Deadlift is the worked example, not a hypothetical** — it is genuinely tagged
+`secondaryBodyParts: [.legs]` in the shipped seed data, both in the app's bundled JSON and on the
+live project. `WarmupSets`' 90 lb reference case and this decision are unrelated, but both are
+reminders that a single observed fact ("the reference shows one body part") does not always
+generalise into "there is only one".
+
 ### Matching a name to an exercise
 
 Resolution uses three signals, cheapest first. No semantic search or embeddings required.
@@ -83,10 +105,13 @@ Resolution uses three signals, cheapest first. No semantic search or embeddings 
 | **Body-part hint** | Right words, wrong movement | Caller may pass a `bodyPart` alongside the query |
 | **Spelling similarity** | Word-order and phrasing variants | "Dumbbell Lateral Raise" → `Lateral Raise (Dumbbell)` |
 
-**The body-part hint ranks; it never filters.** Boost candidates in the hinted body part, but keep
-the rest below them. The library files Deadlift under Back rather than Legs, so a hard filter on a
-slightly-wrong hint would hide the correct answer entirely — the failure mode the hint exists to
-prevent.
+**The body-part hint ranks; it never filters.** Boost candidates that `trains(hint)` — primary OR
+secondary — but keep the rest below them. Barbell Row is filed under Back only (no secondary), so
+a Legs hint must still return it rather than hiding it — the failure mode the hint exists to
+prevent. Deadlift used to be this document's example of "wrong hint, must not be hidden"; now that
+its secondary carries Legs, a Legs hint genuinely boosts it instead of merely failing to hide it —
+see "Secondary body parts" above. The general rule is unchanged: plenty of exercises still have
+only one body part, and a hint that turns out wrong for one of those must never make it vanish.
 
 > **Design note — the hint comes from the caller, not the server.** The query string carries no
 > metadata; only library entries do. But an AI client already knows a JM press is a triceps movement,

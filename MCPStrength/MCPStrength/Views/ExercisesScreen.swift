@@ -74,7 +74,10 @@ struct ExercisesScreen: View {
     private var visibleExercises: [Exercise] {
         var candidates = exercises
         if let bodyPartFilter {
-            candidates = candidates.filter { $0.bodyPart == bodyPartFilter }
+            // `trains(_:)`, not `bodyPart ==` — Deadlift is filed primarily
+            // under Back but also trains Legs, and the Legs pill must show it
+            // (docs/01-data-model.md § "Secondary body parts").
+            candidates = candidates.filter { $0.trains(bodyPartFilter) }
         }
         if let categoryFilter {
             candidates = candidates.filter { $0.category == categoryFilter }
@@ -212,7 +215,7 @@ private struct ExerciseRow: View {
                 Text(exercise.name)
                     .font(Typography.body.weight(.semibold))
                     .foregroundStyle(Theme.textPrimary)
-                Text(exercise.bodyPart.displayName)
+                Text(exercise.bodyPartsDisplayName)
                     .font(Typography.secondary)
                     .foregroundStyle(Theme.textSecondary)
             }
@@ -242,7 +245,10 @@ private struct ExerciseRow: View {
     let samples: [Exercise] = [
         Exercise(name: "Back Squat", aliases: ["Squat"], bodyPart: .legs, category: .barbell),
         Exercise(name: "Bench Press", aliases: ["Flat Bench"], bodyPart: .chest, category: .barbell),
-        Exercise(name: "Deadlift", aliases: ["Conventional Deadlift"], bodyPart: .back, category: .barbell),
+        // Secondary body part set deliberately, so this preview shows "Back, Legs" on the row —
+        // the worked example for secondary body parts (docs/01-data-model.md).
+        Exercise(name: "Deadlift", aliases: ["Conventional Deadlift"], bodyPart: .back,
+                 secondaryBodyParts: [.legs], category: .barbell),
         Exercise(name: "Overhead Press", aliases: ["OHP", "Military Press"], bodyPart: .shoulders, category: .barbell),
         Exercise(name: "Dumbbell Lateral Raise", aliases: ["Lateral Raise"], bodyPart: .shoulders, category: .dumbbell),
         Exercise(name: "Pull Up", bodyPart: .back, category: .weightedBodyweight),

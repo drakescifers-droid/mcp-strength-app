@@ -149,6 +149,19 @@ phone — see Waiting on me.
 
 ## Waiting on me
 
+- 🆕 **DEADLIFT NOW SHOWS UNDER BOTH LEGS AND BACK — check it on the phone.** Exercises tab →
+  filter by Legs, then by Back; Deadlift should appear in both, and its row should read
+  "Back, Legs". This is a new feature (`secondaryBodyParts`), asked for directly and built
+  2026-08-19 — an exercise can train more than one body part now. Postgres migration applied and
+  verified against the live project.
+- 🆕 **THE EXERCISE REVIEW SPREADSHEET (`exercise-library-refresh/exercise-review.xlsx`, also in
+  `~/Downloads`) GAINED A COLUMN mid-review — re-open it if you already had it open.** "Secondary
+  Body Part", with the posterior-chain movements (Romanian/Stiff-Leg/Sumo Deadlift, Good Morning,
+  Rack Pull, Zercher Squat, and a few others) pre-filled as suggestions, colored light blue —
+  confirm or clear them like everything else on the sheet. Nothing else on it changed. Still
+  waiting on your review pass generally: the Hammer Strength blocker (9 exercises — say if you
+  want the Swift enum case added now that real Hammer Strength names are in the list), and ~26
+  flagged likely duplicates against the 25 exercises already in the app.
 - ✅ **OAUTH ON THE LIVE PROJECT, dashboard 2026-08-19.** OAuth 2.1 on, dynamic
   registration on. MCP function deployed. Allow page is the site in `web/`.
 - ✅ **MCPSTRENGTH.COM LIVE, 2026-08-19.** Pages on Cloudflare, nameservers

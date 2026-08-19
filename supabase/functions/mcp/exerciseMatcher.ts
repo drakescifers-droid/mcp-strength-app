@@ -2,6 +2,12 @@
 // Three ranked signals, cheapest first — docs/01-data-model.md § Matching,
 // docs/03-mcp-tools.md open question 3. Keep this file a pure function over
 // data so the Swift tests can have a twin here.
+//
+// The body-part boost checks PRIMARY OR SECONDARY (`trains`, mirroring
+// `Exercise.trains(_:)`), not just `bodyPart ===`. Keep the two in lockstep —
+// this file's whole reason to exist is being an identical twin of the Swift
+// one; letting the boost condition drift would mean the same hint ranks
+// Deadlift differently for a phone-app caller than for an AI caller.
 
 import type { BodyPart, LibraryExercise } from "./types.ts";
 
@@ -70,10 +76,18 @@ export function score(
     normalizedTokens(exercise.name),
   );
   const base = Math.max(nameExact, aliasScore, spelling);
-  const boost = bodyPartHint !== null && exercise.bodyPart === bodyPartHint
+  const boost = bodyPartHint !== null && trains(exercise, bodyPartHint)
     ? bodyPartBoost
     : 0;
   return { base, total: base + boost };
+}
+
+// Whether `exercise` trains `part`, as primary or secondary — the one
+// predicate the boost and any future hard filter should both use, so this
+// question has exactly one answer in the server the way `Exercise.trains(_:)`
+// is the one answer on the client.
+function trains(exercise: LibraryExercise, part: BodyPart): boolean {
+  return exercise.bodyPart === part || exercise.secondaryBodyParts.includes(part);
 }
 
 function bestAliasScore(query: string, aliases: string[]): number {

@@ -665,6 +665,36 @@ underneath never changed — only whether the screen described it honestly.
   > change — two screens that choose one setting and name it differently read as two settings.
   > Deliberately distinct from `abbreviation` (trails a number) and `columnHeader` (heads a
   > column); a test fails if somebody collapses the three.
+- **`secondaryBodyParts` — an exercise can train more than one body part.** Drake asked directly
+  (2026-08-19): should Deadlift show up under both Legs and Back? Built as a real feature rather
+  than a spreadsheet workaround. `bodyPart` stays the single PRIMARY value; `secondaryBodyParts`
+  (`[BodyPart]`, declaration-defaulted `= []` — AGENTS.md rule 2) is what it does not capture.
+  Deadlift is `bodyPart: .back, secondaryBodyParts: [.legs]`, never `[.back, .legs]` with no
+  primary. `Exercise.trains(_:)` is the one predicate — the library filter pills, the matcher's
+  body-part hint, and the MCP server's `list_exercises`/`create_exercise` output all read it, so
+  "does Deadlift count as Legs" has exactly one answer across phone app and AI caller.
+  > **A full-stack change discovered mid-task, not scoped that way going in.** Phase 3's MCP
+  > server (`supabase/functions/mcp`) ports the matcher to TypeScript deliberately — its own header
+  > comment says so — so the boost had to change in both places or an AI caller and the phone app
+  > would rank the same hint differently. `exerciseMatcher.ts`, `listExercises.ts`,
+  > `createExercise.ts`, `createTemplate.ts` and `types.ts` all changed; 42 Deno tests green.
+  > **Postgres migration `20260819220000`**, applied and verified remote (dumped the schema back,
+  > then read Deadlift's own row back rather than trusting the `UPDATE`): `body_part[]`, matching
+  > the existing `aliases text[] not null default '{}'` shape on the same table. Same ordering
+  > discipline as every prior `exercises`-touching migration: schema applied and verified BEFORE
+  > the client build that sends the column, because `exercises` is second in the sync push order
+  > and an unknown column aborts the whole run.
+  > **Deadlift is the worked example, not a hypothetical** — genuinely tagged
+  > `secondaryBodyParts: [.legs]` in the bundled JSON and on the live project, both reached via the
+  > same UPDATE statement (client) and re-seed refresh-on-match (any future device). 648 Swift
+  > tests green, including a tie-break test proving the boost fires via a SECONDARY body part, not
+  > just the primary (`ExerciseMatcherTests.legsHintBoostsAnExerciseViaItsSecondaryBodyPart`).
+  > **The exercise-library-refresh spreadsheet (`exercise-library-refresh/exercise-review.xlsx`,
+  > sent to Drake for review, not yet merged) gained a "Secondary Body Part" column** with the
+  > posterior-chain candidates pre-filled (Romanian/Stiff-Leg/Sumo Deadlift, Good Morning, Rack
+  > Pull, Zercher Squat, and others) — flagged, not silently decided. Still open from that review:
+  > the Hammer Strength Swift-enum blocker (9 exercises) and ~26 likely duplicates against the
+  > existing 25. See `HANDOFF.md`.
 
 ### What is left, in order
 

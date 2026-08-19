@@ -54,6 +54,7 @@ struct SyncRowApplyTests {
             name: "Pendlay Row",
             aliases: ["Barbell Row", "Yates"],
             bodyPart: .back,
+            secondaryBodyParts: [.legs],
             category: .barbell,
             isCustom: true
         )
@@ -64,6 +65,7 @@ struct SyncRowApplyTests {
             name: "PLACEHOLDER",
             aliases: ["wrong"],
             bodyPart: .other,
+            secondaryBodyParts: [],
             category: .cardio,
             isCustom: false
         )
@@ -76,6 +78,7 @@ struct SyncRowApplyTests {
         #expect(dest.name == source.name)
         #expect(dest.aliases == source.aliases)
         #expect(dest.bodyPart == source.bodyPart)
+        #expect(dest.secondaryBodyParts == source.secondaryBodyParts)
         #expect(dest.category == source.category)
         #expect(dest.isCustom == source.isCustom)
         #expect(dest.updatedAt == source.updatedAt)

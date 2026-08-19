@@ -962,6 +962,7 @@ struct SyncEngineTests {
             name: name,
             aliases: [],
             bodyPart: .chest,
+            secondaryBodyParts: [],
             category: .barbell,
             isCustom: isCustom,
             updatedAt: updatedAt ?? serverUpdatedAt ?? base,

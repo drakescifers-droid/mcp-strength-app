@@ -122,7 +122,7 @@ struct TemplateOverviewSheet: View {
             Text("\(item.liveSets.count) × \(exercise.name)")
                 .font(Typography.body.weight(.semibold))
                 .foregroundStyle(Theme.textPrimary)
-            Text(exercise.bodyPart.displayName)
+            Text(exercise.bodyPartsDisplayName)
                 .font(Typography.secondary)
                 .foregroundStyle(Theme.textSecondary)
         }

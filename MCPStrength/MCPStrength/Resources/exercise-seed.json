@@ -27,6 +27,9 @@
     "aliases": [
       "deadlift",
       "conventional deadlift"
+    ],
+    "secondaryBodyParts": [
+      "legs"
     ]
   },
   {

@@ -63,5 +63,9 @@ export type LibraryExercise = {
   name: string;
   aliases: string[];
   bodyPart: BodyPart;
+  // Body parts trained beyond `bodyPart` — Deadlift is back + [legs]. Mirrors
+  // MCPStrength/Models/Exercise.swift's `secondaryBodyParts`; see
+  // exerciseMatcher.ts for why the matcher's body-part hint checks both.
+  secondaryBodyParts: BodyPart[];
   category: ExerciseCategory;
 };

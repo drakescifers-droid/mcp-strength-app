@@ -19,6 +19,7 @@ type ExerciseLibRow = {
   name: string;
   aliases: string[] | null;
   body_part: BodyPart;
+  secondary_body_parts: BodyPart[] | null;
   category: string;
 };
 
@@ -125,7 +126,7 @@ export async function createTemplate(
 
   const { data: libData, error: libError } = await supabase
     .from("exercises")
-    .select("id, name, aliases, body_part, category")
+    .select("id, name, aliases, body_part, secondary_body_parts, category")
     .is("deleted_at", null);
 
   if (libError) {
@@ -150,6 +151,7 @@ export async function createTemplate(
       name: row.name,
       aliases: row.aliases ?? [],
       bodyPart: row.body_part,
+      secondaryBodyParts: row.secondary_body_parts ?? [],
       category: row.category as LibraryExercise["category"],
     }));
 

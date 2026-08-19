@@ -98,6 +98,22 @@ final class Exercise {
     var category: ExerciseCategory
     var isCustom: Bool
 
+    /// Other body parts this exercise also trains, beyond `bodyPart`.
+    ///
+    /// **Additive to an existing model, so this one — unlike `bodyPart` above
+    /// — needs the declaration-level default** (`var x: T = v`, AGENTS.md
+    /// rule 2). `bodyPart` predates every store this app has ever written;
+    /// `secondaryBodyParts` does not, and `ModelContainer(for:)` throws on
+    /// launch against an older store without one.
+    ///
+    /// `bodyPart` stays the PRIMARY and is never redundantly repeated here —
+    /// Deadlift is `bodyPart: .back, secondaryBodyParts: [.legs]`, not
+    /// `[.back, .legs]`. `ExercisesScreen`'s Legs/Back filter pills and
+    /// `ExerciseMatcher`'s body-part hint both check primary OR secondary, so
+    /// an exercise trained under either pill shows up under both — see
+    /// `Exercise.trains(_:)`.
+    var secondaryBodyParts: [BodyPart] = []
+
     /// Per-user settings for this exercise. Nil until the user sets one —
     /// the table stays sparse by construction (docs/06-sync.md).
     ///
@@ -116,6 +132,7 @@ final class Exercise {
         name: String,
         aliases: [String] = [],
         bodyPart: BodyPart,
+        secondaryBodyParts: [BodyPart] = [],
         category: ExerciseCategory,
         isCustom: Bool = false
     ) {
@@ -123,7 +140,20 @@ final class Exercise {
         self.name = name
         self.aliases = aliases
         self.bodyPart = bodyPart
+        self.secondaryBodyParts = secondaryBodyParts
         self.category = category
         self.isCustom = isCustom
+    }
+}
+
+extension Exercise {
+    /// Whether this exercise trains `part`, as PRIMARY or SECONDARY.
+    ///
+    /// The one predicate both the library filter pills and the matcher's
+    /// body-part hint should use, so "does Deadlift count as Legs" has
+    /// exactly one answer in the app rather than two call sites that could
+    /// drift apart.
+    func trains(_ part: BodyPart) -> Bool {
+        bodyPart == part || secondaryBodyParts.contains(part)
     }
 }

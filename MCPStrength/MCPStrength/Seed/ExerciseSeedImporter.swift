@@ -22,6 +22,11 @@ struct ExerciseSeedRow: Codable, Sendable, Equatable {
     let bodyPart: BodyPart
     let category: ExerciseCategory
     let aliases: [String]?
+    /// Body parts trained beyond `bodyPart` — Deadlift is `bodyPart: .back,
+    /// secondaryBodyParts: [.legs]`. Optional in the JSON, like `aliases`,
+    /// so the many rows that only train one body part need no key at all;
+    /// absent decodes to empty, same as `aliases ?? []` below.
+    let secondaryBodyParts: [BodyPart]?
 }
 
 /// Imports seed rows into a SwiftData `ModelContext`.
@@ -64,10 +69,10 @@ struct ExerciseSeedRow: Codable, Sendable, Equatable {
 ///
 /// THE ID WINS, and the name is updated in place. This is exactly why ids are the contract: a
 /// corrected name must not orphan the history attached to that id. The same in-place update
-/// applies to `bodyPart`, `category`, and `aliases` — the library-defined fields.
+/// applies to `bodyPart`, `secondaryBodyParts`, `category`, and `aliases` — the library-defined fields.
 ///
 /// For an existing matched (seeded) row, only the library-defined fields are refreshed
-/// (`name`, `bodyPart`, `category`, `aliases`). Per-user preferences live on a
+/// (`name`, `bodyPart`, `secondaryBodyParts`, `category`, `aliases`). Per-user preferences live on a
 /// different model (`ExercisePreference`) and a re-seed cannot touch them: they
 /// are a different row entirely, so the preservation logic is not lost, it is
 /// structurally unnecessary.
@@ -94,6 +99,7 @@ enum ExerciseSeedImporter {
 
         for row in rows {
             let aliases = row.aliases ?? []
+            let secondaryBodyParts = row.secondaryBodyParts ?? []
             if let exercise = byID[row.id] {
                 // Existing row: update library-defined fields in place. The id is untouched
                 // (stability). A preference is a different row and is not in scope
@@ -102,6 +108,7 @@ enum ExerciseSeedImporter {
                 exercise.name = row.name
                 exercise.aliases = aliases
                 exercise.bodyPart = row.bodyPart
+                exercise.secondaryBodyParts = secondaryBodyParts
                 exercise.category = row.category
                 exercise.isCustom = false
             } else {
@@ -111,6 +118,7 @@ enum ExerciseSeedImporter {
                     name: row.name,
                     aliases: aliases,
                     bodyPart: row.bodyPart,
+                    secondaryBodyParts: secondaryBodyParts,
                     category: row.category,
                     isCustom: false
                 )

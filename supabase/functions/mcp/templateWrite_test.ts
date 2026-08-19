@@ -13,6 +13,7 @@ const library: LibraryExercise[] = [
     name: "Bench Press (Barbell)",
     aliases: [],
     bodyPart: "chest",
+    secondaryBodyParts: [],
     category: "barbell",
   },
   {
@@ -20,6 +21,7 @@ const library: LibraryExercise[] = [
     name: "Chest Fly (Machine)",
     aliases: ["pec deck"],
     bodyPart: "chest",
+    secondaryBodyParts: [],
     category: "machineOther",
   },
   {
@@ -27,6 +29,7 @@ const library: LibraryExercise[] = [
     name: "Squat (Barbell)",
     aliases: ["squat"],
     bodyPart: "legs",
+    secondaryBodyParts: [],
     category: "barbell",
   },
   {
@@ -34,6 +37,7 @@ const library: LibraryExercise[] = [
     name: "Front Squat (Barbell)",
     aliases: ["squat"],
     bodyPart: "legs",
+    secondaryBodyParts: [],
     category: "barbell",
   },
 ];

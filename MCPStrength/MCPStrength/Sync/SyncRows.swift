@@ -88,6 +88,7 @@ struct SyncExerciseRow: Codable, Sendable, Equatable {
     let name: String
     let aliases: [String]
     let bodyPart: BodyPart
+    let secondaryBodyParts: [BodyPart]
     let category: ExerciseCategory
     let isCustom: Bool
     let updatedAt: Date
@@ -98,6 +99,7 @@ struct SyncExerciseRow: Codable, Sendable, Equatable {
         case id, name, aliases
         case userID = "user_id"
         case bodyPart = "body_part"
+        case secondaryBodyParts = "secondary_body_parts"
         case category
         case isCustom = "is_custom"
         case updatedAt = "updated_at"
@@ -116,6 +118,7 @@ struct SyncExerciseRow: Codable, Sendable, Equatable {
         try c.encode(name, forKey: .name)
         try c.encode(aliases, forKey: .aliases)
         try c.encode(bodyPart, forKey: .bodyPart)
+        try c.encode(secondaryBodyParts, forKey: .secondaryBodyParts)
         try c.encode(category, forKey: .category)
         try c.encode(isCustom, forKey: .isCustom)
         try c.encode(updatedAt, forKey: .updatedAt)
@@ -789,6 +792,7 @@ enum SyncRowMapper {
             name: exercise.name,
             aliases: exercise.aliases,
             bodyPart: exercise.bodyPart,
+            secondaryBodyParts: exercise.secondaryBodyParts,
             category: exercise.category,
             isCustom: exercise.isCustom,
             updatedAt: exercise.updatedAt,

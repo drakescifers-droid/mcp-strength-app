@@ -12,9 +12,11 @@ import Foundation
 ///    collision is ambiguity (multiple candidates), not a bug.
 /// 2. **Body-part hint** — an optional `BodyPart` supplied by the caller (an AI client or the
 ///    app UI) that already knows, say, a JM press is triceps work. **The hint RANKS, it never
-///    FILTERS**: candidates whose `bodyPart` matches the hint are boosted, but the rest are
-///    still returned below them. Filtering on a slightly-wrong hint would hide the right answer
-///    (the library files Deadlift under `.back`, not `.legs`).
+///    FILTERS**: candidates that `trains(hint)` — primary OR secondary body part — are boosted,
+///    but the rest are still returned below them. Filtering on a slightly-wrong hint would hide
+///    the right answer — Deadlift's primary is `.back`, and a `.legs` hint only reaches it
+///    because `secondaryBodyParts` now carries `.legs` too; an exercise that turns out to have
+///    NEITHER as a hint would otherwise vanish from a filtered list.
 /// 3. **Spelling similarity** — a token-based Dice coefficient over the exercise name, for
 ///    word-order and phrasing variants, e.g. "Dumbbell Lateral Raise" -> `Lateral Raise (Dumbbell)`.
 ///
@@ -110,7 +112,7 @@ struct ExerciseMatcher {
 
         let base = max(nameExact, aliasScore, spelling)
 
-        let boost = (bodyPartHint != nil && exercise.bodyPart == bodyPartHint) ? bodyPartBoost : 0.0
+        let boost = (bodyPartHint.map(exercise.trains) ?? false) ? bodyPartBoost : 0.0
         return Score(base: base, total: base + boost)
     }
 

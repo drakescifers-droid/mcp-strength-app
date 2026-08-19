@@ -7,6 +7,7 @@ type Row = {
   name: string;
   aliases: string[];
   body_part: string;
+  secondary_body_parts: string[];
   category: string;
   is_custom: boolean;
 };
@@ -35,6 +36,10 @@ function clientWith(rows: Row[], inserted: unknown[] = []): SupabaseClient {
                       name: r.name,
                       aliases: r.aliases,
                       body_part: r.body_part,
+                      // Never in the insert payload (create is primary-only,
+                      // see createExercise.ts) — the real column default is
+                      // '{}', mocked the same way here.
+                      secondary_body_parts: r.secondary_body_parts ?? [],
                       category: r.category,
                       is_custom: r.is_custom,
                     },
@@ -56,6 +61,7 @@ const library: Row[] = [
     name: "Chest Fly (Machine)",
     aliases: ["pec deck", "machine fly"],
     body_part: "chest",
+    secondary_body_parts: [],
     category: "machineOther",
     is_custom: false,
   },
@@ -64,6 +70,7 @@ const library: Row[] = [
     name: "Barbell Row",
     aliases: ["row"],
     body_part: "back",
+    secondary_body_parts: [],
     category: "barbell",
     is_custom: false,
   },
@@ -72,7 +79,17 @@ const library: Row[] = [
     name: "Dumbbell Row",
     aliases: ["row"],
     body_part: "back",
+    secondary_body_parts: [],
     category: "dumbbell",
+    is_custom: false,
+  },
+  {
+    id: "deadlift",
+    name: "Deadlift",
+    aliases: ["conventional deadlift"],
+    body_part: "back",
+    secondary_body_parts: ["legs"],
+    category: "barbell",
     is_custom: false,
   },
 ];
@@ -90,6 +107,21 @@ Deno.test("pec deck returns the existing Chest Fly and does not insert", async (
     result.structuredContent?.matched_to_existing,
     ["Pec Deck -> Chest Fly (Machine)"],
   );
+});
+
+// A matched EXISTING row surfaces its real secondaries even though create
+// itself cannot set them — an AI matching onto Deadlift must be able to see
+// it also trains legs, the same fact the phone app shows.
+Deno.test("a matched existing exercise surfaces its secondary body parts", async () => {
+  const inserted: unknown[] = [];
+  const result = await createExercise(clientWith(library, inserted), "user-1", {
+    name: "Deadlift",
+  });
+  assertEquals(inserted.length, 0);
+  const exercise = result.structuredContent?.exercise as
+    { name: string; secondary_body_parts: string[] };
+  assertEquals(exercise.name, "Deadlift");
+  assertEquals(exercise.secondary_body_parts, ["legs"]);
 });
 
 Deno.test("ambiguous alias writes nothing and returns candidates", async () => {

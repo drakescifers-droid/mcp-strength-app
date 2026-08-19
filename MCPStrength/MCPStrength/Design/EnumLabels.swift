@@ -29,6 +29,15 @@ extension BodyPart {
     }
 }
 
+extension Exercise {
+    /// Primary body part, then any secondaries, comma-joined — "Back, Legs"
+    /// for Deadlift. Presentation only: `bodyPart` stays the single value
+    /// every model-layer comparison and filter reads.
+    var bodyPartsDisplayName: String {
+        ([bodyPart] + secondaryBodyParts).map(\.displayName).joined(separator: ", ")
+    }
+}
+
 extension ExerciseCategory {
     var displayName: String {
         switch self {

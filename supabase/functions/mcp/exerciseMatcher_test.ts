@@ -1,17 +1,23 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { rank, suggest } from "./exerciseMatcher.ts";
+import { rank, score, suggest } from "./exerciseMatcher.ts";
 import type { BodyPart, ExerciseCategory, LibraryExercise } from "./types.ts";
 
 function make(
   name: string,
   bodyPart: BodyPart,
-  opts: { aliases?: string[]; category?: ExerciseCategory; id?: string } = {},
+  opts: {
+    aliases?: string[];
+    category?: ExerciseCategory;
+    id?: string;
+    secondaryBodyParts?: BodyPart[];
+  } = {},
 ): LibraryExercise {
   return {
     id: opts.id ?? name,
     name,
     aliases: opts.aliases ?? [],
     bodyPart,
+    secondaryBodyParts: opts.secondaryBodyParts ?? [],
     category: opts.category ?? "machineOther",
   };
 }
@@ -25,6 +31,7 @@ function library(): LibraryExercise[] {
     make("Deadlift", "back", {
       aliases: ["conventional deadlift"],
       category: "barbell",
+      secondaryBodyParts: ["legs"],
     }),
     make("Barbell Row", "back", { aliases: ["row"], category: "barbell" }),
     make("Dumbbell Row", "back", { aliases: ["row"], category: "dumbbell" }),
@@ -49,9 +56,19 @@ Deno.test("JM Press with arms hint does not rank Leg Press first", () => {
   assertEquals(results.some((r) => r.name === "Leg Press"), true);
 });
 
-Deno.test("legs hint does not filter out Deadlift filed under back", () => {
-  const results = rank("Deadlift", "legs", library());
-  assertEquals(results.some((r) => r.name === "Deadlift"), true);
+Deno.test("legs hint does not filter out Barbell Row, filed under back only", () => {
+  const results = rank("Row", "legs", library());
+  assertEquals(results.some((r) => r.name === "Barbell Row"), true);
+});
+
+// Deadlift's secondaryBodyParts carries "legs" (docs/01-data-model.md §
+// Secondary body parts), so a legs hint should BOOST it, not just fail to
+// hide it — the stronger claim the case above doesn't make.
+Deno.test("legs hint boosts Deadlift via its secondary body part", () => {
+  const deadlift = library().find((e) => e.name === "Deadlift")!;
+  const unhinted = score("Deadlift", null, deadlift);
+  const hinted = score("Deadlift", "legs", deadlift);
+  assertEquals(hinted.total > unhinted.total, true);
 });
 
 Deno.test("ambiguous alias returns multiple candidates", () => {

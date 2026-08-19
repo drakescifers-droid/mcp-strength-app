@@ -331,14 +331,22 @@ split required repeating identical set objects 28 times in one call.
    | `body_part` hint on the query | Right words, wrong movement — `"JM Press"` can no longer reach `Leg Press` |
    | Spelling similarity (existing) | Word-order variants — already works, keep it |
 
-   **The hint ranks, it does not filter** — Deadlift is filed under Back, so a hard filter on a
-   slightly-wrong hint would hide the right answer. Boost, then fall through.
+   **The hint ranks, it does not filter** — a hard filter on a slightly-wrong hint would hide the
+   right answer. Boost, then fall through.
 
    The reason this works without the server understanding movements: **the caller already does.**
    Claude knows a JM press is triceps work, so `search_exercises` just accepts `body_part` as an
    optional argument rather than the server inferring it. Aliases need not be unique — a collision
    produces ambiguity, and the ambiguity path already returns candidates and writes nothing. Full
    shape in `01` § Matching a name to an exercise.
+
+   > **UPDATE 2026-08-19: `secondary_body_parts` landed** (`01` § "Secondary body parts"), and it
+   > changes what "Deadlift is filed under Back" means. The boost now checks `body_part` OR
+   > `secondary_body_parts`, so a `legs` hint genuinely boosts Deadlift rather than merely failing
+   > to hide it — the general rule above (hint ranks, never filters) is exactly why that upgrade
+   > was safe to make without touching the boost's contract. `list_exercises` and `create_exercise`
+   > both now return `secondary_body_parts` on every exercise, so an AI caller can see the same
+   > fact the phone app's exercise row shows.
 4. **Resolved by reading `spike/server.py`: validation is *inconsistent*, not absent.**
    `create_exercise` validates both enums strictly and returns a usable message
    (`body_part must be one of: ...`) — already the pattern SEP-1303 asks for. But `SetSpec.set_type`

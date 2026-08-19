@@ -35,8 +35,9 @@ export const listExercisesInput = z
       .describe(
         "Hint that RANKS results, it never filters. Pass this when you " +
           "already know the movement's body part (a JM press is arms) so a " +
-          "spelling collision cannot surface the wrong machine. Deadlift is " +
-          "filed under back, so a legs hint must still return it.",
+          "spelling collision cannot surface the wrong machine. Deadlift's " +
+          "primary body part is back, and a legs hint must still return " +
+          "it — matched via body_part OR secondary_body_parts.",
       ),
   })
   .strict();
@@ -51,6 +52,7 @@ export const listExercisesOutput = z
         name: z.string(),
         aliases: z.array(z.string()),
         body_part: z.enum(BODY_PARTS),
+        secondary_body_parts: z.array(z.enum(BODY_PARTS)),
         category: z.enum(EXERCISE_CATEGORIES),
         is_custom: z.boolean(),
       }).strict(),
@@ -68,6 +70,7 @@ type ExerciseRow = {
   name: string;
   aliases: string[] | null;
   body_part: BodyPart;
+  secondary_body_parts: BodyPart[] | null;
   category: ExerciseCategory;
   is_custom: boolean;
 };
@@ -83,7 +86,7 @@ export async function listExercises(
   const started = performance.now();
   const { data, error } = await supabase
     .from("exercises")
-    .select("id, name, aliases, body_part, category, is_custom")
+    .select("id, name, aliases, body_part, secondary_body_parts, category, is_custom")
     .is("deleted_at", null);
 
   if (error) {
@@ -108,6 +111,7 @@ export async function listExercises(
     name: row.name,
     aliases: row.aliases ?? [],
     bodyPart: row.body_part,
+    secondaryBodyParts: row.secondary_body_parts ?? [],
     category: row.category,
   }));
 
@@ -130,6 +134,7 @@ export async function listExercises(
       name: ex.name,
       aliases: ex.aliases,
       body_part: ex.bodyPart,
+      secondary_body_parts: ex.secondaryBodyParts,
       category: ex.category,
       is_custom: row?.is_custom ?? false,
     };

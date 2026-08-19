@@ -47,6 +47,7 @@ type ExerciseRow = {
   name: string;
   aliases: string[] | null;
   body_part: BodyPart;
+  secondary_body_parts: BodyPart[] | null;
   category: ExerciseCategory;
   is_custom: boolean;
 };
@@ -57,16 +58,22 @@ function asLibrary(rows: ExerciseRow[]): LibraryExercise[] {
     name: row.name,
     aliases: row.aliases ?? [],
     bodyPart: row.body_part,
+    secondaryBodyParts: row.secondary_body_parts ?? [],
     category: row.category,
   }));
 }
 
+// No secondary_body_parts INPUT on create — this tool only ever creates a
+// CUSTOM row for a single caller-stated body part, the same scope it always
+// had. Matched EXISTING rows still surface their real secondaries below, so
+// an AI asking about Deadlift sees legs too; it just cannot set that itself.
 function publicExercise(row: ExerciseRow) {
   return {
     id: row.id,
     name: row.name,
     aliases: row.aliases ?? [],
     body_part: row.body_part,
+    secondary_body_parts: row.secondary_body_parts ?? [],
     category: row.category,
     is_custom: row.is_custom,
   };
@@ -92,7 +99,7 @@ export async function createExercise(
 
   const { data, error } = await supabase
     .from("exercises")
-    .select("id, name, aliases, body_part, category, is_custom")
+    .select("id, name, aliases, body_part, secondary_body_parts, category, is_custom")
     .is("deleted_at", null);
 
   if (error) {
@@ -200,7 +207,7 @@ export async function createExercise(
   const { data: created, error: insertError } = await supabase
     .from("exercises")
     .insert(insert)
-    .select("id, name, aliases, body_part, category, is_custom")
+    .select("id, name, aliases, body_part, secondary_body_parts, category, is_custom")
     .single();
 
   if (insertError || created === null) {

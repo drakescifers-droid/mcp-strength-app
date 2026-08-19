@@ -58,6 +58,7 @@ enum SyncRowApply {
         exercise.name = row.name
         exercise.aliases = row.aliases
         exercise.bodyPart = row.bodyPart
+        exercise.secondaryBodyParts = row.secondaryBodyParts
         exercise.category = row.category
         exercise.isCustom = row.isCustom
         settle(exercise, from: row.updatedAt, deletedAt: row.deletedAt)

@@ -45,14 +45,14 @@ struct ExerciseSeedImporterTests {
     /// directly and never depend on bundle plumbing.
     private var fixtureRows: [ExerciseSeedRow] {
         [
-            ExerciseSeedRow(id: Self.chestFlyID, name: "Chest Fly (Machine)",
-                            bodyPart: .chest, category: .machineOther, aliases: ["pec deck", "machine fly"]),
-            ExerciseSeedRow(id: Self.legPressID, name: "Leg Press",
-                            bodyPart: .legs, category: .machineOther, aliases: ["leg press"]),
-            ExerciseSeedRow(id: Self.lateralRaiseID, name: "Lateral Raise (Dumbbell)",
-                            bodyPart: .shoulders, category: .dumbbell, aliases: ["side raise"]),
-            ExerciseSeedRow(id: Self.deadliftID, name: "Deadlift (Barbell)",
-                            bodyPart: .back, category: .barbell, aliases: ["deadlift"]),
+            ExerciseSeedRow(id: Self.chestFlyID, name: "Chest Fly (Machine)", bodyPart: .chest,
+                            category: .machineOther, aliases: ["pec deck", "machine fly"], secondaryBodyParts: nil),
+            ExerciseSeedRow(id: Self.legPressID, name: "Leg Press", bodyPart: .legs,
+                            category: .machineOther, aliases: ["leg press"], secondaryBodyParts: nil),
+            ExerciseSeedRow(id: Self.lateralRaiseID, name: "Lateral Raise (Dumbbell)", bodyPart: .shoulders,
+                            category: .dumbbell, aliases: ["side raise"], secondaryBodyParts: nil),
+            ExerciseSeedRow(id: Self.deadliftID, name: "Deadlift (Barbell)", bodyPart: .back,
+                            category: .barbell, aliases: ["deadlift"], secondaryBodyParts: nil),
         ]
     }
 
@@ -109,8 +109,8 @@ struct ExerciseSeedImporterTests {
         let extraID = UUID(uuidString: "11111111-1111-4111-8111-111111111111")!
         var withExtra = fixtureRows
         withExtra.append(
-            ExerciseSeedRow(id: extraID, name: "Hammer Curl (Dumbbell)",
-                            bodyPart: .arms, category: .dumbbell, aliases: ["hammer curl"])
+            ExerciseSeedRow(id: extraID, name: "Hammer Curl (Dumbbell)", bodyPart: .arms,
+                            category: .dumbbell, aliases: ["hammer curl"], secondaryBodyParts: nil)
         )
 
         try ExerciseSeedImporter.importRows(withExtra, into: context)
@@ -175,12 +175,13 @@ struct ExerciseSeedImporterTests {
 
         // Re-import the same id with a renamed exercise and a dropped alias.
         let renamed = [
-            ExerciseSeedRow(id: Self.chestFlyID, name: "Pec Fly (Machine)",
-                            bodyPart: .chest, category: .machineOther, aliases: ["pec deck"]),
+            ExerciseSeedRow(id: Self.chestFlyID, name: "Pec Fly (Machine)", bodyPart: .chest,
+                            category: .machineOther, aliases: ["pec deck"], secondaryBodyParts: nil),
             // also re-import the rest so the set is consistent
         ] + Array(fixtureRows.dropFirst().map { row in
             ExerciseSeedRow(id: row.id, name: row.name, bodyPart: row.bodyPart,
-                            category: row.category, aliases: row.aliases)
+                            category: row.category, aliases: row.aliases,
+                            secondaryBodyParts: row.secondaryBodyParts)
         })
         try ExerciseSeedImporter.importRows(renamed, into: context)
 
@@ -197,6 +198,56 @@ struct ExerciseSeedImporterTests {
         #expect(kept.notes == "favorite machine")
         #expect(kept.barType == .other)
         #expect(try context.fetch(FetchDescriptor<ExercisePreference>()).count == 1)
+    }
+
+    // MARK: - Secondary body parts
+
+    // Absent in the JSON, same treatment as absent `aliases` — decodes to nil on the row,
+    // defaults to an empty array on the model. Most rows will never set this.
+    @Test func aRowWithNoSecondaryBodyPartsDefaultsToEmpty() throws {
+        let context = try makeContainer()
+        try ExerciseSeedImporter.importRows(fixtureRows, into: context)
+
+        let all = try fetchAll(context)
+        #expect(all.allSatisfy { $0.secondaryBodyParts.isEmpty })
+    }
+
+    // A row that DOES carry one imports it on first insert.
+    @Test func aRowWithSecondaryBodyPartsSetsThemOnInsert() throws {
+        let context = try makeContainer()
+        let id = UUID(uuidString: "33333333-3333-4333-8333-333333333333")!
+        let rows = [
+            ExerciseSeedRow(id: id, name: "Deadlift (Barbell)", bodyPart: .back,
+                            category: .barbell, aliases: nil, secondaryBodyParts: [.legs]),
+        ]
+        try ExerciseSeedImporter.importRows(rows, into: context)
+
+        let deadlift = try #require(try fetchAll(context).first { $0.id == id })
+        #expect(deadlift.bodyPart == .back)
+        #expect(deadlift.secondaryBodyParts == [.legs])
+    }
+
+    // Re-importing with a CHANGED secondaryBodyParts list refreshes it in place, the same as
+    // a name or bodyPart correction — it is a library-defined field, not a user preference.
+    @Test func reimportRefreshesSecondaryBodyPartsInPlace() throws {
+        let context = try makeContainer()
+        let id = Self.deadliftID
+        let first = [
+            ExerciseSeedRow(id: id, name: "Deadlift (Barbell)", bodyPart: .back,
+                            category: .barbell, aliases: nil, secondaryBodyParts: [.legs]),
+        ]
+        try ExerciseSeedImporter.importRows(first, into: context)
+        #expect(try #require(try fetchAll(context).first { $0.id == id }).secondaryBodyParts == [.legs])
+
+        // A correction that removes the secondary must actually clear it, not just leave it —
+        // the same "clearing is a real edit" trap this codebase has hit before with synced
+        // optionals (docs/06-sync.md § the nil-encoding bug).
+        let corrected = [
+            ExerciseSeedRow(id: id, name: "Deadlift (Barbell)", bodyPart: .back,
+                            category: .barbell, aliases: nil, secondaryBodyParts: []),
+        ]
+        try ExerciseSeedImporter.importRows(corrected, into: context)
+        #expect(try #require(try fetchAll(context).first { $0.id == id }).secondaryBodyParts == [])
     }
 
     // The decoder accepts both the top-level array and the {"exercises": [...]} object form.
@@ -255,7 +306,11 @@ struct ExerciseSeedImporterTests {
         #expect(lateralRaise.category == .dumbbell)
 
         let deadlift = try #require(find("Deadlift (Barbell)"))
-        #expect(deadlift.bodyPart == .back) // deliberately back, not legs — matcher depends on it
+        #expect(deadlift.bodyPart == .back) // primary is back — the matcher's "hint never
+        // filters" case now uses Barbell Row instead (ExerciseMatcherTests), since Deadlift's
+        // secondary below means a legs hint genuinely boosts it rather than merely failing to
+        // hide it.
+        #expect(deadlift.secondaryBodyParts == [.legs], "the worked example for secondary body parts")
 
         let legPress = try #require(find("Leg Press"))
         #expect(legPress.bodyPart == .legs)
