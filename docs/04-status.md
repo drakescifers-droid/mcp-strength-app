@@ -284,6 +284,57 @@ was typed in front of "90" — the ramp was then correctly generated from 13590 
 only evidence if you know what produced it**, which is the same trap as reading a hand-edited ramp
 as a generated one.
 
+### What a gym session found — seven bugs, and three of them were the same shape
+
+**2026-08-18. Drake used the app to train, and reported seven things in about an hour.** All are
+fixed; the log is `bug-triage/BUGS.md`. Keeping the causes here because three of them are one
+shape, and it is a shape this codebase produces repeatedly.
+
+**A wrapper silently swallowing the thing it wraps.** Not one of these threw, logged, or failed a
+check. Each compiled cleanly, read correctly in a diff, and did nothing:
+
+| Symptom | Cause |
+|---|---|
+| Templates could not be dragged between folders — and `04-status.md` claimed the feature was DONE | `TemplateCard`'s root was a `Button`, which consumes the long press `.draggable` needs. Written, reviewed, unreachable |
+| Making the whole folder a drop target changed nothing | A drop destination hit-tests the RENDERED shape, and the section's background was `.clear` until targeted. A clear fill is not hit-testable. `.contentShape(Rectangle())` |
+| The rest bar closed toward its middle instead of draining | The fill sat in a `ZStack`, which centres by default, so shrinking its width took the same off both edges |
+
+> **The reusable question: "is this modifier on a view that can actually receive what it is
+> about?"** All three were correct modifiers on views that could not take them. The existing
+> `.sheet(isPresented:)` trap in this document is the fourth member of the family.
+
+**Two more were state with a second, undocumented job.** `defaultRestSeconds` on the workout screen
+was a hardcoded `90`, so the options menu wrote a value nothing read — the Add Set button always
+said 1:30 and always appended 90 seconds. And `draggingExerciseID` means both "what was lifted" and
+"something is being dragged, here is an arbitrary id", so a new condition that read it the first
+way suppressed the insertion marker on exactly the block the user was aiming at.
+
+**One was a design decision that only use could overturn.** The rest-timer menu deliberately
+applied to NEW sets only, with per-set edits via the divider — defensible on paper, and in a gym it
+reads as the control doing nothing. It now rewrites every set in the exercise. The per-set override
+survives.
+
+**And one was pure interaction language.** Dragging a template onto a card looked like filing it
+INSIDE that card. Three things said so at once: the hovered card was outlined (a container
+affordance), the dragged card stayed fully drawn so no empty slot existed, and the gutters between
+cards belonged to the folder rather than to any card, so the reflow stopped and started. The rule
+underneath never changed — only whether the screen described it honestly.
+
+### Also landed
+
+- **A local notification when a rest ends**, plus a haptic for the app-in-front case.
+  `RestNotificationRule` is a pure function of (timer, now) and the view hands it the timer whenever
+  it changes — so start / pause / resume / adjust / reset / skip are all covered by watching the
+  value, and so is any seventh operation added later. Same reasoning as `PushFilter`: a rule that
+  cannot be violated beats one you have to remember. Every test in it is about firing at the WRONG
+  moment, which is the only failure that matters.
+- **Swipe-to-delete on set rows**, hand-built because `.swipeActions` needs a `List` and this app
+  has none. Tombstones on the workout screen, drops a draft in the template editor.
+- **Template fixtures**, which did not exist — the Start Workout tab was empty in preview mode, so
+  nobody had ever looked at it with content.
+- **`AutomatedLaunch`**, which stops a test run syncing to the live project. See the START HERE
+  block above; this was the cause of the double-converted rows.
+
 ### What is left, in order
 
 1. **Per-exercise Preferences.** Design decided and approved: `docs/06-sync.md` § "Per-exercise

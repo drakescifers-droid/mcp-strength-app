@@ -18,9 +18,14 @@ I'm not a developer — explain things in plain English. Code, commits and docs 
 state, the traps, the decisions and the reasoning behind them. Don't re-derive from the code what
 those files already explain, and don't duplicate them into new files.
 
-The one-line state: **sync is proven end to end, and canonical units are DONE — storage is
-kilograms, every screen converts, and the pounds that were already stored have been converted on
-both sides.** Swift suite green, SQL suite green.
+The one-line state: **the app is on Drake's phone, he is training on it, and Phase 2 is down to
+four items.** Sync proven end to end, canonical units done, and a round of bugs found by actually
+using it in a gym is fixed and confirmed. Swift suite green (480), SQL suite green.
+
+> **THE APP IS IN HIS HAND AND HE TESTS IT.** That changes how you work — see
+> `AGENTS.md` § "DRAKE DOES THE UI TESTING". Build, install, hand over. Do not drive the simulator
+> to judge how something looks or feels; an afternoon of XCUITest runs cost ~$10 and settled
+> nothing. The install loop is two commands and takes about a minute.
 
 > **Every stored weight is now KILOGRAMS.** `WorkoutSet.weight`, `TemplateSet.weight` and
 > `Workout.totalVolume`. Never print one without converting it — `PreviousText.weightText` or
@@ -34,6 +39,12 @@ both sides.** Swift suite green, SQL suite green.
 > cause: **running the unit suite was syncing to the live project**, because the test bundle is
 > hosted by the app, so `xcodebuild test` launched the real app signed in. Fixed in
 > `Auth/AutomatedLaunch.swift` and pinned by a test.
+
+> **Seven bugs came out of one gym session, and all seven are fixed** —
+> `bug-triage/BUGS.md` is the log, kept because the CAUSES are more useful than the fixes. Three of
+> them were gestures silently swallowed by a wrapper (`Button` eating a long press, a `.clear`
+> background that cannot be hit-tested, a `ZStack` centring a shrinking bar). None was catchable by
+> a test; all were obvious in five seconds on a device.
 
 ## Next piece of work, in order
 
@@ -54,6 +65,11 @@ both sides.** Swift suite green, SQL suite green.
    > kind of thing: a device-local record of which data migrations this store has run.
 4. **Apple Health.** Last thing in Phase 2, and no longer blocked — the developer account is live.
    Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
+
+> **Item 1 is the one to route through Ringer**, and Drake asked why it had not been. The bug work
+> was all visual, which the routing rule excludes — but a model refactor with a compile check and
+> no visual judgement is exactly what a worker is for. Read the `ringer` skill before writing the
+> manifest.
 
 > **`Add Warm-up Sets` has been looked at and is done.** It found one real bug — the Previous
 > column followed row position, so a generated ramp moved your last working set onto a warm-up.
