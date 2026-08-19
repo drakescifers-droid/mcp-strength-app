@@ -203,8 +203,8 @@ struct SyncRowsTests {
     // MARK: - Every model type has a mapper
 
     @Test func everySyncedModelCanBeEncoded() throws {
-        // Eleven models are Syncable; eleven need a mapper. A type added to the
-        // Syncable list without one silently never syncs.
+        // Thirteen models are Syncable; thirteen need a mapper. A type added
+        // to the Syncable list without one silently never syncs.
         let context = try makeContext()
         let folder = TemplateFolder(name: "F", order: 0)
         let template = Template(name: "T", order: 0, folder: folder)
@@ -218,7 +218,9 @@ struct SyncRowsTests {
         let entry = MeasurementEntry(value: 1, unit: "lb", type: type)
         let exercise = Exercise(name: "E", bodyPart: .arms, category: .barbell,
                                 isCustom: true)
-        for object in [folder, template, tx, ts, day, workout, we, ws, type, entry, exercise] as [any PersistentModel] {
+        let preference = ExercisePreference(id: exercise.id, barType: .olympicBar, exercise: exercise)
+        let settings = AppSettings()
+        for object in [folder, template, tx, ts, day, workout, we, ws, type, entry, exercise, preference, settings] as [any PersistentModel] {
             context.insert(object)
         }
 
@@ -233,5 +235,134 @@ struct SyncRowsTests {
         #expect(SyncRowMapper.row(for: ws, userID: user)?.id == ws.id)
         #expect(SyncRowMapper.row(for: type, userID: user).id == type.id)
         #expect(SyncRowMapper.row(for: entry, userID: user).id == entry.id)
+        #expect(SyncRowMapper.row(for: settings, userID: user).id == user)
+        #expect(SyncRowMapper.row(for: preference, userID: user)?.id == exercise.id)
+    }
+
+    // MARK: - Settings and preferences
+
+    @Test func settingsRowCarriesEveryFieldAndItsComputedIdIsTheUser() {
+        let settings = AppSettings(
+            weightUnit: .kg,
+            measurementWeightUnit: .kg,
+            distanceUnit: .kilometers,
+            sizeUnit: .centimeters,
+            defaultRestSeconds: 150,
+            weekStartDay: 2,
+            theme: "dark",
+            language: "en",
+            previousSetBehavior: "lastTime"
+        )
+        settings.updatedAt = when
+        let row = SyncRowMapper.row(for: settings, userID: user)
+
+        #expect(row.userID == user)
+        #expect(row.id == user, "computed id must be the user, not the local UUID")
+        #expect(row.id != settings.id)
+        #expect(row.weightUnit == .kg)
+        #expect(row.measurementWeightUnit == .kg)
+        #expect(row.distanceUnit == .kilometers)
+        #expect(row.sizeUnit == .centimeters)
+        #expect(row.defaultRestSeconds == 150)
+        #expect(row.weekStartDay == 2)
+        #expect(row.theme == "dark")
+        #expect(row.language == "en")
+        #expect(row.previousSetBehavior == "lastTime")
+        #expect(row.updatedAt == when)
+        #expect(row.serverUpdatedAt == nil)
+    }
+
+    @Test func aPreferenceCarriesTheExerciseIDAndALostExerciseIsNotEncoded() throws {
+        let context = try makeContext()
+        let exercise = Exercise(name: "Bench Press", bodyPart: .chest, category: .barbell, isCustom: false)
+        context.insert(exercise)
+        let preference = ExercisePreference(
+            id: exercise.id,
+            weightUnitOverride: .kg,
+            barType: .trapBar,
+            focusMetric: .totalReps,
+            notes: "paused",
+            exercise: exercise
+        )
+        preference.updatedAt = when
+        context.insert(preference)
+
+        let row = try #require(SyncRowMapper.row(for: preference, userID: user))
+        #expect(row.exerciseID == exercise.id)
+        #expect(row.id == exercise.id)
+        #expect(row.userID == user)
+        #expect(row.weightUnitOverride == .kg)
+        #expect(row.barType == .trapBar)
+        #expect(row.focusMetric == .totalReps)
+        #expect(row.notes == "paused")
+
+        let orphan = ExercisePreference(id: UUID(), barType: .olympicBar)
+        context.insert(orphan)
+        #expect(SyncRowMapper.row(for: orphan, userID: user) == nil)
+    }
+
+    @Test func settingsAndPreferenceRowsDoNotEncodeAnIdColumn() throws {
+        // Neither table has an `id` column. A computed id that leaked
+        // onto the wire is a 400 on every push of that table.
+        let settings = AppSettings()
+        let settingsJSON = try encodedJSON(SyncRowMapper.row(for: settings, userID: user))
+        #expect(!settingsJSON.contains("\"id\""), "app_settings encoded an id column")
+        #expect(settingsJSON.contains("\"user_id\""))
+        #expect(settingsJSON.contains("\"weight_unit\""))
+        #expect(settingsJSON.contains("\"measurement_weight_unit\""))
+        #expect(settingsJSON.contains("\"previous_set_behavior\""))
+        #expect(!settingsJSON.contains("\"userID\""))
+
+        let context = try makeContext()
+        let exercise = Exercise(name: "E", bodyPart: .arms, category: .barbell, isCustom: true)
+        context.insert(exercise)
+        let preference = ExercisePreference(id: exercise.id, exercise: exercise)
+        context.insert(preference)
+        let prefJSON = try encodedJSON(try #require(SyncRowMapper.row(for: preference, userID: user)))
+        #expect(!prefJSON.contains("\"id\""), "exercise_preferences encoded an id column")
+        #expect(prefJSON.contains("\"user_id\""))
+        #expect(prefJSON.contains("\"exercise_id\""))
+        #expect(prefJSON.contains("\"weight_unit_override\""))
+    }
+
+    // A NIL FIELD MUST TRAVEL AS AN EXPLICIT null, NOT VANISH.
+    //
+    // This test exists because the obvious code is wrong: Swift's synthesised
+    // encoder uses `encodeIfPresent` for optionals, so a nil is omitted from
+    // the JSON — and an upsert only updates the columns its payload mentions.
+    // "Clear this" silently becomes "leave it alone", and the next pull brings
+    // the old value back down.
+    //
+    // It is reachable the day the Preferences sheet ships: *Default* and
+    // *Not set* are real choices that write nil.
+    @Test func clearingAFieldTravelsAsAnExplicitNullRatherThanVanishing() throws {
+        let context = try makeContext()
+        let exercise = Exercise(name: "Bench Press", bodyPart: .chest, category: .barbell)
+        context.insert(exercise)
+
+        // A preference where the user has cleared BOTH editable fields.
+        let cleared = ExercisePreference(id: exercise.id, exercise: exercise)
+        cleared.weightUnitOverride = nil
+        cleared.barType = nil
+        context.insert(cleared)
+
+        let json = try encodedJSON(try #require(SyncRowMapper.row(for: cleared, userID: user)))
+        #expect(
+            json.contains("\"weight_unit_override\":null"),
+            "a cleared weight unit vanished from the payload instead of nulling the column — the server would keep the old value and the next pull would restore it"
+        )
+        #expect(
+            json.contains("\"bar_type\":null"),
+            "a cleared bar type vanished from the payload instead of nulling the column"
+        )
+
+        // And the same for settings, whose nullable fields have no screen yet.
+        let settingsJSON = try encodedJSON(SyncRowMapper.row(for: AppSettings(), userID: user))
+        #expect(settingsJSON.contains("\"theme\":null"))
+        #expect(settingsJSON.contains("\"previous_set_behavior\":null"))
+
+        // `server_updated_at` is the ONE field that must still be omitted: it is
+        // server-owned and the trigger writes it on every write.
+        #expect(!settingsJSON.contains("\"server_updated_at\""))
     }
 }

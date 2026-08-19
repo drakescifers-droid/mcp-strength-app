@@ -430,6 +430,41 @@ push, this), which is enough to call it the house failure mode.
 `exercise_preferences` needs no equivalent filter, because a preference row only exists where the
 user set something. That is the whole point of keeping it sparse.
 
+### A nil field must travel as an explicit `null` — the synthesised encoder will not do it
+
+**Found by the test suite on 2026-08-18, after the Ringer check had passed.** Swift's synthesised
+`encode(to:)` uses `encodeIfPresent` for every `Optional`, so a nil property is OMITTED FROM THE JSON
+ENTIRELY. An upsert is `INSERT … ON CONFLICT DO UPDATE` and its SET clause is built from the keys the
+payload actually contains — so **an omitted column keeps whatever the server already had.**
+
+That silently turns *clear this* into *leave it alone*:
+
+1. the user picks Olympic Bar for Bench Press; `bar_type` pushes and the server stores it;
+2. they change their mind and pick *Not set*; `barType` becomes nil, the key vanishes from the
+   payload, and the server keeps `olympicBar`;
+3. the next pull brings `olympicBar` back down and overwrites the local nil. **The setting
+   un-clears itself**, on every device, and nothing reports anything.
+
+`ExercisePreferencesSheet` offers *Default* and *Not set* as real choices — `nil` IS the chosen value
+there, not a missing one — so this is reachable the day that sheet ships. Both new row structs write
+`encode` rather than `encodeIfPresent` and the clear travels as `null`.
+
+> **`serverUpdatedAt` is the one field that must still be OMITTED rather than nulled.** It is
+> server-owned, the trigger writes it on every write, and a key for it is at best noise.
+
+> ⚠️ **THE SAME BUG IS LATENT IN EVERY OTHER ROW STRUCT, and it is now the most valuable thing on
+> the list.** The eleven pre-existing rows all use the synthesised encoder, so **no nullable field
+> can currently be cleared through sync**: unfiling a template (`folder_id`), deleting a workout's
+> note or summary, removing a prescribed weight from a template set. Each is a silent no-op that the
+> next pull reverses. It has never bitten because nothing had synced long enough for anyone to clear
+> a value on one device and look at another. Fixing it is mechanical — an explicit `encode(to:)` per
+> struct — but it changes every payload the app sends, so it wants its own change and its own tests
+> rather than being smuggled in here.
+>
+> **Why no test caught it for eleven structs:** every existing round-trip test builds a row with
+> values PRESENT. The absence is the case nobody wrote, which is the same shape as the warm-up ramp
+> bug (every test used a set list with no warm-ups in it).
+
 ### What the Postgres half needs
 
 A new migration, verified remote before anything else moves: an `app_settings` table keyed on

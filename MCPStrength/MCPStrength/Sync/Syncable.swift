@@ -119,7 +119,9 @@ extension Syncable {
 // The order matches the push/pull order in docs/06-sync.md: parents before
 // children, so foreign keys resolve in both directions.
 
+extension AppSettings: Syncable {}
 extension Exercise: Syncable {}
+extension ExercisePreference: Syncable {}
 extension TemplateFolder: Syncable {}
 extension Template: Syncable {}
 extension TemplateExercise: Syncable {}

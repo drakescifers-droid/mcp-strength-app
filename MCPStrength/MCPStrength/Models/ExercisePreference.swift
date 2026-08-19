@@ -18,21 +18,14 @@
 //  `needsSync` so the exercises push cannot clear the flag the
 //  preferences pass is about to read. A separate model dissolves both.
 //
-//  ## Why it is NOT Syncable yet
+//  ## Why the conflict target is not `id`
 //
-//  Same arrangement as `AppSettings`, and for the same reason. The
-//  columns are here now because adding a stored property later is the
-//  crash-on-launch rule below. The conformance is a one-line decision
-//  that must wait: `SyncClient.upsert` hard-codes `onConflict: "id"`,
-//  and this table's primary key is `(user_id, exercise_id)`. PostgREST
-//  would reject the batch, a rejected batch aborts the entire sync
-//  run, the pull never happens either, and every subsequent sync fails
-//  identically. That is exactly what the 18 seeded measurement types
-//  did the first time this app talked to a real project
-//  (docs/04-status.md § "What running it for real found"). Making the
-//  conflict target a per-entity fact is a separate, visible change —
-//  item 3 on the status list — and is done once for both this table
-//  and `app_settings`.
+//  The server table has no `id` column. Its primary key is
+//  `(user_id, exercise_id)`. `SyncEntity.conflictTarget` carries that
+//  pair; the upsert used to hard-code `"id"` and would have rejected
+//  every batch, aborting the whole run. The local `id` is still the
+//  exercise's, so the pull index matches without a special path —
+//  unlike `AppSettings`, whose local id is a random UUID.
 //
 //  ## `id` is the exercise's id. Do not mint a fresh UUID.
 //
@@ -94,17 +87,11 @@ final class ExercisePreference {
 
     // MARK: Sync metadata
     //
-    // Present but NOT YET WIRED. `ExercisePreference` deliberately does
-    // not conform to `Syncable` and has no push mapping — see the file
-    // comment. The columns are here now anyway, because adding a stored
-    // property later is precisely the crash-on-launch rule above, and
-    // the conformance is a one-line decision once the upsert's conflict
-    // target is a per-entity fact.
-    //
-    // `Syncable`'s conformance list is described there as "the answer
-    // to what leaves the device", so flipping it is deliberately a
-    // separate, visible change rather than something that arrives with
-    // a column.
+    // Wired. The conformance lives in Syncable.swift — that list is the
+    // answer to what leaves the device. The local `id` is the exercise's
+    // id, so the generic pull index matches. The wire row's `id` is
+    // computed from `exercise_id` because the server table has no `id`
+    // column to decode.
 
     /// Wall-clock time of the last local edit. The last-write-wins key.
     var updatedAt: Date = Date.distantPast
@@ -185,17 +172,5 @@ extension ExercisePreference {
         let created = ExercisePreference(id: exercise.id, exercise: exercise)
         context.insert(created)
         return created
-    }
-
-    /// Same bookkeeping as `Syncable.markEdited`. The type is not
-    /// `Syncable` (see the file comment) so the method lives here
-    /// rather than arriving through the protocol; when the
-    /// conformance lands, this goes away.
-    ///
-    /// MUST NOT be called when applying a row pulled FROM the server.
-    /// docs/06-sync.md § "The echo trap".
-    func markEdited(at date: Date = .now) {
-        updatedAt = date
-        needsSync = true
     }
 }

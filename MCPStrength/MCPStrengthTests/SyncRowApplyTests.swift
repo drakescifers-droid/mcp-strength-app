@@ -549,6 +549,97 @@ struct SyncRowApplyTests {
         #expect(dest.isTombstoned == false)
     }
 
+    @Test func appSettingsRoundTripsEverySyncedField() {
+        let source = AppSettings(
+            weightUnit: .kg,
+            measurementWeightUnit: .kg,
+            distanceUnit: .kilometers,
+            sizeUnit: .centimeters,
+            defaultRestSeconds: 150,
+            weekStartDay: 2,
+            theme: "dark",
+            language: "en",
+            previousSetBehavior: "lastTime"
+        )
+        source.updatedAt = updated
+        source.deletedAt = deleted
+
+        let dest = AppSettings(
+            weightUnit: .lbs,
+            measurementWeightUnit: .lbs,
+            distanceUnit: .miles,
+            sizeUnit: .inches,
+            defaultRestSeconds: 30,
+            weekStartDay: 7,
+            theme: "wrong",
+            language: "wrong",
+            previousSetBehavior: "wrong"
+        )
+        let destID = dest.id
+        #expect(dest.needsSync == true)
+
+        let row = SyncRowMapper.row(for: source, userID: user)
+        SyncRowApply.apply(row, to: dest)
+
+        #expect(dest.weightUnit == .kg)
+        #expect(dest.measurementWeightUnit == .kg)
+        #expect(dest.distanceUnit == .kilometers)
+        #expect(dest.sizeUnit == .centimeters)
+        #expect(dest.defaultRestSeconds == 150)
+        #expect(dest.weekStartDay == 2)
+        #expect(dest.theme == "dark")
+        #expect(dest.language == "en")
+        #expect(dest.previousSetBehavior == "lastTime")
+        #expect(dest.updatedAt == source.updatedAt)
+        #expect(dest.deletedAt == source.deletedAt)
+        #expect(dest.needsSync == false)
+        #expect(dest.isTombstoned)
+        #expect(dest.id == destID, "apply must not rewrite the local settings id")
+    }
+
+    @Test func exercisePreferenceRoundTripsEverySyncedField() throws {
+        let context = try makeContext()
+        let library = Exercise(
+            name: "Bench Press", bodyPart: .chest, category: .barbell,
+            isCustom: false
+        )
+        let source = ExercisePreference(
+            id: library.id,
+            weightUnitOverride: .kg,
+            barType: .trapBar,
+            focusMetric: .totalReps,
+            notes: "paused at the bottom",
+            exercise: library
+        )
+        source.updatedAt = updated
+        source.deletedAt = deleted
+        context.insert(library)
+        context.insert(source)
+
+        let dest = ExercisePreference(
+            id: library.id,
+            weightUnitOverride: .lbs,
+            barType: .olympicBar,
+            focusMetric: .totalVolume,
+            notes: "wrong",
+            exercise: nil
+        )
+        #expect(dest.needsSync == true)
+
+        let row = try #require(SyncRowMapper.row(for: source, userID: user))
+        SyncRowApply.apply(row, to: dest, exercise: library)
+
+        #expect(dest.weightUnitOverride == .kg)
+        #expect(dest.barType == .trapBar)
+        #expect(dest.focusMetric == .totalReps)
+        #expect(dest.notes == "paused at the bottom")
+        #expect(dest.exercise === library)
+        #expect(dest.updatedAt == source.updatedAt)
+        #expect(dest.deletedAt == source.deletedAt)
+        #expect(dest.needsSync == false)
+        #expect(dest.isTombstoned)
+    }
+
     @Test func aPulledTombstoneStaysATombstone() {
         // A pulled tombstone whose deletedAt is dropped arrives as an
         // ordinary live row and un-deletes itself on this device.

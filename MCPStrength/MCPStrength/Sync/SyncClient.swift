@@ -34,9 +34,8 @@ import Supabase
 /// cursor and nothing else — see docs/05-database.md § "Two timestamps".
 ///
 /// Declared here rather than on the structs themselves so `SyncRows.swift`
-/// stays a mapping file. The eleven conformances below are the list of
-/// tables the engine can actually apply; `exercise_preferences` has no
-/// model and no row type yet, on purpose (see that file).
+/// stays a mapping file. The thirteen conformances below are the list of
+/// tables the engine can actually apply.
 /// NOT refined by `Sendable`, and that is forced rather than chosen. This
 /// target builds with `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, so the
 /// row structs' SYNTHESISED `Codable` conformances are main-actor isolated
@@ -50,7 +49,9 @@ protocol SyncWireRow: Codable {
     var serverUpdatedAt: Date? { get }
 }
 
+extension SyncAppSettingsRow: SyncWireRow {}
 extension SyncExerciseRow: SyncWireRow {}
+extension SyncExercisePreferenceRow: SyncWireRow {}
 extension SyncTemplateFolderRow: SyncWireRow {}
 extension SyncTemplateRow: SyncWireRow {}
 extension SyncTemplateExerciseRow: SyncWireRow {}
@@ -73,7 +74,17 @@ extension SyncMeasurementEntryRow: SyncWireRow {}
 protocol SyncTransport: AnyObject {
     /// Upsert a batch into a named table. Throws if the server rejects the
     /// batch; the engine then leaves those rows dirty so they are retried.
-    func upsert<Row: Encodable>(_ rows: [Row], into table: String) async throws
+    ///
+    /// `onConflict` is the PostgREST conflict-target column list, passed
+    /// in by the engine from `SyncEntity.conflictTarget`. The client must
+    /// not re-derive it from the table name — a table's key is a fact the
+    /// entity already knows, and looking it up here is how `"id"` got
+    /// hard-coded in the first place.
+    func upsert<Row: Encodable>(
+        _ rows: [Row],
+        into table: String,
+        onConflict: String
+    ) async throws
 
     /// One page of rows changed since `since` (`nil` means everything),
     /// oldest `server_updated_at` first.
@@ -123,6 +134,7 @@ extension SyncEntity {
     /// which is camelCase (`exercisePreferences` ≠ `exercise_preferences`).
     var tableName: String {
         switch self {
+        case .appSettings:          "app_settings"
         case .exercises:            "exercises"
         case .exercisePreferences:  "exercise_preferences"
         case .templateFolders:      "template_folders"
@@ -135,6 +147,26 @@ extension SyncEntity {
         case .workoutSets:          "workout_sets"
         case .measurementTypes:     "measurement_types"
         case .measurementEntries:   "measurement_entries"
+        }
+    }
+
+    /// The PostgREST `onConflict` target. A table's key is a fact about
+    /// the table, not something a caller should have to remember, so it
+    /// lives next to `tableName`.
+    ///
+    /// Every other synced table is keyed on `id`. These two are not:
+    /// `app_settings` is one row per person (`user_id`), and
+    /// `exercise_preferences` is one row per person per exercise
+    /// (`user_id,exercise_id` — no spaces, that is the PostgREST spelling
+    /// of a composite target). Hard-coding `"id"` in the client was what
+    /// blocked both from joining the run: PostgREST rejects a conflict
+    /// target that is not a unique constraint, a rejected batch aborts
+    /// the WHOLE RUN, and the pull never happens either.
+    var conflictTarget: String {
+        switch self {
+        case .appSettings:          "user_id"
+        case .exercisePreferences:  "user_id,exercise_id"
+        default:                    "id"
         }
     }
 }
@@ -155,13 +187,17 @@ final class SupabaseSyncClient: SyncTransport {
         self.client = client
     }
 
-    func upsert<Row: Encodable>(_ rows: [Row], into table: String) async throws {
+    func upsert<Row: Encodable>(
+        _ rows: [Row],
+        into table: String,
+        onConflict: String
+    ) async throws {
         // An empty upsert is a no-op we must not send: PostgREST still
         // treats it as a write, and a Prefer: return=minimal on zero rows
         // is a request we have no reason to make.
         guard !rows.isEmpty else { return }
         try await client.from(table)
-            .upsert(rows, onConflict: "id", returning: .minimal)
+            .upsert(rows, onConflict: onConflict, returning: .minimal)
             .execute()
     }
 

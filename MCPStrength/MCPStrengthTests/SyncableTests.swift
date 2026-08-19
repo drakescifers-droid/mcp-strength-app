@@ -57,7 +57,9 @@ struct SyncableTests {
         // so a type added to the conformance list without the properties, or
         // with the wrong default, is caught.
         let syncables: [any Syncable] = [
+            AppSettings(),
             Exercise(name: "Back Squat", bodyPart: .legs, category: .barbell),
+            ExercisePreference(id: UUID()),
             TemplateFolder(name: "Q2 2026", order: 0),
             Template(name: "Push A", order: 0),
             TemplateExercise(order: 0),
@@ -70,7 +72,7 @@ struct SyncableTests {
             MeasurementEntry(value: 180, unit: "lb"),
         ]
 
-        #expect(syncables.count == 11, "a synced type is missing from this list")
+        #expect(syncables.count == 13, "a synced type is missing from this list")
         for row in syncables {
             #expect(row.needsSync == true)
             #expect(row.deletedAt == nil)

@@ -39,9 +39,27 @@ struct SyncPlanningTests {
     }
 
     @Test func everyTableIsAccountedFor() {
-        // Twelve tables in the schema (docs/05-database.md). A table missing
-        // from this enum is a table that silently never syncs.
-        #expect(SyncEntity.allCases.count == 12)
+        // Thirteen tables in the schema (the original twelve plus
+        // `app_settings`). A table missing from this enum is a table
+        // that silently never syncs.
+        #expect(SyncEntity.allCases.count == 13)
+        #expect(SyncEntity.allCases.first == .appSettings)
+    }
+
+    @Test func conflictTargetIsIdForAnOrdinaryEntity() {
+        #expect(SyncEntity.exercises.conflictTarget == "id")
+        #expect(SyncEntity.workouts.conflictTarget == "id")
+        #expect(SyncEntity.measurementEntries.conflictTarget == "id")
+    }
+
+    @Test func conflictTargetIsUserIdForAppSettings() {
+        #expect(SyncEntity.appSettings.conflictTarget == "user_id")
+    }
+
+    @Test func conflictTargetIsTheCompositeForExercisePreferences() {
+        // PostgREST spelling: no spaces. A space here is a 400 on every
+        // preference push, which aborts the whole run.
+        #expect(SyncEntity.exercisePreferences.conflictTarget == "user_id,exercise_id")
     }
 
     // MARK: - Cursor
@@ -336,5 +354,50 @@ struct SyncPlanningTests {
         // If the bundle read fails, seededIDs is empty and EVERY seeded type
         // becomes pushable again — the exact 42501 that broke the first sync.
         #expect(MeasurementSeedImporter.seededIDs.count >= 18)
+    }
+
+    // MARK: - Never-touched settings must not push
+    //
+    // THE HAZARD: needsSync defaults to true and the app creates the
+    // settings row at first launch. A run is claim → push → pull, so a
+    // fresh install would upload pounds stamped now over kilograms
+    // chosen on another device, win last-write-wins, and revert both.
+    // `.distantPast` is "never stamped"; after markEdited the row is
+    // a real choice and must travel.
+
+    @Test func aNeverTouchedSettingsRowIsNotPushed() {
+        let settings = AppSettings()
+        #expect(settings.needsSync, "a new row starts dirty; the filter is the only thing stopping it")
+        #expect(settings.updatedAt == .distantPast)
+        #expect(!PushFilter.shouldPush(settings))
+    }
+
+    @Test func anEditedSettingsRowIsPushed() {
+        let settings = AppSettings()
+        settings.markEdited()
+        #expect(settings.updatedAt != .distantPast)
+        #expect(PushFilter.shouldPush(settings))
+    }
+
+    @Test func aCleanEditedSettingsRowIsNotPushed() {
+        let settings = AppSettings()
+        settings.markEdited()
+        settings.markSynced()
+        #expect(!PushFilter.shouldPush(settings))
+    }
+
+    @Test func theSettingsFilterAppliesThroughTheSyncableOverload() {
+        let untouched: any Syncable = AppSettings()
+        #expect(!PushFilter.shouldPush(untouched))
+
+        let edited = AppSettings()
+        edited.markEdited()
+        #expect(PushFilter.shouldPush(edited as any Syncable))
+    }
+
+    @Test func pendingCountIgnoresUntouchedSettings() {
+        let settings = AppSettings()
+        let folder = TemplateFolder(name: "Q2 2026", order: 0)
+        #expect(PushFilter.pendingCount([settings, folder]) == 1)
     }
 }

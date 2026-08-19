@@ -673,6 +673,218 @@ struct SyncEngineTests {
         #expect(sent.first?.updatedAt == base, "backfill clobbered a genuine edit time")
     }
 
+    // MARK: - Settings: the two hazards
+
+    @Test func anUntouchedSettingsRowIsNotPushedAndIsNotBackfilled() async throws {
+        // HAZARD TWO. A fresh install's settings row is dirty, full of
+        // defaults, and stamped distantPast. Pushing it would overwrite a
+        // real choice made on another device: pushModels backfills
+        // distantPast to now, that now wins last-write-wins, and both
+        // devices revert. The filter has to hold it, AND the backfill
+        // must not run on a row the filter held back.
+        let context = try makeContext()
+        let transport = FakeSyncTransport()
+        let settings = AppSettings()
+        context.insert(settings)
+        #expect(settings.updatedAt == .distantPast)
+        #expect(settings.needsSync)
+
+        let (engine, _) = makeEngine(context: context, transport: transport)
+        await engine.run(as: user)
+
+        #expect(transport.upserted(SyncAppSettingsRow.self, from: "app_settings").isEmpty)
+        #expect(settings.needsSync == true, "an unsent defaults row was marked clean")
+        #expect(settings.updatedAt == .distantPast, "backfill stamped a row the filter held back")
+    }
+
+    @Test func anEditedSettingsRowIsPushed() async throws {
+        let context = try makeContext()
+        let transport = FakeSyncTransport()
+        let settings = AppSettings()
+        settings.setWeightUnit(.kg)
+        context.insert(settings)
+        #expect(settings.updatedAt != .distantPast)
+
+        let (engine, _) = makeEngine(context: context, transport: transport)
+        await engine.run(as: user)
+
+        let sent = transport.upserted(SyncAppSettingsRow.self, from: "app_settings")
+        #expect(sent.count == 1)
+        #expect(sent.first?.weightUnit == .kg)
+        #expect(sent.first?.userID == user)
+        #expect(settings.needsSync == false)
+    }
+
+    @Test func pullingSettingsDoesNotCreateASecondRow() async throws {
+        // HAZARD ONE. Drake's phone already holds an AppSettings row
+        // with a random UUID. The server identifies settings by user_id.
+        // Matching on id would treat the remote as new and insert a
+        // second row; current() then reads whichever happened to be
+        // older, and the unit choice appears to revert at random.
+        let context = try makeContext()
+        let transport = FakeSyncTransport()
+
+        let local = AppSettings(weightUnit: .lbs)
+        #expect(local.id != user, "the local id must not coincidentally be the user id")
+        context.insert(local)
+        #expect(try context.fetch(FetchDescriptor<AppSettings>()).count == 1)
+
+        transport.seed([
+            SyncAppSettingsRow(
+                userID: user,
+                weightUnit: .kg,
+                measurementWeightUnit: .kg,
+                distanceUnit: .kilometers,
+                sizeUnit: .centimeters,
+                defaultRestSeconds: 120,
+                weekStartDay: 2,
+                theme: "dark",
+                language: "en",
+                previousSetBehavior: "lastTime",
+                updatedAt: base,
+                deletedAt: nil,
+                serverUpdatedAt: base
+            ),
+        ], into: "app_settings")
+
+        let (engine, _) = makeEngine(context: context, transport: transport)
+        await engine.run(as: user)
+
+        let all = try context.fetch(FetchDescriptor<AppSettings>())
+        #expect(all.count == 1, "settings pull inserted a second row")
+        let current = AppSettings.current(in: context)
+        #expect(current.id == local.id, "values did not land on the existing current() row")
+        #expect(current.weightUnit == .kg)
+        #expect(current.measurementWeightUnit == .kg)
+        #expect(current.distanceUnit == .kilometers)
+        #expect(current.sizeUnit == .centimeters)
+        #expect(current.defaultRestSeconds == 120)
+        #expect(current.weekStartDay == 2)
+        #expect(current.theme == "dark")
+        #expect(current.language == "en")
+        #expect(current.previousSetBehavior == "lastTime")
+        #expect(current.needsSync == false)
+        #expect(current.updatedAt == base)
+    }
+
+    @Test func pullingAPreferenceMatchesTheLocalRowByExerciseID() async throws {
+        // The counterpart of the settings hazard: preference local id
+        // IS the exercise's id, so the generic index must hit and must
+        // not insert a second row.
+        let context = try makeContext()
+        let transport = FakeSyncTransport()
+        let exercise = Exercise(
+            name: "Bench Press", bodyPart: .chest, category: .barbell, isCustom: false
+        )
+        context.insert(exercise)
+        let preference = ExercisePreference(
+            id: exercise.id, barType: .olympicBar, exercise: exercise
+        )
+        preference.markEdited(at: base.addingTimeInterval(-60))
+        preference.markSynced()
+        context.insert(preference)
+
+        transport.seed([
+            SyncExercisePreferenceRow(
+                userID: user,
+                exerciseID: exercise.id,
+                weightUnitOverride: .kg,
+                barType: .trapBar,
+                focusMetric: .totalReps,
+                notes: "paused",
+                updatedAt: base,
+                deletedAt: nil,
+                serverUpdatedAt: base
+            ),
+        ], into: "exercise_preferences")
+
+        let (engine, _) = makeEngine(context: context, transport: transport)
+        await engine.run(as: user)
+
+        let all = try context.fetch(FetchDescriptor<ExercisePreference>())
+        #expect(all.count == 1)
+        let pulled = try #require(all.first)
+        #expect(pulled.id == exercise.id)
+        #expect(pulled.barType == .trapBar)
+        #expect(pulled.weightUnitOverride == .kg)
+        #expect(pulled.focusMetric == .totalReps)
+        #expect(pulled.notes == "paused")
+        #expect(pulled.needsSync == false)
+        #expect(pulled.exercise?.id == exercise.id)
+    }
+
+    @Test func aNewerDirtySettingsRowSurvivesAPull() async throws {
+        let context = try makeContext()
+        let transport = FakeSyncTransport()
+        let local = AppSettings(weightUnit: .kg)
+        local.markEdited(at: base.addingTimeInterval(60))
+        context.insert(local)
+
+        transport.seed([
+            SyncAppSettingsRow(
+                userID: user,
+                weightUnit: .lbs,
+                measurementWeightUnit: .lbs,
+                distanceUnit: .miles,
+                sizeUnit: .inches,
+                defaultRestSeconds: 90,
+                weekStartDay: 1,
+                theme: nil,
+                language: nil,
+                previousSetBehavior: nil,
+                updatedAt: base,
+                deletedAt: nil,
+                serverUpdatedAt: base.addingTimeInterval(120)
+            ),
+        ], into: "app_settings")
+
+        let (engine, _) = makeEngine(context: context, transport: transport)
+        await engine.run(as: user)
+
+        #expect(try context.fetch(FetchDescriptor<AppSettings>()).count == 1)
+        #expect(AppSettings.current(in: context).weightUnit == .kg)
+        #expect(engine.discardedEdits.isEmpty)
+    }
+
+    @Test func anOlderDirtySettingsRowLosesAndIsLogged() async throws {
+        let context = try makeContext()
+        let transport = FakeSyncTransport()
+        let local = AppSettings(weightUnit: .lbs)
+        local.markEdited(at: base)
+        context.insert(local)
+
+        let remoteAt = base.addingTimeInterval(60)
+        transport.seed([
+            SyncAppSettingsRow(
+                userID: user,
+                weightUnit: .kg,
+                measurementWeightUnit: .lbs,
+                distanceUnit: .miles,
+                sizeUnit: .inches,
+                defaultRestSeconds: 90,
+                weekStartDay: 1,
+                theme: nil,
+                language: nil,
+                previousSetBehavior: nil,
+                updatedAt: remoteAt,
+                deletedAt: nil,
+                serverUpdatedAt: remoteAt
+            ),
+        ], into: "app_settings")
+
+        let (engine, _) = makeEngine(context: context, transport: transport)
+        await engine.run(as: user)
+
+        #expect(try context.fetch(FetchDescriptor<AppSettings>()).count == 1)
+        #expect(AppSettings.current(in: context).weightUnit == .kg)
+        #expect(engine.discardedEdits.count == 1)
+        let discarded = try #require(engine.discardedEdits.first)
+        #expect(discarded.entity == .appSettings)
+        #expect(discarded.id == local.id)
+        #expect(discarded.localUpdatedAt == base)
+        #expect(discarded.remoteUpdatedAt == remoteAt)
+    }
+
     // MARK: - Row fixtures
 
     private func folderRow(
@@ -738,9 +950,14 @@ final class FakeSyncTransport: SyncTransport {
             .flatMap { $0.rows.compactMap { $0 as? Row } }
     }
 
-    func upsert<Row: Encodable>(_ rows: [Row], into table: String) async throws {
+    func upsert<Row: Encodable>(
+        _ rows: [Row],
+        into table: String,
+        onConflict: String
+    ) async throws {
         if let upsertError { throw upsertError }
         upsertCalls.append((table, rows))
+        _ = onConflict
     }
 
     func fetchPage<Row: Decodable>(

@@ -26,6 +26,10 @@ import Foundation
 /// that set `deleted_at` — there is no reverse pass. Nothing is ever removed by
 /// sync, so no child is ever orphaned by it.
 enum SyncEntity: String, CaseIterable, Sendable {
+    /// First: its only foreign key is to `auth.users`, so nothing else
+    /// has to exist before it can land. `allCases` is the push and pull
+    /// order, and a test asserts that order satisfies `dependsOn`.
+    case appSettings
     case exercises
     case exercisePreferences
     case templateFolders
@@ -45,6 +49,7 @@ enum SyncEntity: String, CaseIterable, Sendable {
     /// noticing that they have.
     var dependsOn: [SyncEntity] {
         switch self {
+        case .appSettings:          []
         case .exercises:            []
         case .exercisePreferences:  [.exercises]
         case .templateFolders:      []
@@ -230,6 +235,26 @@ enum PushFilter {
         type.needsSync && !seededIDs.contains(type.id)
     }
 
+    /// A settings row that has never been edited must not leave the device.
+    ///
+    /// `needsSync` defaults to `true` and the app creates this row at first
+    /// launch, so a freshly installed device has a dirty row of pure defaults
+    /// nobody chose. A run is claim → push → pull, so that device would push
+    /// BEFORE it pulls — and `pushModels` backfills `.distantPast` to `Date()`
+    /// on the way out. Phone B then uploads pounds stamped *now* over the
+    /// kilograms Drake picked on phone A, wins last-write-wins, and both
+    /// devices revert. Nothing reports a conflict: as far as the engine is
+    /// concerned B made the newer edit.
+    ///
+    /// `.distantPast` is how this codebase already spells "never stamped".
+    /// `setWeightUnit` calls `markEdited`, so a genuine choice is eligible
+    /// immediately. The backfill is safely downstream of this check, so a
+    /// defaults row is never stamped on the way out. docs/06-sync.md §
+    /// "A never-touched settings row MUST NOT PUSH".
+    static func shouldPush(_ settings: AppSettings) -> Bool {
+        settings.needsSync && settings.updatedAt != .distantPast
+    }
+
     /// Everything else is simply "has unconfirmed local changes".
     static func shouldPush(_ row: any Syncable) -> Bool {
         switch row {
@@ -244,9 +269,11 @@ enum PushFilter {
         // it calls itself until the stack dies. It compiles, and it crashed the
         // app on launch (EXC_BAD_ACCESS, "excessive recursion") the first time
         // a sync ran. The other cases are safe only because their overloads
-        // take a single argument and win outright.
+        // take a single argument and win outright. `AppSettings` is in that
+        // safe group: its overload takes exactly one parameter.
         case let type as MeasurementType:
             shouldPush(type, seededIDs: MeasurementSeedImporter.seededIDs)
+        case let settings as AppSettings:       shouldPush(settings)
         default:                                row.needsSync
         }
     }

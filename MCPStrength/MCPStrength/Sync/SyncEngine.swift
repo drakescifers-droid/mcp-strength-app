@@ -211,75 +211,70 @@ final class SyncEngine {
     }
 
     private func push(_ entity: SyncEntity, userID: UUID) async throws {
-        let table = entity.tableName
         switch entity {
+        case .appSettings:
+            try await pushModels(
+                AppSettings.self, userID: userID, entity: entity
+            ) { SyncRowMapper.row(for: $0, userID: $1) }
+
         case .exercises:
             try await pushModels(
-                Exercise.self, userID: userID, into: table
+                Exercise.self, userID: userID, entity: entity
             ) { SyncRowMapper.row(for: $0, userID: $1) }
 
         case .exercisePreferences:
-            // The local model exists (`ExercisePreference`) but must
-            // not join this path yet. `SyncClient.upsert` hard-codes
-            // `onConflict: "id"`, and this table's primary key is
-            // `(user_id, exercise_id)`. PostgREST would reject the
-            // batch, a rejected batch aborts the entire sync run —
-            // so the pull never happens either, and every subsequent
-            // sync fails identically. Same reason `AppSettings`
-            // carries the three columns and is not `Syncable`. The
-            // remaining pieces are a `SyncExercisePreferenceRow` and
-            // a per-entity conflict target (status item 3), done
-            // once for this table and `app_settings`.
-            break
+            try await pushModels(
+                ExercisePreference.self, userID: userID, entity: entity
+            ) { SyncRowMapper.row(for: $0, userID: $1) }
 
         case .templateFolders:
             try await pushModels(
-                TemplateFolder.self, userID: userID, into: table
+                TemplateFolder.self, userID: userID, entity: entity
             ) { SyncRowMapper.row(for: $0, userID: $1) }
 
         case .templates:
             try await pushModels(
-                Template.self, userID: userID, into: table
+                Template.self, userID: userID, entity: entity
             ) { SyncRowMapper.row(for: $0, userID: $1) }
 
         case .templateExercises:
             try await pushModels(
-                TemplateExercise.self, userID: userID, into: table
+                TemplateExercise.self, userID: userID, entity: entity
             ) { SyncRowMapper.row(for: $0, userID: $1) }
 
         case .templateSets:
             try await pushModels(
-                TemplateSet.self, userID: userID, into: table
+                TemplateSet.self, userID: userID, entity: entity
             ) { SyncRowMapper.row(for: $0, userID: $1) }
 
         case .programDays:
             try await pushModels(
-                ProgramDay.self, userID: userID, into: table
+                ProgramDay.self, userID: userID, entity: entity
             ) { SyncRowMapper.row(for: $0, userID: $1) }
 
         case .workouts:
             try await pushModels(
-                Workout.self, userID: userID, into: table
+                Workout.self, userID: userID, entity: entity
             ) { SyncRowMapper.row(for: $0, userID: $1) }
 
         case .workoutExercises:
             try await pushModels(
-                WorkoutExercise.self, userID: userID, into: table
+                WorkoutExercise.self, userID: userID, entity: entity
             ) { SyncRowMapper.row(for: $0, userID: $1) }
 
         case .workoutSets:
             try await pushModels(
-                WorkoutSet.self, userID: userID, into: table
+                WorkoutSet.self, userID: userID, entity: entity
             ) { SyncRowMapper.row(for: $0, userID: $1) }
 
         case .measurementTypes:
             try await pushModels(
-                MeasurementType.self, userID: userID, into: table
+                MeasurementType.self, userID: userID, entity: entity
             ) { SyncRowMapper.row(for: $0, userID: $1) }
 
         case .measurementEntries:
             try await pushModels(
-                MeasurementEntry.self, userID: userID, into: table
+                MeasurementEntry.self, userID: userID, entity: entity
             ) { SyncRowMapper.row(for: $0, userID: $1) }
         }
     }
@@ -291,7 +286,7 @@ final class SyncEngine {
     private func pushModels<Model: SyncIdentified, Row: Encodable>(
         _: Model.Type,
         userID: UUID,
-        into table: String,
+        entity: SyncEntity,
         map: (Model, UUID) -> Row?
     ) async throws {
         let models = try context.fetch(FetchDescriptor<Model>())
@@ -331,7 +326,11 @@ final class SyncEngine {
         while start < pairs.count {
             let end = min(start + Self.pushBatchSize, pairs.count)
             let batch = Array(pairs[start..<end])
-            try await transport.upsert(batch.map(\.1), into: table)
+            try await transport.upsert(
+                batch.map(\.1),
+                into: entity.tableName,
+                onConflict: entity.conflictTarget
+            )
             for (model, _) in batch {
                 // Record BEFORE clearing the flag. The pull reads this
                 // set, not the flag, to decide whether the local row
@@ -357,6 +356,7 @@ final class SyncEngine {
         // as new rows land. Looking each FK up with a fresh fetch is an
         // N+1; this is the alternative.
         var exercises: [UUID: Exercise] = try index()
+        var preferences: [UUID: ExercisePreference] = try index()
         var folders: [UUID: TemplateFolder] = try index()
         var templates: [UUID: Template] = try index()
         var templateExercises: [UUID: TemplateExercise] = try index()
@@ -369,6 +369,18 @@ final class SyncEngine {
         var measurementEntries: [UUID: MeasurementEntry] = try index()
 
         var newest: Date?
+
+        // Settings MUST NOT go through the generic pull. That helper
+        // matches with `index[row.id]`, and for this table that is the
+        // wrong question: the local row predates sync and carries a
+        // random UUID, the server identifies settings by user_id, and
+        // asking the index would insert a SECOND row. `current(in:)`
+        // then reads whichever happened to be older, so the unit choice
+        // appears to revert at random. docs/06-sync.md.
+        newest = SyncCursor.advanced(
+            from: newest,
+            seeing: try await pullAppSettings(since: since)
+        )
 
         newest = SyncCursor.advanced(
             from: newest,
@@ -390,10 +402,28 @@ final class SyncEngine {
             )
         )
 
-        // exercise_preferences: the model exists, but there is still
-        // no wire struct and no apply. See push, same reason — joining
-        // the path before the conflict target is per-entity would
-        // abort every run.
+        newest = SyncCursor.advanced(
+            from: newest,
+            seeing: try await pull(
+                ExercisePreference.self, entity: .exercisePreferences, since: since,
+                index: &preferences,
+                make: { row in
+                    ExercisePreference(
+                        id: row.id,
+                        weightUnitOverride: row.weightUnitOverride,
+                        barType: row.barType,
+                        focusMetric: row.focusMetric,
+                        notes: row.notes
+                    )
+                },
+                apply: { row, model in
+                    SyncRowApply.apply(
+                        row, to: model,
+                        exercise: exercises[row.exerciseID]
+                    )
+                }
+            )
+        )
 
         newest = SyncCursor.advanced(
             from: newest,
@@ -640,6 +670,58 @@ final class SyncEngine {
         status.cursor = SyncCursor.advanced(from: status.cursor, seeing: newest)
     }
 
+    /// Pull `app_settings` by resolving the one local row, not by id.
+    ///
+    /// Lives next to the generic `pull` rather than inside it so a later
+    /// reader cannot "tidy" settings into the index path. The generic
+    /// helper is correct for every other table and wrong for this one;
+    /// a flag on the generic would be the thing somebody later deletes.
+    ///
+    /// Dirtiness is the same question the generic path asks: would we
+    /// push this row, or did we this run? `AppSettings` is
+    /// `SyncIdentified`, so a confirmed push puts `existing.id` in
+    /// `pushedThisRun` the same way every other type does. The filter
+    /// still has to run: a never-touched defaults row is dirty and
+    /// unstamped, `shouldPush` is false, and reading the flag alone
+    /// would log a fabricated discard.
+    private func pullAppSettings(since: Date?) async throws -> Date? {
+        let rows = try await transport.fetchChanged(
+            SyncAppSettingsRow.self,
+            from: SyncEntity.appSettings.tableName,
+            since: since,
+            pageSize: Self.pullPageSize
+        )
+        var newest: Date?
+        for row in rows {
+            newest = SyncCursor.advanced(from: newest, seeing: row.serverUpdatedAt)
+            let existing = AppSettings.current(in: context)
+            let localIsDirty = PushFilter.shouldPush(existing)
+                || pushedThisRun.contains(existing.id)
+            switch ConflictResolver.resolve(
+                localUpdatedAt: existing.updatedAt,
+                localIsDirty: localIsDirty,
+                remoteUpdatedAt: row.updatedAt
+            ) {
+            case .keepLocal:
+                continue
+            case .takeRemoteDiscardingLocalEdit:
+                recordDiscard(
+                    entity: .appSettings,
+                    id: existing.id,
+                    localUpdatedAt: existing.updatedAt,
+                    remoteUpdatedAt: row.updatedAt
+                )
+                SyncRowApply.apply(row, to: existing)
+            case .takeRemote:
+                SyncRowApply.apply(row, to: existing)
+            }
+        }
+        if !rows.isEmpty {
+            try context.save()
+        }
+        return newest
+    }
+
     /// Apply every pulled row of one type. Returns the newest
     /// `serverUpdatedAt` in the page so the caller can advance the
     /// global cursor; returns nil when the page was empty.
@@ -746,7 +828,9 @@ final class SyncEngine {
 
     private func pendingCount() throws -> Int {
         var rows: [any Syncable] = []
+        rows.append(contentsOf: try context.fetch(FetchDescriptor<AppSettings>()))
         rows.append(contentsOf: try context.fetch(FetchDescriptor<Exercise>()))
+        rows.append(contentsOf: try context.fetch(FetchDescriptor<ExercisePreference>()))
         rows.append(contentsOf: try context.fetch(FetchDescriptor<TemplateFolder>()))
         rows.append(contentsOf: try context.fetch(FetchDescriptor<Template>()))
         rows.append(contentsOf: try context.fetch(FetchDescriptor<TemplateExercise>()))
@@ -845,7 +929,9 @@ private protocol SyncIdentified: PersistentModel, Syncable {
     var id: UUID { get }
 }
 
+extension AppSettings: SyncIdentified {}
 extension Exercise: SyncIdentified {}
+extension ExercisePreference: SyncIdentified {}
 extension TemplateFolder: SyncIdentified {}
 extension Template: SyncIdentified {}
 extension TemplateExercise: SyncIdentified {}

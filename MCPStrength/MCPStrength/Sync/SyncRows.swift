@@ -352,10 +352,158 @@ struct SyncMeasurementEntryRow: Codable, Sendable, Equatable {
     }
 }
 
-// NOTE: `exercise_preferences` has no row type here on purpose. The table
-// exists (docs/05-database.md § "The one real divergence") but the app has no
-// model for it and nothing reads or writes those four per-user fields yet. A
-// struct with no producer and no consumer is dead code that reads as coverage.
+// MARK: - Settings and per-exercise preferences
+//
+// Neither table has an `id` column. `SyncWireRow` requires `var id: UUID`,
+// so both expose it as a COMPUTED property that is not in `CodingKeys` and
+// therefore never encoded or decoded.
+//
+// `SyncExercisePreferenceRow.id` returns `exerciseID`. The local model's
+// `id` IS the exercise's id, so the generic pull index matches without
+// special handling. `SyncAppSettingsRow.id` returns `userID` only to
+// satisfy the protocol — nothing matches on it. The settings pull goes
+// through `AppSettings.current(in:)`, not `index[row.id]`. Matching on
+// id would insert a second settings row: Drake's phone already holds
+// one with a random UUID, the server identifies settings by user_id,
+// and `current(in:)` then reads whichever happened to be older.
+// docs/06-sync.md § "Syncing the two singleton-ish tables".
+
+struct SyncAppSettingsRow: Codable, Sendable, Equatable {
+    let userID: UUID
+    let weightUnit: WeightUnit
+    let measurementWeightUnit: WeightUnit
+    let distanceUnit: DistanceUnit
+    let sizeUnit: SizeUnit
+    let defaultRestSeconds: Int
+    let weekStartDay: Int
+    let theme: String?
+    let language: String?
+    let previousSetBehavior: String?
+    let updatedAt: Date
+    let deletedAt: Date?
+    var serverUpdatedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case theme, language
+        case userID = "user_id"
+        case weightUnit = "weight_unit"
+        case measurementWeightUnit = "measurement_weight_unit"
+        case distanceUnit = "distance_unit"
+        case sizeUnit = "size_unit"
+        case defaultRestSeconds = "default_rest_seconds"
+        case weekStartDay = "week_start_day"
+        case previousSetBehavior = "previous_set_behavior"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+        case serverUpdatedAt = "server_updated_at"
+    }
+
+    /// Explicit `null` for every nil, for the reason argued at length on
+    /// `SyncExercisePreferenceRow.encode(to:)`: the synthesised encoder omits
+    /// nil optionals, an omitted column is not updated by an upsert, and
+    /// "clear this" therefore becomes "leave it alone".
+    ///
+    /// None of this row's three nullable fields has a screen yet, so nothing
+    /// can clear one TODAY. It is written this way anyway, because the day one
+    /// of them gets a picker is not the day anybody will remember that the
+    /// encoder silently drops the clear.
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(userID, forKey: .userID)
+        try c.encode(weightUnit, forKey: .weightUnit)
+        try c.encode(measurementWeightUnit, forKey: .measurementWeightUnit)
+        try c.encode(distanceUnit, forKey: .distanceUnit)
+        try c.encode(sizeUnit, forKey: .sizeUnit)
+        try c.encode(defaultRestSeconds, forKey: .defaultRestSeconds)
+        try c.encode(weekStartDay, forKey: .weekStartDay)
+        try c.encode(theme, forKey: .theme)
+        try c.encode(language, forKey: .language)
+        try c.encode(previousSetBehavior, forKey: .previousSetBehavior)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(deletedAt, forKey: .deletedAt)
+        try c.encodeIfPresent(serverUpdatedAt, forKey: .serverUpdatedAt)
+    }
+}
+
+extension SyncAppSettingsRow {
+    /// Satisfies `SyncWireRow`. Not a column, not stored, not in
+    /// CodingKeys — `app_settings` is keyed on `user_id`. Nothing
+    /// matches on this value; the settings pull goes through
+    /// `AppSettings.current(in:)`, not `index[row.id]`.
+    var id: UUID { userID }
+}
+
+struct SyncExercisePreferenceRow: Codable, Sendable, Equatable {
+    let userID: UUID
+    let exerciseID: UUID
+    let weightUnitOverride: WeightUnit?
+    let barType: BarType?
+    let focusMetric: FocusMetric
+    let notes: String?
+    let updatedAt: Date
+    let deletedAt: Date?
+    var serverUpdatedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case notes
+        case userID = "user_id"
+        case exerciseID = "exercise_id"
+        case weightUnitOverride = "weight_unit_override"
+        case barType = "bar_type"
+        case focusMetric = "focus_metric"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+        case serverUpdatedAt = "server_updated_at"
+    }
+
+    /// **A NIL FIELD MUST GO ON THE WIRE AS AN EXPLICIT `null`, and the
+    /// synthesised encoder will not do it.**
+    ///
+    /// Swift's synthesised `encode(to:)` uses `encodeIfPresent` for every
+    /// `Optional`, so a nil property is OMITTED FROM THE JSON ENTIRELY. An
+    /// upsert is `INSERT … ON CONFLICT DO UPDATE`, and its SET clause is built
+    /// from the keys the payload actually contains — so an omitted column keeps
+    /// whatever the server already had.
+    ///
+    /// That turns "clear this" into "leave it alone", silently:
+    ///
+    ///   1. the user picks Olympic Bar for Bench Press; `bar_type` pushes and
+    ///      the server stores it;
+    ///   2. the user changes their mind and picks *Not set*; `barType` becomes
+    ///      nil, the key vanishes from the payload, and the server keeps
+    ///      `olympicBar`;
+    ///   3. the next pull brings `olympicBar` back down and overwrites the
+    ///      local nil. The setting un-clears itself.
+    ///
+    /// `ExercisePreferencesSheet` offers *Default* and *Not set* as real
+    /// choices — `nil` IS the chosen value here, not a missing one
+    /// (`ExercisePreferenceEditing`) — so this is reachable the day the sheet
+    /// ships. `encode` rather than `encodeIfPresent` writes the key as `null`
+    /// and the clear travels.
+    ///
+    /// > `serverUpdatedAt` is the ONE field that must still be omitted rather
+    /// > than nulled: it is server-owned, the trigger sets it on every write,
+    /// > and sending a key for it is at best noise. It is `encodeIfPresent`
+    /// > deliberately, and it is the only one.
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(userID, forKey: .userID)
+        try c.encode(exerciseID, forKey: .exerciseID)
+        try c.encode(weightUnitOverride, forKey: .weightUnitOverride)
+        try c.encode(barType, forKey: .barType)
+        try c.encode(focusMetric, forKey: .focusMetric)
+        try c.encode(notes, forKey: .notes)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(deletedAt, forKey: .deletedAt)
+        try c.encodeIfPresent(serverUpdatedAt, forKey: .serverUpdatedAt)
+    }
+}
+
+extension SyncExercisePreferenceRow {
+    /// The local preference's id is the exercise's id, so the generic
+    /// pull index hits. Not a column, not stored, not in CodingKeys.
+    var id: UUID { exerciseID }
+}
 
 // MARK: - Model → row
 //
@@ -546,6 +694,40 @@ enum SyncRowMapper {
             source: entry.source,
             updatedAt: entry.updatedAt,
             deletedAt: entry.deletedAt
+        )
+    }
+
+    static func row(for settings: AppSettings, userID: UUID) -> SyncAppSettingsRow {
+        SyncAppSettingsRow(
+            userID: userID,
+            weightUnit: settings.weightUnit,
+            measurementWeightUnit: settings.measurementWeightUnit,
+            distanceUnit: settings.distanceUnit,
+            sizeUnit: settings.sizeUnit,
+            defaultRestSeconds: settings.defaultRestSeconds,
+            weekStartDay: settings.weekStartDay,
+            theme: settings.theme,
+            language: settings.language,
+            previousSetBehavior: settings.previousSetBehavior,
+            updatedAt: settings.updatedAt,
+            deletedAt: settings.deletedAt
+        )
+    }
+
+    /// A preference that has lost its exercise cannot be encoded. The
+    /// server key is `(user_id, exercise_id)` and there is no honest
+    /// uuid to invent — the same rule as every other child mapper.
+    static func row(for preference: ExercisePreference, userID: UUID) -> SyncExercisePreferenceRow? {
+        guard let exerciseID = preference.exercise?.id else { return nil }
+        return SyncExercisePreferenceRow(
+            userID: userID,
+            exerciseID: exerciseID,
+            weightUnitOverride: preference.weightUnitOverride,
+            barType: preference.barType,
+            focusMetric: preference.focusMetric,
+            notes: preference.notes,
+            updatedAt: preference.updatedAt,
+            deletedAt: preference.deletedAt
         )
     }
 }

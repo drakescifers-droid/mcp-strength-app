@@ -74,16 +74,13 @@ final class AppSettings {
 
     // MARK: Sync metadata
     //
-    // Present but NOT YET WIRED. `AppSettings` deliberately does not conform to
-    // `Syncable` and has no `SyncEntity` case — there is no settings table in
-    // Postgres yet (docs/05-database.md § What is not here yet). The columns are
-    // here now anyway, because adding a stored property later is precisely the
-    // crash-on-launch rule above, and the conformance is a one-line decision
-    // once the table exists.
-    //
-    // `Syncable`'s conformance list is described there as "the answer to what
-    // leaves the device", so flipping it is deliberately a separate, visible
-    // change rather than something that arrives with a column.
+    // Wired. The conformance lives in Syncable.swift — that list is the
+    // answer to what leaves the device. The engine does NOT pull this type
+    // through the generic id index: the server keys the row on `user_id`,
+    // and the local id is a random UUID minted before sync existed.
+    // Matching on id would insert a second settings row and
+    // `current(in:)` would then read whichever happened to be older.
+    // docs/06-sync.md § "AppSettings does NOT go through the pull index".
 
     /// Wall-clock time of the last local edit. The last-write-wins key.
     var updatedAt: Date = Date.distantPast
@@ -190,13 +187,11 @@ extension AppSettings {
     /// forbids, and once this syncs a duplicate arriving from another device is
     /// exactly the case that must not destroy data.
     ///
-    /// > **Open, and it belongs to the sync task, not here.** One row per user
-    /// > means the server key is `user_id`, not `id` — so a device that creates
-    /// > its own row and then pulls the account's row has two, with different
-    /// > ids and no way to tell they are the same thing. That is the same
-    /// > per-entity conflict-target work `docs/06-sync.md` specifies for
-    /// > `exercise_preferences`; do it once for both. Until then this is
-    /// > local-only and cannot produce a duplicate.
+    /// > **The server key is `user_id`, not `id`.** The local row predates
+    /// > sync and carries a random UUID, so the pull must not match on id —
+    /// > it resolves through this method and applies onto the one row. See
+    /// > `SyncEngine.pullAppSettings`. Extra rows are still left alone: a
+    /// > hard delete here is the thing AGENTS.md rule 1 forbids.
     static func current(in context: ModelContext) -> AppSettings {
         var descriptor = FetchDescriptor<AppSettings>(
             predicate: #Predicate { $0.deletedAt == nil },
@@ -233,20 +228,5 @@ extension AppSettings {
         guard weightUnit != unit else { return }
         weightUnit = unit
         markEdited()
-    }
-
-    /// Same bookkeeping as `Syncable.markEdited`. This type is not `Syncable`
-    /// yet — there is no settings table in Postgres and the key would be
-    /// `user_id` rather than `id` (see the sync note above) — so the method
-    /// lives here rather than arriving through the protocol. It goes away when
-    /// the conformance lands. `ExercisePreference` carries the same stopgap for
-    /// the same reason.
-    ///
-    /// MUST NOT be called when applying a row pulled FROM the server, once
-    /// there is one: that dirties everything a pull touches and the two ends
-    /// never settle. docs/06-sync.md § "The echo trap".
-    func markEdited(at date: Date = .now) {
-        updatedAt = date
-        needsSync = true
     }
 }

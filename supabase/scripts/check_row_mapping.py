@@ -51,6 +51,8 @@ STRUCT_TO_TABLE = {
     "SyncWorkoutSetRow": "workout_sets",
     "SyncMeasurementTypeRow": "measurement_types",
     "SyncMeasurementEntryRow": "measurement_entries",
+    "SyncAppSettingsRow": "app_settings",
+    "SyncExercisePreferenceRow": "exercise_preferences",
 }
 
 # Server-owned. The trigger sets both on every write regardless of what the
@@ -59,9 +61,11 @@ SERVER_OWNED = {"created_at"}
 
 # Tables with no row struct, and the reason. An entry here is a deliberate
 # exclusion; anything else missing is a bug.
-NO_ROW_STRUCT = {
-    "exercise_preferences": "no SwiftData model yet — nothing produces or consumes it",
-}
+# Empty since 2026-08-18: `exercise_preferences` gained its model and row struct,
+# and `app_settings` arrived with both. Leaving the stale entry here would have
+# been worse than an empty dict — the script would have SKIPPED a table it can
+# now check, and printed a reassuring reason for doing it.
+NO_ROW_STRUCT: dict[str, str] = {}
 
 
 def schema_columns() -> dict[str, set[str]]:

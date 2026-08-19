@@ -212,6 +212,38 @@ enum SyncRowApply {
         settle(entry, from: row.updatedAt, deletedAt: row.deletedAt)
     }
 
+    // MARK: - Settings and per-exercise preferences
+
+    /// `id` is not copied. The settings pull matched this model through
+    /// `AppSettings.current(in:)`, not by id, and rewriting the local
+    /// uuid to the user id is a sync-time fixup wearing a migration's
+    /// clothes. docs/06-sync.md.
+    static func apply(_ row: SyncAppSettingsRow, to settings: AppSettings) {
+        settings.weightUnit = row.weightUnit
+        settings.measurementWeightUnit = row.measurementWeightUnit
+        settings.distanceUnit = row.distanceUnit
+        settings.sizeUnit = row.sizeUnit
+        settings.defaultRestSeconds = row.defaultRestSeconds
+        settings.weekStartDay = row.weekStartDay
+        settings.theme = row.theme
+        settings.language = row.language
+        settings.previousSetBehavior = row.previousSetBehavior
+        settle(settings, from: row.updatedAt, deletedAt: row.deletedAt)
+    }
+
+    static func apply(
+        _ row: SyncExercisePreferenceRow,
+        to preference: ExercisePreference,
+        exercise: Exercise?
+    ) {
+        preference.weightUnitOverride = row.weightUnitOverride
+        preference.barType = row.barType
+        preference.focusMetric = row.focusMetric
+        preference.notes = row.notes
+        preference.exercise = exercise
+        settle(preference, from: row.updatedAt, deletedAt: row.deletedAt)
+    }
+
     // MARK: - Bookkeeping
 
     /// Copy the two timestamps the pull is authoritative for, then mark the
