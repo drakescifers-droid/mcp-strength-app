@@ -170,9 +170,11 @@ Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
   `Warm-up Calculator` screen was in the screenshots all along (`IMG_3002.PNG`) and its `Default`
   formula reads **40% / 60% / 80%** at 5 / 5 / 3. Ours is 50 / 60 / 75 at 5 / 5 / 3, fitted to a
   single 90 lb screenshot that BOTH formulas reproduce once the bar floor is applied.
-  **Generate a ramp for a 135 lb working set in the reference app and tell me the first and last
+  **Generate a ramp for a 135 lb working set IN THE REFERENCE APP and tell me the first and last
   steps** — ours says 70 and 100, the reference's `Default` says 55 and 110. Ten seconds, and
-  nothing else can decide it. I have changed nothing; the ramp is shipped and its numbers are sane.
+  nothing else can decide it. **Asked once already and answered from OUR app** (70 / 80 / 100,
+  which is our formula's own prediction), so the question is still open — say which app the numbers
+  came from. I have changed nothing; the ramp is shipped and its numbers are sane.
   Full arithmetic in `04-status.md`.
 - **Hammer Strength exercises.** The category is live in the app and the database; the actual
   movements land with the bigger exercise-library refresh I'm doing separately. Don't seed them.

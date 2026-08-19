@@ -75,6 +75,14 @@ toggle, and backfill).
 > 55 / 80 / 110. **Generate a ramp for a 135 lb working set in the reference app and read the first
 > and last steps** — that settles it in ten seconds, and nothing else will.
 >
+> **A 70 / 80 / 100 reading taken on 2026-08-19 was OUR app, not the reference, and is not
+> evidence.** Drake generated a 135 lb ramp on the phone and reported it; it matches
+> `WarmupSets.Ramp` exactly, which is what our own formula predicts and says nothing about
+> Strong's. It IS a useful confirmation that the ramp, the tie-to-heavier rounding and the bar
+> floor all behave on a real device. **The comparison still needs the ramp generated IN THE
+> REFERENCE APP** — and this is the third time in one paragraph that the trap has been "whose
+> output am I looking at".
+>
 > **The shape: a fit to a single observation is not a formula, and the third step is where a wrong
 > one shows.** The comment on `WarmupSets.Ramp` says these are "measured, not chosen", which is
 > true and is not the same as *correct* — the measurement had one point and two unknowns (the
