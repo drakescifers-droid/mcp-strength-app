@@ -37,8 +37,8 @@ true today — with the standing caveat that it should **not** hold real trainin
 provides sync and backup, because a local-only store has no recovery story.
 
 **Phase 2 — in progress. Sync is PROVEN against the real project, storage is canonical
-kilograms, per-exercise Preferences is DONE, and the units setting is REACHABLE.** What remains is
-syncing `AppSettings` and `ExercisePreference`, and Apple Health.
+kilograms, per-exercise Preferences is DONE, the units setting is REACHABLE, and both of them now
+SYNC.** What remains is Apple Health, and the nil-encoding fix below.
 
 > ⚠️ **THE CLAIM BELOW IS PROBABLY WRONG, AND IT WAS USED TO DELETE A REQUIREMENT.** Building the
 > settings screen meant reading the reference's settings screenshots properly, and
@@ -426,7 +426,23 @@ underneath never changed — only whether the screen described it honestly.
 
 ### What is left, in order
 
-1. **Sync `AppSettings` — and `ExercisePreference`, which is waiting on exactly the same
+1. **A CLEARED FIELD DOES NOT TRAVEL, on all eleven pre-existing row structs.** Swift's synthesised
+   encoder omits nil optionals, and an upsert only updates the columns its payload mentions — so
+   clearing a value is a silent no-op that the next pull reverses. Unfiling a template
+   (`folder_id`), deleting a workout note or summary, removing a template set's prescribed weight:
+   none of them can currently reach the server. `docs/06-sync.md` § "A nil field must travel as an
+   explicit `null`" has the full argument.
+   > **The two NEW rows are already fixed** — they write explicit `encode` — because the
+   > Preferences sheet made it reachable the day it shipped. The rest is mechanical, an explicit
+   > `encode(to:)` per struct, and it changes every payload the app sends, which is why it is its
+   > own change with its own tests.
+   > **Why no test caught it for eleven structs:** every round-trip test builds a row with values
+   > PRESENT. The absence is the case nobody wrote — the same shape as the warm-up ramp bug, where
+   > every test used a set list with no warm-ups in it.
+2. ~~**Sync `AppSettings` and `ExercisePreference`.**~~ **DONE 2026-08-18.** Kept below because the
+   reasoning is the record of why it was one job.
+   
+   **Sync `AppSettings` — and `ExercisePreference`, which is waiting on exactly the same
    thing.** Both carry the sync columns and deliberately do NOT conform to `Syncable`. `AppSettings`
    has no Postgres table yet (`05-database.md`); `exercise_preferences` has had one since the first
    migration. What they share is that neither is keyed on `id`: one row per user means `user_id`,
@@ -442,7 +458,7 @@ underneath never changed — only whether the screen described it honestly.
    > like more of the same. It is the opposite: a device-local record of which data migrations this
    > STORE has run. Syncing it would let one device tell another that its weights are already
    > converted.
-2. **Apple Health.** The last item in Phase 2, and no longer blocked — see the signing note below.
+3. **Apple Health.** The last item in Phase 2, and no longer blocked — see the signing note below.
 
 > **`Add Warm-up Sets` has now been looked at and is off this list.** It found one real bug, which
 > is recorded below rather than here because the shape of it is the reusable part.

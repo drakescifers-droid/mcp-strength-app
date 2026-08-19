@@ -19,10 +19,10 @@ state, the traps, the decisions and the reasoning behind them. Don't re-derive f
 those files already explain, and don't duplicate them into new files.
 
 The one-line state: **the app is on Drake's phone, he is training on it, and Phase 2 is down to
-two items.** Sync proven end to end, canonical units done, a round of bugs found by actually
-using it in a gym is fixed and confirmed, per-exercise Preferences — model and sheet — has landed,
-and the settings screen now makes the global weight unit changeable. Swift suite green, SQL suite
-green.
+two items.** Sync proven end to end, canonical units done, a round of gym-found bugs fixed,
+per-exercise Preferences — model and sheet — landed, the settings screen makes the global weight
+unit changeable, and **both settings and preferences now SYNC** (table live on the project, client
+conformances on). Swift suite green, SQL suite green.
 
 > **THE APP IS IN HIS HAND AND HE TESTS IT.** That changes how you work — see
 > `AGENTS.md` § "DRAKE DOES THE UI TESTING". Build, install, hand over. Do not drive the simulator
@@ -50,18 +50,17 @@ green.
 
 ## Next piece of work, in order
 
-1. **Sync `AppSettings` — and `ExercisePreference`, which waits on the same one change.**
-   Neither is keyed on `id`: one row per user means `user_id`, a preference means
-   `(user_id, exercise_id)`, and `SyncClient.upsert` hard-codes `onConflict: "id"`. Making the
-   conflict target a per-entity fact on `SyncEntity` unblocks both. `AppSettings` also has no
-   Postgres table yet; `exercise_preferences` has had one since the first migration.
-   > **This decides whether a bar type and a unit choice survive losing the phone.** Both became
-   > real user data today and neither leaves the device.
-   > **Do NOT turn either conformance on before the conflict target moves.** PostgREST rejects the
-   > batch and a rejected batch aborts the WHOLE run, so the pull stops too. That is what the 18
-   > seeded measurement types did.
-   > **Do not sweep `StoreMigrations` into it.** It sits next to `AppSettings` and is the opposite
-   > kind of thing: a device-local record of which data migrations this store has run.
+1. **A CLEARED FIELD DOES NOT TRAVEL — eleven row structs, and it is silent.** Swift's synthesised
+   encoder omits nil optionals and an upsert only updates the columns its payload mentions, so
+   clearing a value never reaches the server and the next pull puts it back. Unfiling a template,
+   deleting a workout note, removing a template set's weight: all silent no-ops today.
+   `docs/06-sync.md` § "A nil field must travel as an explicit `null`" has the argument and the
+   worked fix.
+   > **The two rows added on 2026-08-18 are already correct** (explicit `encode`), because the
+   > Preferences sheet made clearing reachable immediately. The remaining eleven are mechanical but
+   > change every payload the app sends, so they want their own change and their own tests.
+   > **Found by the REAL suite after the Ringer check passed** — a compile cannot see it, and every
+   > existing round-trip test builds rows with values present. The absence is the case nobody wrote.
 2. **Apple Health.** Last thing in Phase 2, and no longer blocked — the developer account is live.
    Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
 
@@ -98,6 +97,11 @@ green.
 - **The template editor has still never been looked at by anyone.** It is the last completely
   unseen screen — and it no longer needs your hands: point
   `MCPStrengthUITests/WarmupRampWalkthroughTests` at it and read the screenshots.
+- **SYNC IS ON FOR SETTINGS AND PREFERENCES as of 2026-08-18 evening, and has NEVER RUN AGAINST
+  THE LIVE PROJECT.** The table is live and verified, the suite is green, and the two hazards are
+  pinned by test — but no real round trip has happened. **The first launch after installing is the
+  moment to watch**, and the thing that would tell you it went wrong is the Profile tab still
+  saying it is not backed up, or a unit choice changing on its own.
 - **THE SETTINGS SCREEN needs a thumb — gear, top-left of Profile.** One row: Weight Unit. The
   case worth trying is switching to Metric **with a workout open**, because `SetRow` reacts with
   `.onChange(of: unit)` and nothing has ever been able to produce that change before. Every entry
