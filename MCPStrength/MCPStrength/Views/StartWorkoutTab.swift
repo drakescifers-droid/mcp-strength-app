@@ -507,16 +507,29 @@ struct StartWorkoutTab: View {
                         .onAppear { draggingTemplateID = template.id }
                         .onDisappear { endPreview() }
                 }
-                .overlay(
-                    // Marks the card the dragged template will land IN FRONT
-                    // OF, so a precise reorder is aimed rather than guessed.
-                    RoundedRectangle(cornerRadius: Radius.card)
-                        .stroke(
-                            targetedTemplateID == template.id ? Theme.accent : .clear,
-                            lineWidth: 2
-                        )
-                )
-                .animation(.snappy(duration: 0.15), value: targetedTemplateID)
+                // NO highlight on the hovered card, deliberately.
+                //
+                // It had one, and outlining the card you are hovering says
+                // "this card is the destination" — which reads as dropping
+                // INTO it, like filing something in a folder. Cards are not
+                // containers. What is actually happening is an insertion
+                // BETWEEN cards, and the honest way to show that is the others
+                // making room, not the neighbour lighting up.
+                //
+                // The dragged card is ghosted instead, so the empty slot IS
+                // the feedback: it travels with the finger and shows exactly
+                // where the card will sit.
+                .opacity(draggingTemplateID == template.id ? 0.25 : 1)
+                .animation(.snappy(duration: 0.15), value: draggingTemplateID)
+                // Claim half the gutter on every side, then take the padding
+                // back out of layout — the same trick RestDivider uses for its
+                // hairline. Without it the gaps between cards belong to the
+                // folder target, so sliding between two cards stops previewing
+                // and the reflow only happens when you are dead-centre on a
+                // card. That stop-start is most of what made this feel like
+                // "onto" rather than "between".
+                .padding(Spacing.comfortable / 2)
+                .contentShape(Rectangle())
                 .dropDestination(for: String.self) { items, _ in
                     let moved = handleCardDrop(items, onto: template)
                     endPreview()
@@ -532,6 +545,7 @@ struct StartWorkoutTab: View {
                         targetedTemplateID = nil
                     }
                 }
+                .padding(-Spacing.comfortable / 2)
             }
         }
         // Animates the ForEach reordering itself: same ids in a new order, so
