@@ -57,36 +57,42 @@ toggle, and backfill).
 > requirement that never existed. It is not scheduled; it is recorded so nobody deletes it twice.
 > `WeightUnits.plateIncrement` (5 lb / 2.5 kg) is already the reference's `Strict`.
 >
-> ⚠️ **AND IT SAYS OUR PERCENTAGES ARE PROBABLY WRONG — 50 / 60 / 75 WHERE THE REFERENCE'S
-> `Default` READS 40 / 60 / 80.** The rep counts (5 / 5 / 3) agree. This is a QUESTION FOR DRAKE,
-> not a fix to apply: the ramp is shipped, used, and the numbers it produces are sane.
+> ⚠️ **AND IT CAUGHT A REAL BUG: OUR RAMP PERCENTAGES WERE WRONG, AND THEY ARE NOW FIXED.**
+> `WarmupSets.Ramp` ran at 50 / 60 / 75 where the reference's `Default` is **40 / 60 / 80**. The
+> rep counts (5 / 5 / 3) were always right. **Corrected 2026-08-19 and confirmed against the
+> reference app's own generated output**, not against its settings screen alone.
 >
-> **The arithmetic reconciles exactly, which is what makes 40 / 60 / 80 the likelier truth.**
-> `WarmupSets.Ramp` was fitted to ONE observation — a 90 lb working set producing 45×5, 55×5, 70×3
-> — and 50 / 60 / 75 reproduces it. So does the reference's own `Default`, once the bar floor and
-> `Strict` rounding this app already implements are applied:
+> **How it survived: it was FITTED TO ONE OBSERVATION, and both candidate formulas reproduce that
+> observation.** The old percentages came from a 90 lb working set generating 45×5, 55×5, 70×3.
+> 50 / 60 / 75 lands on 45 by arithmetic; 40 / 60 / 80 lands on it via the BAR FLOOR, which the
+> reference applies too:
 >
->     0.40 × 90 = 36  -> 35  -> floored to the 45 lb bar -> 45 × 5
->     0.60 × 90 = 54  -> 55                              -> 55 × 5
->     0.80 × 90 = 72  -> 70                              -> 70 × 3
+>     0.40 × 90 = 36  -> 35  -> raised to the 45 lb bar -> 45 × 5
+>     0.60 × 90 = 54  -> 55                             -> 55 × 5
+>     0.80 × 90 = 72  -> 70                             -> 70 × 3
 >
-> Two formulas agreeing on the one data point they were fitted to is not evidence between them.
-> **They diverge everywhere else**: at 135 lb ours proposes 70 / 80 / 100 and `Default` proposes
-> 55 / 80 / 110. **Generate a ramp for a 135 lb working set in the reference app and read the first
-> and last steps** — that settles it in ten seconds, and nothing else will.
+> **They diverge everywhere else, and 135 lb is where it showed.** Ours proposed 70 / 80 / 100; the
+> reference generates **55 × 5, 80 × 5, 110 × 3** — both ends wrong by 10 lb, middle step
+> coincidentally identical. Read off the reference app on 2026-08-19, and it matches the
+> Warm-up Calculator screen's stated `Default` exactly.
 >
-> **A 70 / 80 / 100 reading taken on 2026-08-19 was OUR app, not the reference, and is not
-> evidence.** Drake generated a 135 lb ramp on the phone and reported it; it matches
-> `WarmupSets.Ramp` exactly, which is what our own formula predicts and says nothing about
-> Strong's. It IS a useful confirmation that the ramp, the tie-to-heavier rounding and the bar
-> floor all behave on a real device. **The comparison still needs the ramp generated IN THE
-> REFERENCE APP** — and this is the third time in one paragraph that the trap has been "whose
-> output am I looking at".
+> **`WarmupSetsTests` now pins BOTH cases and says why neither may be deleted.** 90 lb alone is
+> satisfiable by a formula that is wrong at every other weight; 135 lb alone does not exercise the
+> floor.
 >
-> **The shape: a fit to a single observation is not a formula, and the third step is where a wrong
-> one shows.** The comment on `WarmupSets.Ramp` says these are "measured, not chosen", which is
-> true and is not the same as *correct* — the measurement had one point and two unknowns (the
-> percentage, and whether the reference floors at the bar).
+> **Three shapes worth keeping, and the middle one is the expensive one:**
+>
+> 1. **A fit to a single observation is not a formula.** One data point and two unknowns (the
+>    percentage, and whether the reference floors at the bar) has no unique solution. The comment
+>    saying the numbers were "measured, not chosen" was TRUE and not the same as *correct*.
+> 2. **A correction can over-correct.** The percentages originally in this file were 0.4 / 0.6 /
+>    0.8 — right — with a first rep count of 10 — wrong. The fix moved all three percentages to
+>    make one rep count fit. Changing what agrees with the evidence in order to explain what does
+>    not is how a partly-wrong answer becomes a wholly-wrong one.
+> 3. **"Whose output am I looking at" caught this project THREE times in one paragraph:** an edited
+>    ramp read as a generated one, a screenshot declared absent without opening the folder, and a
+>    135 lb ramp generated in OUR app and reported as the reference's. The last one was caught only
+>    by asking, and by noticing the numbers were exactly what our own formula predicts.
 >
 > **The shape worth keeping, and it has now caught the SAME MISTAKE TWICE: a claim was made on the
 > strength of an absence, and an absence is only evidence if you looked where it would have been.**
@@ -218,9 +224,10 @@ toggle, and backfill).
 - **The per-exercise options menu**, one shared component with two callers, SEVEN of eight items.
   `Add Warm-up Sets` landed once the settings model it was blocked on turned out not to be needed;
   only Preferences is still absent, waiting on the `ExercisePreference` split.
-- **The warm-up ramp** (`Workout/WarmupSets.swift`), wired into both screens. Percentages are
-  MEASURED from the reference app, not chosen, and bar weight floors it so it cannot propose a load
-  lighter than the bar. **Now watched running on a screen**, which is where the Previous-column bug
+- **The warm-up ramp** (`Workout/WarmupSets.swift`), wired into both screens. Percentages are the
+  reference app's `Default` formula — **40 / 60 / 80 at 5 / 5 / 3, corrected 2026-08-19** from a
+  wrong fit; see the Warm-up Calculator block at the top of this file — and bar weight floors it so
+  it cannot propose a load lighter than the bar. **Now watched running on a screen**, which is where the Previous-column bug
   below came from — see "What looking at the warm-up ramp found".
 - **Bar types carry a weight PER UNIT** (`BarType.weight(in:)`), and a `hammerStrength` exercise
   category exists in the app and in the live database.

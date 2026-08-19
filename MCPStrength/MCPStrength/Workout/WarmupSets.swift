@@ -74,28 +74,46 @@ import Foundation
 
 enum WarmupSets {
 
-    /// Hard-coded ramp. There is no settings screen on purpose: generate
-    /// these, then edit the SETS if you want something different. One named
-    /// place so changing a percentage, a rep count, or the plate increment
-    /// is a five-second find rather than a hunt through a loop.
+    /// Hard-coded ramp. One named place, so changing a percentage, a rep
+    /// count, or the plate increment is a five-second find rather than a hunt
+    /// through a loop.
+    ///
+    /// **There is no settings screen for it, and that is now a DEFERRAL rather
+    /// than a decision.** This comment used to say the reference app offers no
+    /// way to adjust the ramp; it does — a `Warm-up Calculator` screen with
+    /// four named formulas and three plate-rounding settings. Ours matches its
+    /// `Default` formula and its `Strict` rounding. See docs/04-status.md.
     enum Ramp {
-        /// Fractions of the working weight: 5 @ 0.5, 5 @ 0.6, 3 @ 0.75.
+        /// Fractions of the working weight: 5 @ 0.4, 5 @ 0.6, 3 @ 0.8.
         ///
-        /// **These are measured, not chosen.** They reproduce the reference
-        /// app's auto-generated ramp exactly, from a screenshot of a 90 lb
-        /// working set: 45×5, 55×5, 70×3.
+        /// **These are the reference app's own `Default` formula, and they are
+        /// confirmed by three independent things** — its Warm-up Calculator
+        /// screen (`Settings accessed from profile page/IMG_3002.PNG`, which
+        /// lists `1 40% × 5 / 2 60% × 5 / 3 80% × 3`), and two generated ramps
+        /// read off the reference app itself:
         ///
-        ///     0.50 × 90 = 45      -> 45
-        ///     0.60 × 90 = 54      -> 55
-        ///     0.75 × 90 = 67.5    -> 70   (the midpoint rule below matters here)
+        ///     135 lb: 0.40 × 135 = 54  -> 55      0.60 -> 81  -> 80
+        ///             0.80 × 135 = 108 -> 110                        ✓ observed
         ///
-        /// An earlier guess of 0.4 / 0.6 / 0.8 at 10 / 5 / 3 was wrong on two
-        /// percentages and two rep counts. It came from a screenshot of a ramp
-        /// Drake had ALREADY EDITED and which persisted into the next session —
-        /// so it showed his adjustments, not the generator. Worth remembering
-        /// when reading any screenshot of this app: an edited warm-up looks
-        /// exactly like a generated one.
-        static let percentages: [Double] = [0.5, 0.6, 0.75]
+        ///      90 lb: 0.40 ×  90 = 36  -> 35 -> raised to the 45 lb bar
+        ///             0.60 ×  90 = 54  -> 55      0.80 -> 72 -> 70    ✓ observed
+        ///
+        /// **THE 90 lb CASE IS WHY THIS WAS WRONG FOR THREE DAYS, and it is
+        /// the reusable part.** The ramp previously ran at 0.5 / 0.6 / 0.75,
+        /// fitted to that one observation — and it reproduces it perfectly,
+        /// because 0.5 × 90 = 45 lands on the bar by arithmetic where 0.4 × 90
+        /// lands on it by the FLOOR. Two formulas agreeing on the single data
+        /// point they were fitted to is not evidence between them. **A fit to
+        /// one observation is not a formula**, and the third step is where a
+        /// wrong one shows: at 135 lb the two differ by 10 lb on the first step
+        /// and 10 lb on the last.
+        ///
+        /// The 0.4 / 0.6 / 0.8 that was here originally was therefore RIGHT on
+        /// the percentages and wrong only on the first rep count (10, not 5) —
+        /// and the correction that replaced it over-corrected, moving two
+        /// numbers that were already correct. Both readings came from
+        /// screenshots; only one of them had a formula screen behind it.
+        static let percentages: [Double] = [0.4, 0.6, 0.8]
         static let reps: [Int] = [5, 5, 3]
     }
 

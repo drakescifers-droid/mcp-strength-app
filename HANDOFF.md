@@ -166,16 +166,13 @@ Then Phase 3, the real MCP server, which Drake has confirmed is in scope for v1.
   change feel like it should have done something? The second is deliberate — a no-change Save
   writes nothing at all, so the table only ever holds preferences somebody actually set.
 - The tappable rest divider, the per-exercise menu and the sticky notes need a real thumb.
-- ⚠️ **THE WARM-UP PERCENTAGES ARE PROBABLY WRONG, AND ONLY YOU CAN SETTLE IT.** The reference's
+- ✅ **THE WARM-UP PERCENTAGES WERE WRONG AND ARE FIXED** (2026-08-19). The reference's
   `Warm-up Calculator` screen was in the screenshots all along (`IMG_3002.PNG`) and its `Default`
-  formula reads **40% / 60% / 80%** at 5 / 5 / 3. Ours is 50 / 60 / 75 at 5 / 5 / 3, fitted to a
-  single 90 lb screenshot that BOTH formulas reproduce once the bar floor is applied.
-  **Generate a ramp for a 135 lb working set IN THE REFERENCE APP and tell me the first and last
-  steps** — ours says 70 and 100, the reference's `Default` says 55 and 110. Ten seconds, and
-  nothing else can decide it. **Asked once already and answered from OUR app** (70 / 80 / 100,
-  which is our formula's own prediction), so the question is still open — say which app the numbers
-  came from. I have changed nothing; the ramp is shipped and its numbers are sane.
-  Full arithmetic in `04-status.md`.
+  formula is **40 / 60 / 80** at 5 / 5 / 3; ours ran at 50 / 60 / 75, fitted to a single 90 lb
+  observation that both formulas reproduce (one by arithmetic, one via the bar floor). Drake
+  generated a 135 lb ramp in the reference: **55 × 5, 80 × 5, 110 × 3**, where ours said
+  70 / 80 / 100. Corrected, both cases pinned in `WarmupSetsTests`, and the ramp on the phone will
+  now start lighter and finish heavier than it did.
 - **Hammer Strength exercises.** The category is live in the app and the database; the actual
   movements land with the bigger exercise-library refresh I'm doing separately. Don't seed them.
 - **Signing out with unpushed changes** (`06-sync.md`, Open question) is still undecided. The
