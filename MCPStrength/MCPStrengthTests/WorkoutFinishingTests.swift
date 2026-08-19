@@ -21,7 +21,7 @@ struct WorkoutFinishingTests {
 
     private func makeContext() throws -> ModelContext {
         let schema = Schema([
-            Exercise.self, TemplateFolder.self, Template.self,
+            Exercise.self, ExercisePreference.self, TemplateFolder.self, Template.self,
             TemplateExercise.self, TemplateSet.self, ProgramDay.self,
             Workout.self, WorkoutExercise.self, WorkoutSet.self,
             MeasurementType.self, MeasurementEntry.self,
@@ -43,7 +43,7 @@ struct WorkoutFinishingTests {
         sets: [(Double?, Int?, Bool)]
     ) -> WorkoutExercise {
         let exercise = Exercise(name: name, bodyPart: .chest,
-                                category: .barbell, focusMetric: .totalVolume)
+                                category: .barbell)
         context.insert(exercise)
         let we = WorkoutExercise(order: order, workout: workout, exercise: exercise)
         context.insert(we)

@@ -251,7 +251,7 @@ private struct WorkoutHistoryCard: View {
         let rows = sortedExercises.compactMap { exercise -> (exercise: WorkoutExercise, best: String)? in
             if let best = WorkoutStats.bestSet(for: exercise) {
                 let unit = WeightUnits.displayUnit(
-                    override: exercise.exercise?.weightUnitOverride,
+                    override: exercise.exercise?.preference?.weightUnitOverride,
                     global: globalWeightUnit
                 )
                 return (

@@ -130,7 +130,7 @@ enum WarmupSets {
 
         // Only a positive bar is a floor. `barWeight ?? 0` would make
         // "no bar" and "floor of zero" the same value, and a caller that
-        // forwarded `exercise.barType?.weight` would then floor every
+        // forwarded `exercise.preference?.barType?.weight` would then floor every
         // dumbbell / other exercise without meaning to.
         let floor: Double? = {
             guard let barWeight, barWeight > 0 else { return nil }

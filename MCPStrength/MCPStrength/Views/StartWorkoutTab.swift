@@ -750,8 +750,8 @@ private struct TemplateCard: View {
     )
     let context = container.mainContext
 
-    let squat = Exercise(name: "Back Squat", bodyPart: .legs, category: .barbell, focusMetric: .totalVolume)
-    let bench = Exercise(name: "Bench Press", bodyPart: .chest, category: .barbell, focusMetric: .totalVolume)
+    let squat = Exercise(name: "Back Squat", bodyPart: .legs, category: .barbell)
+    let bench = Exercise(name: "Bench Press", bodyPart: .chest, category: .barbell)
     context.insert(squat)
     context.insert(bench)
 

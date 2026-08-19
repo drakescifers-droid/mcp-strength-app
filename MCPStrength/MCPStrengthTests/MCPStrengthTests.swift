@@ -15,6 +15,7 @@ struct MCPStrengthTests {
     private func makeContainer() throws -> ModelContext {
         let schema = Schema([
             Exercise.self,
+            ExercisePreference.self,
             TemplateFolder.self,
             Template.self,
             TemplateExercise.self,
@@ -40,10 +41,7 @@ struct MCPStrengthTests {
             aliases: ["pec deck", "machine fly"],
             bodyPart: .chest,
             category: .machineOther,
-            isCustom: true,
-            weightUnitOverride: .lbs,
-            focusMetric: .totalVolume,
-            notes: "Squeeze at the top"
+            isCustom: true
         )
         context.insert(exercise)
         try context.save()
@@ -58,10 +56,7 @@ struct MCPStrengthTests {
         #expect(found.bodyPart == .chest)
         #expect(found.category == .machineOther)
         #expect(found.isCustom == true)
-        #expect(found.weightUnitOverride == .lbs)
-        #expect(found.focusMetric == .totalVolume)
-        #expect(found.notes == "Squeeze at the top")
-        #expect(found.barType == nil)
+        #expect(found.preference == nil)
     }
 
     // (b) Template -> TemplateExercise -> TemplateSet relationship resolves
@@ -70,8 +65,7 @@ struct MCPStrengthTests {
         let exercise = Exercise(
             name: "Back Squat",
             bodyPart: .legs,
-            category: .barbell,
-            focusMetric: .totalVolume
+            category: .barbell
         )
         context.insert(exercise)
 
@@ -174,7 +168,7 @@ struct MCPStrengthTests {
     // Bonus: WorkoutSet must NOT carry rep range, but DOES carry rpe + completion
     @Test func workoutSetHasNoRepRangeButCarriesRPEAndCompletion() throws {
         let context = try makeContainer()
-        let exercise = Exercise(name: "Bench Press", bodyPart: .chest, category: .barbell, focusMetric: .totalVolume)
+        let exercise = Exercise(name: "Bench Press", bodyPart: .chest, category: .barbell)
         context.insert(exercise)
 
         let workout = Workout(name: "Afternoon Workout", startedAt: Date(), durationSeconds: 3600)

@@ -158,18 +158,17 @@ struct WeightUnitsTests {
                 "the same override must not follow the global unit when it moves")
     }
 
-    // Nothing writes `weightUnitOverride` today, so every screen resolves to
-    // the global setting. Pinned so that stops being true LOUDLY, when the
-    // preferences sheet lands, rather than silently.
+    // Nothing writes an `ExercisePreference` today, so every screen resolves
+    // to the global setting. Pinned so that stops being true LOUDLY, when
+    // the preferences sheet lands, rather than silently.
     @Test func todayEveryExerciseFollowsTheGlobalSetting() {
         let exercise = Exercise(
             name: "Bench Press (Barbell)",
             bodyPart: .chest,
-            category: .barbell,
-            focusMetric: .totalVolume
+            category: .barbell
         )
-        #expect(exercise.weightUnitOverride == nil)
-        #expect(WeightUnits.displayUnit(override: exercise.weightUnitOverride, global: .kg) == .kg)
+        #expect(exercise.preference?.weightUnitOverride == nil)
+        #expect(WeightUnits.displayUnit(override: exercise.preference?.weightUnitOverride, global: .kg) == .kg)
     }
 
     // MARK: - Bars

@@ -226,25 +226,35 @@ The seeded exercises and measurement types are local SwiftData rows *and* global
 
 ## Per-exercise preferences get their own local model
 
-**Status: APPROVED by Drake 2026-08-16. Not built yet.**
+**Status: APPROVED by Drake 2026-08-16. THE MODEL IS BUILT (2026-08-18). The sheet is not.**
+
+> **What exists now:** `Models/ExercisePreference.swift`, an optional `Exercise.preference`
+> relationship, and every display site reading through it. What does NOT exist: the Preferences
+> sheet, so nothing calls the write path yet, and the conformance below.
+>
+> ⚠️ **IT IS NOT `Syncable` AND MUST NOT BECOME ONE UNTIL THE CONFLICT TARGET IS PER-ENTITY.**
+> `SyncClient.upsert` hard-codes `onConflict: "id"` and this table's key is
+> `(user_id, exercise_id)`. PostgREST would reject the batch, and a rejected batch aborts the
+> WHOLE RUN — the pull never happens either and every later sync fails identically. That is what
+> the 18 seeded measurement types did (`04-status.md` § "What running it for real found"). Same
+> arrangement as `AppSettings`, same one fix for both.
 
 > **Two things learned after this was written, from screenshots of the reference app.** Neither
 > changes the decision below; both change the scope.
 >
 > 1. **The Preferences sheet is TWO items, not four** — Weight Unit and Bar Type. `focusMetric` and
->    `notes` are not edited there. The model still carries all four (they exist and the seed
->    importer preserves them); only the sheet is smaller than assumed.
+>    `notes` are not edited there. The model still carries all four; only the sheet is smaller than
+>    assumed.
 > 2. **Weight Unit has three options, not two:** Default, Metric (kg), US/Imperial (lbs), where
 >    *Default* follows a global setting. `weightUnitOverride: WeightUnit?` already expresses that
->    exactly — `nil` IS Default — so the model needs nothing, but the global setting it defers to is
->    the canonical-units work and does not exist yet.
+>    exactly — `nil` IS Default. The global setting it defers to now exists (`AppSettings.weightUnit`),
+>    though item 2 on the status list — the settings screen — is what lets anyone change it.
 >
-> **And one open question this raised:** the reference app's Bar Type carries a WEIGHT per case
-> (Olympic 45, Short 33, EZ 20, Hex 75, None 0) and is used by the plate and warm-up calculators.
-> Our `BarType` has no weights and a different set of cases (`standardBar`, `trapBar`, `dumbbell`,
-> `other`). Decide whether to adopt the reference's list and attach weights before building the
-> sheet — a picker that shows bar types without their weights is less useful, and changing the cases
-> later is an enum migration on both sides.
+> ~~**And one open question this raised:** the reference app's Bar Type carries a WEIGHT per
+> case…~~ **CLOSED.** `BarType.weight(in:)` exists and carries two real-world constants per bar
+> (45 lb / 20 kg for an Olympic bar are different bars, not two spellings of one), and the cases
+> are values of the live Postgres enum `public.bar_type`. The picker can show weights. Do not
+> rename the cases.
 
 `exercise_preferences` has existed as a table since the first migration with nothing writing it
 (`05-database.md` § "The one real divergence"). Wiring it up looked like a small job and is not,
@@ -281,6 +291,18 @@ Doing that dissolves three of the four problems rather than solving them:
 - **(1) and (2) shrink to one line.** The local model gets an ordinary `id`, so the pull index and
   `SyncWireRow` work unchanged. The conflict target becomes a per-entity fact on `SyncEntity`
   alongside `tableName`, defaulting to `"id"`, because the two facts about a table belong together.
+  > **CORRECTED WHEN THIS WAS BUILT: the id is ordinary in SHAPE, not in VALUE.** It is a `UUID`
+  > property, so the pull index and `SyncWireRow` do work unchanged — but its value is **the
+  > exercise's id**, not a freshly minted one, because the server table has no `id` column to
+  > match a minted one against. There is at most one preference row per user per exercise, so the
+  > exercise's id is the natural key and is already agreed by every device (exercise ids are baked
+  > into the seed). `ExercisePreference(id: UUID())` would mint two different local ids for what
+  > the server stores as ONE row, and the pull would create a duplicate on every device with no
+  > way to tell them apart — last-write-wins cannot settle two rows it does not know are the same
+  > thing. `init` therefore takes `id:` with no default; the resolver is the only construction site.
+  >
+  > **The consequence for the conflict-target work:** the wire row's `id` has nothing to decode
+  > from. It has to be derived from `exercise_id` on the way in, not read off the row.
 - **(3) disappears.** The preference row is not the exercise row, so it needs no exception and no
   second opinion about `isCustom`. A preference on a seeded exercise pushes because it is an
   ordinary owned row that happens to point at a global one.
@@ -308,7 +330,23 @@ precisely why this work exists — so there is no user data to carry across. `Ex
 preserves them on re-seed and must stop referring to them; that is the one call site to update.
 
 > **If this is deferred, do it before there are users, not after.** The moment somebody has set a
-> bar type, moving the field stops being free.
+> bar type, moving the field stops being free. **Done 2026-08-18, with a real store on a real
+> phone and no preference ever written — the last moment it was free.**
+
+> **The third half, which this section missed: the RELATIONSHIP is also a property added to
+> `Exercise`.** `var preference: ExercisePreference?` goes onto a model whose store already has
+> rows on Drake's phone, so it is squarely the crash-on-launch class after all. It is safe only
+> because it is OPTIONAL on both sides. A non-optional relationship there would be the same launch
+> crash as `var sortOrder: Int`, and the unit suite would stay green through all of it — in-memory
+> containers are built from the current schema, so there is never an old store to migrate. The
+> inverse is declared on `Exercise`, matching every other parent in the codebase.
+
+> **`current(for:in:)` returns a TOMBSTONED row rather than skipping it, and that is deliberate.**
+> `AppSettings.current` filters `deletedAt == nil` and creates a fresh row with a fresh id when it
+> finds none. This one cannot: its id IS the exercise's id, so creating a second row would mean two
+> rows with the same UUID, which is worse than handing back the tombstone. Nothing deletes a
+> preference today. **Whoever builds the first delete path owns reviving it** — clearing
+> `deletedAt` when the user sets a preference again — and this is the note that says so.
 
 ## Out of scope
 

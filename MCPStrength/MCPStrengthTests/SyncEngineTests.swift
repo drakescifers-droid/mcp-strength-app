@@ -30,7 +30,7 @@ struct SyncEngineTests {
 
     private func makeContext() throws -> ModelContext {
         let schema = Schema([
-            Exercise.self, TemplateFolder.self, Template.self,
+            Exercise.self, ExercisePreference.self, TemplateFolder.self, Template.self,
             TemplateExercise.self, TemplateSet.self, ProgramDay.self,
             Workout.self, WorkoutExercise.self, WorkoutSet.self,
             MeasurementType.self, MeasurementEntry.self,
@@ -70,11 +70,11 @@ struct SyncEngineTests {
 
         let seeded = Exercise(
             name: "Bench Press (Barbell)", bodyPart: .chest,
-            category: .barbell, isCustom: false, focusMetric: .totalVolume
+            category: .barbell, isCustom: false
         )
         let custom = Exercise(
             name: "Reverse Nordic", bodyPart: .legs,
-            category: .repsOnly, isCustom: true, focusMetric: .totalReps
+            category: .repsOnly, isCustom: true
         )
         let live = Workout(name: "In progress")
         let liveExercise = WorkoutExercise(order: 0, workout: live)
@@ -576,7 +576,7 @@ struct SyncEngineTests {
 
         let seeded = Exercise(
             id: id, name: "Bench Press (Barbell)", bodyPart: .chest,
-            category: .barbell, isCustom: false, focusMetric: .totalVolume
+            category: .barbell, isCustom: false
         )
         #expect(seeded.needsSync, "a seeded row starts dirty and nothing ever clears it")
         #expect(seeded.updatedAt == .distantPast, "and it has never been stamped")
@@ -611,7 +611,7 @@ struct SyncEngineTests {
 
         let mine = Exercise(
             id: id, name: "Reverse Nordic", bodyPart: .legs,
-            category: .repsOnly, isCustom: true, focusMetric: .totalReps
+            category: .repsOnly, isCustom: true
         )
         mine.updatedAt = base
         context.insert(mine)

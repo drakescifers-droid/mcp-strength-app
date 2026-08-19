@@ -67,18 +67,11 @@ struct ExerciseSeedRow: Codable, Sendable, Equatable {
 /// applies to `bodyPart`, `category`, and `aliases` — the library-defined fields.
 ///
 /// For an existing matched (seeded) row, only the library-defined fields are refreshed
-/// (`name`, `bodyPart`, `category`, `aliases`). User preferences on that exercise
-/// (`weightUnitOverride`, `barType`, `focusMetric`, `notes`) are preserved, so a re-seed never
-/// silently rewrites a user's customizations — the most boring, most predictable behavior, and
-/// the one that does not destroy user data.
+/// (`name`, `bodyPart`, `category`, `aliases`). Per-user preferences live on a
+/// different model (`ExercisePreference`) and a re-seed cannot touch them: they
+/// are a different row entirely, so the preservation logic is not lost, it is
+/// structurally unnecessary.
 enum ExerciseSeedImporter {
-
-    /// Default `focusMetric` assigned to newly-inserted seeded exercises. The seed file does
-    /// not carry `focusMetric` (it is a per-exercise user preference, not a library property),
-    /// so every fresh seeded row gets the most boring default: `.totalVolume`. A user can
-    /// change it later, and a re-import will NOT overwrite that choice (see the in-place update
-    /// rule above).
-    static let defaultFocusMetric: FocusMetric = .totalVolume
 
     // MARK: - Core (pure / testable)
 
@@ -103,9 +96,9 @@ enum ExerciseSeedImporter {
             let aliases = row.aliases ?? []
             if let exercise = byID[row.id] {
                 // Existing row: update library-defined fields in place. The id is untouched
-                // (stability). User preferences (weightUnitOverride, barType, focusMetric,
-                // notes) are deliberately NOT overwritten — a re-seed must not destroy user
-                // data. A name change with the same id is applied here: the id wins.
+                // (stability). A preference is a different row and is not in scope
+                // here, so a re-seed cannot rewrite one. A name change with the same
+                // id is applied here: the id wins.
                 exercise.name = row.name
                 exercise.aliases = aliases
                 exercise.bodyPart = row.bodyPart
@@ -119,8 +112,7 @@ enum ExerciseSeedImporter {
                     aliases: aliases,
                     bodyPart: row.bodyPart,
                     category: row.category,
-                    isCustom: false,
-                    focusMetric: defaultFocusMetric
+                    isCustom: false
                 )
                 context.insert(exercise)
                 byID[row.id] = exercise

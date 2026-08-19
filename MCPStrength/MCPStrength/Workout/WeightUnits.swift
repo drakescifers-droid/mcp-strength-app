@@ -117,11 +117,11 @@ extension WeightUnits {
     /// expresses exactly.
     ///
     /// > **Every display site calls this rather than reading a setting
-    /// > directly**, so that when the four preference fields move off
-    /// > `Exercise` onto `ExercisePreference` (`06-sync.md`, the next piece of
-    /// > work) the change is what each caller PASSES, not a hunt for screens
-    /// > that resolved the unit their own way. Nothing writes the override
-    /// > today, so it is always nil and the global setting always wins.
+    /// > directly**, so moving the four preference fields off `Exercise`
+    /// > onto `ExercisePreference` was a change of what each caller PASSES,
+    /// > not a hunt for screens that resolved the unit their own way.
+    /// > Nothing writes a preference row today (the sheet is a later task),
+    /// > so the override is always nil and the global setting always wins.
     static func displayUnit(override: WeightUnit?, global: WeightUnit) -> WeightUnit {
         override ?? global
     }

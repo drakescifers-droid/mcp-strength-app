@@ -51,9 +51,9 @@ enum SyncRowApply {
     // MARK: - Exercises
 
     /// Seeded library rows share baked UUIDs with Postgres. Their per-user
-    /// fields (`focusMetric`, `notes`, `barType`, `weightUnitOverride`) live
-    /// in `exercise_preferences`, which has no model yet — leaving them
-    /// untouched is what keeps a pull from wiping local preferences.
+    /// fields live on `ExercisePreference`, a different row — applying an
+    /// exercise cannot touch them, by construction. Do not start writing
+    /// them here.
     static func apply(_ row: SyncExerciseRow, to exercise: Exercise) {
         exercise.name = row.name
         exercise.aliases = row.aliases

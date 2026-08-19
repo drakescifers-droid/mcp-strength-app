@@ -219,9 +219,17 @@ final class SyncEngine {
             ) { SyncRowMapper.row(for: $0, userID: $1) }
 
         case .exercisePreferences:
-            // No SwiftData model and no wire struct. The table exists so
-            // a later settings screen has somewhere to land; pushing it
-            // now would be inventing a mapping nobody has designed.
+            // The local model exists (`ExercisePreference`) but must
+            // not join this path yet. `SyncClient.upsert` hard-codes
+            // `onConflict: "id"`, and this table's primary key is
+            // `(user_id, exercise_id)`. PostgREST would reject the
+            // batch, a rejected batch aborts the entire sync run —
+            // so the pull never happens either, and every subsequent
+            // sync fails identically. Same reason `AppSettings`
+            // carries the three columns and is not `Syncable`. The
+            // remaining pieces are a `SyncExercisePreferenceRow` and
+            // a per-entity conflict target (status item 3), done
+            // once for this table and `app_settings`.
             break
 
         case .templateFolders:
@@ -373,8 +381,7 @@ final class SyncEngine {
                         aliases: row.aliases,
                         bodyPart: row.bodyPart,
                         category: row.category,
-                        isCustom: row.isCustom,
-                        focusMetric: .totalVolume
+                        isCustom: row.isCustom
                     )
                 },
                 apply: { row, model in
@@ -383,7 +390,10 @@ final class SyncEngine {
             )
         )
 
-        // exercise_preferences: no model, no apply. See push, same reason.
+        // exercise_preferences: the model exists, but there is still
+        // no wire struct and no apply. See push, same reason — joining
+        // the path before the conflict target is per-entity would
+        // abort every run.
 
         newest = SyncCursor.advanced(
             from: newest,

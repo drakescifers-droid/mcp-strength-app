@@ -30,6 +30,7 @@ struct AppSettingsTests {
     private func makeContainer() throws -> ModelContext {
         let schema = Schema([
             Exercise.self,
+            ExercisePreference.self,
             TemplateFolder.self,
             Template.self,
             TemplateExercise.self,

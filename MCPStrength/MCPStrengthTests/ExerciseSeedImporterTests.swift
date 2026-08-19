@@ -18,6 +18,7 @@ struct ExerciseSeedImporterTests {
     private func makeContainer() throws -> ModelContext {
         let schema = Schema([
             Exercise.self,
+            ExercisePreference.self,
             TemplateFolder.self,
             Template.self,
             TemplateExercise.self,
@@ -126,9 +127,7 @@ struct ExerciseSeedImporterTests {
             aliases: [],
             bodyPart: .other,
             category: .repsOnly,
-            isCustom: true,
-            focusMetric: .totalReps,
-            notes: "do not delete me"
+            isCustom: true
         )
         context.insert(userExercise)
         try context.save()
@@ -144,7 +143,6 @@ struct ExerciseSeedImporterTests {
         let survivor = try #require(all.first { $0.id == userID })
         #expect(survivor.isCustom == true)
         #expect(survivor.name == "My Custom Move")
-        #expect(survivor.notes == "do not delete me")
     }
 
     // (5) Seeded rows have isCustom == false.
@@ -159,17 +157,20 @@ struct ExerciseSeedImporterTests {
 
     // MARK: - Extra: contract details worth pinning
 
-    // A name change with the same id updates the name in place (the id wins), and preserves the
-    // user's preference fields on that exercise.
-    @Test func nameChangeWithSameIdUpdatesInPlaceAndPreservesUserPreferences() throws {
+    // A name change with the same id updates the name in place (the id wins).
+    // A preference is a different row, so a re-seed cannot touch it — the
+    // preservation the old test pinned is now structural rather than
+    // something the importer has to remember not to overwrite.
+    @Test func nameChangeWithSameIdUpdatesInPlaceAndLeavesPreferencesAlone() throws {
         let context = try makeContainer()
         try ExerciseSeedImporter.importRows(fixtureRows, into: context)
 
-        // Simulate a user customizing a seeded exercise.
         let seeded = try #require(try fetchAll(context).first { $0.id == Self.chestFlyID })
-        seeded.focusMetric = .totalReps
-        seeded.notes = "favorite machine"
-        seeded.barType = .other
+        let preference = ExercisePreference.current(for: seeded, in: context)
+        preference.focusMetric = .totalReps
+        preference.notes = "favorite machine"
+        preference.barType = .other
+        preference.markEdited()
         try context.save()
 
         // Re-import the same id with a renamed exercise and a dropped alias.
@@ -189,10 +190,13 @@ struct ExerciseSeedImporterTests {
         #expect(updated.name == "Pec Fly (Machine)") // the id won; name updated
         #expect(updated.aliases == ["pec deck"])
         #expect(updated.isCustom == false)
-        // User preferences survive the re-seed.
-        #expect(updated.focusMetric == .totalReps)
-        #expect(updated.notes == "favorite machine")
-        #expect(updated.barType == .other)
+
+        let kept = try #require(updated.preference)
+        #expect(kept.id == updated.id)
+        #expect(kept.focusMetric == .totalReps)
+        #expect(kept.notes == "favorite machine")
+        #expect(kept.barType == .other)
+        #expect(try context.fetch(FetchDescriptor<ExercisePreference>()).count == 1)
     }
 
     // The decoder accepts both the top-level array and the {"exercises": [...]} object form.

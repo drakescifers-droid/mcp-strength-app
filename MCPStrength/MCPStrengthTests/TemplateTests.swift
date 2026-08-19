@@ -19,6 +19,7 @@ struct TemplateTests {
     private func makeContainer() throws -> ModelContext {
         let schema = Schema([
             Exercise.self,
+            ExercisePreference.self,
             TemplateFolder.self,
             Template.self,
             TemplateExercise.self,
@@ -40,8 +41,7 @@ struct TemplateTests {
         let exercise = Exercise(
             name: name,
             bodyPart: .legs,
-            category: .barbell,
-            focusMetric: .totalVolume
+            category: .barbell
         )
         context.insert(exercise)
         return exercise
@@ -83,7 +83,7 @@ struct TemplateTests {
     @Test func startingWorkoutFromTemplateCopiesExercisesAndSets() throws {
         let context = try makeContainer()
         let squat = makeExercise(in: context, name: "Back Squat")
-        let bench = Exercise(name: "Bench Press", bodyPart: .chest, category: .barbell, focusMetric: .totalVolume)
+        let bench = Exercise(name: "Bench Press", bodyPart: .chest, category: .barbell)
         context.insert(bench)
 
         let template = Template(name: "Full Body", order: 0)

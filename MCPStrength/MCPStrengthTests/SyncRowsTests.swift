@@ -33,7 +33,7 @@ struct SyncRowsTests {
 
     private func makeContext() throws -> ModelContext {
         let schema = Schema([
-            Exercise.self, TemplateFolder.self, Template.self,
+            Exercise.self, ExercisePreference.self, TemplateFolder.self, Template.self,
             TemplateExercise.self, TemplateSet.self, ProgramDay.self,
             Workout.self, WorkoutExercise.self, WorkoutSet.self,
             MeasurementType.self, MeasurementEntry.self,
@@ -160,7 +160,7 @@ struct SyncRowsTests {
         // every sync fails on a row nobody can explain.
         let exercise = Exercise(
             name: "Burpee", bodyPart: .fullBody, category: .repsOnly,
-            isCustom: true, focusMetric: .totalReps
+            isCustom: true
         )
         let json = try encodedJSON(SyncRowMapper.row(for: exercise, userID: user))
 
@@ -217,7 +217,7 @@ struct SyncRowsTests {
         let type = MeasurementType(name: "Weight")
         let entry = MeasurementEntry(value: 1, unit: "lb", type: type)
         let exercise = Exercise(name: "E", bodyPart: .arms, category: .barbell,
-                                isCustom: true, focusMetric: .totalVolume)
+                                isCustom: true)
         for object in [folder, template, tx, ts, day, workout, we, ws, type, entry, exercise] as [any PersistentModel] {
             context.insert(object)
         }

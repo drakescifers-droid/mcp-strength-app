@@ -13,6 +13,7 @@ struct WorkoutHistoryTests {
     private func makeContainer() throws -> ModelContext {
         let schema = Schema([
             Exercise.self,
+            ExercisePreference.self,
             TemplateFolder.self,
             Template.self,
             TemplateExercise.self,
@@ -34,8 +35,7 @@ struct WorkoutHistoryTests {
         let exercise = Exercise(
             name: name,
             bodyPart: .legs,
-            category: .barbell,
-            focusMetric: .totalVolume
+            category: .barbell
         )
         context.insert(exercise)
         return exercise

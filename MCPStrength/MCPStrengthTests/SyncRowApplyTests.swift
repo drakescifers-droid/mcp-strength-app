@@ -35,7 +35,7 @@ struct SyncRowApplyTests {
 
     private func makeContext() throws -> ModelContext {
         let schema = Schema([
-            Exercise.self, TemplateFolder.self, Template.self,
+            Exercise.self, ExercisePreference.self, TemplateFolder.self, Template.self,
             TemplateExercise.self, TemplateSet.self, ProgramDay.self,
             Workout.self, WorkoutExercise.self, WorkoutSet.self,
             MeasurementType.self, MeasurementEntry.self,
@@ -55,11 +55,7 @@ struct SyncRowApplyTests {
             aliases: ["Barbell Row", "Yates"],
             bodyPart: .back,
             category: .barbell,
-            isCustom: true,
-            weightUnitOverride: .kg,
-            barType: .olympicBar,
-            focusMetric: .totalVolume,
-            notes: "local only"
+            isCustom: true
         )
         source.updatedAt = updated
         source.deletedAt = deleted
@@ -69,11 +65,7 @@ struct SyncRowApplyTests {
             aliases: ["wrong"],
             bodyPart: .other,
             category: .cardio,
-            isCustom: false,
-            weightUnitOverride: .lbs,
-            barType: .ezBar,
-            focusMetric: .totalReps,
-            notes: "must survive"
+            isCustom: false
         )
         let destID = dest.id
         #expect(dest.needsSync == true)
@@ -92,12 +84,9 @@ struct SyncRowApplyTests {
         #expect(dest.isTombstoned)
         #expect(dest.id == destID, "apply must not steal the source id")
 
-        // Per-user fields are not on the row. A pull that wiped them would
-        // be the exercise_preferences split failing silently.
-        #expect(dest.focusMetric == .totalReps)
-        #expect(dest.notes == "must survive")
-        #expect(dest.weightUnitOverride == .lbs)
-        #expect(dest.barType == .ezBar)
+        // Per-user fields live on `ExercisePreference`, a different row.
+        // Applying an exercise cannot touch them, by construction.
+        #expect(dest.preference == nil)
     }
 
     // MARK: - Templates
@@ -185,7 +174,7 @@ struct SyncRowApplyTests {
         let context = try makeContext()
         let library = Exercise(
             name: "Bench Press", bodyPart: .chest, category: .barbell,
-            isCustom: true, focusMetric: .totalVolume
+            isCustom: true
         )
         let template = Template(name: "Push A", order: 5)
         let source = TemplateExercise(
@@ -381,7 +370,7 @@ struct SyncRowApplyTests {
         let context = try makeContext()
         let library = Exercise(
             name: "Squat", bodyPart: .legs, category: .barbell,
-            isCustom: true, focusMetric: .totalVolume
+            isCustom: true
         )
         let workout = Workout(name: "Evening Session", startedAt: started)
         let source = WorkoutExercise(

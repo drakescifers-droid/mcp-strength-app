@@ -44,6 +44,7 @@ struct PrescriptionTests {
     private func makeContainer() throws -> ModelContext {
         let schema = Schema([
             Exercise.self,
+            ExercisePreference.self,
             TemplateFolder.self,
             Template.self,
             TemplateExercise.self,
@@ -66,8 +67,7 @@ struct PrescriptionTests {
         let exercise = Exercise(
             name: "Back Squat",
             bodyPart: .legs,
-            category: .barbell,
-            focusMetric: .totalVolume
+            category: .barbell
         )
         context.insert(exercise)
 
@@ -106,8 +106,7 @@ struct PrescriptionTests {
         let exercise = Exercise(
             name: "Bench Press",
             bodyPart: .chest,
-            category: .barbell,
-            focusMetric: .totalVolume
+            category: .barbell
         )
         context.insert(exercise)
 

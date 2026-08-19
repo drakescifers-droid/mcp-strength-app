@@ -37,8 +37,8 @@ true today — with the standing caveat that it should **not** hold real trainin
 provides sync and backup, because a local-only store has no recovery story.
 
 **Phase 2 — in progress. Sync is PROVEN against the real project, and storage is canonical
-kilograms.** What remains is per-exercise Preferences, the settings screen, syncing `AppSettings`,
-and Apple Health.
+kilograms.** What remains is the Preferences SHEET (its model landed 2026-08-18), the settings
+screen, syncing `AppSettings` and `ExercisePreference`, and Apple Health.
 
 > **The settings model that used to be item 2 on this list no longer exists as a requirement.** It
 > was there to hold editable warm-up percentages — and the reference app offers no way to adjust
@@ -334,30 +334,60 @@ underneath never changed — only whether the screen described it honestly.
   nobody had ever looked at it with content.
 - **`AutomatedLaunch`**, which stops a test run syncing to the live project. See the START HERE
   block above; this was the cause of the double-converted rows.
+- **`ExercisePreference`, the model half of per-exercise Preferences.** The four per-user fields
+  left `Exercise`; an optional relationship replaced them; seven display sites now read
+  `exercise.preference?.…`; the seed importer no longer has to remember not to overwrite them.
+  Written by a Ringer worker (grok-4.6, first attempt, run
+  `mcpstrength-per-exercise-preferences`) and reviewed here — the routing call the handoff asked
+  for, and the right one: a required init argument disappearing turned all ~65 stale construction
+  sites into compile errors, which is what made the work checkable by a sandbox that cannot run a
+  test.
+  > **Three things the worker got right that are worth keeping.** It corrected `06-sync.md` on the
+  > `id` (there is no `id` column on the server to match a minted one against) rather than
+  > implementing the doc as written. It noticed that `current(for:in:)` cannot copy
+  > `AppSettings.current`'s tombstone behaviour, and said which future change owns the difference.
+  > And it left `ExerciseOptionsMenu.swift`'s now-stale comment alone because the spec put that
+  > file out of bounds, and recorded the staleness instead of silently fixing it.
 
 ### What is left, in order
 
-1. **Per-exercise Preferences.** Design decided and approved: `docs/06-sync.md` § "Per-exercise
-   preferences get their own local model". The sheet is two rows — Weight Unit and Bar Type — not
-   four; `focusMetric` and `notes` are not edited there. The *Default* option in its weight-unit row
-   now has something to defer to.
-   > **The display side is already built and is waiting for it.** Every screen resolves its unit
-   > through `WeightUnits.displayUnit(override:global:)` and passes `exercise.weightUnitOverride`
-   > as the override — which is always nil, because nothing writes it. When the four fields move to
-   > `ExercisePreference`, the change is what those four call sites PASS, not a hunt for screens
-   > that resolved the unit their own way. They are: `ExerciseBlock.displayUnit` (workout screen),
-   > `TemplateEditorScreen.displayUnit(for:)`, `ExerciseDetailBlock.displayUnit` (history detail),
-   > and the best-set row in `WorkoutHistoryCard`.
+1. **Per-exercise Preferences — HALF DONE. The model landed 2026-08-18; the SHEET is what is
+   left.** `ExercisePreference` exists, `Exercise` is back to being purely what the library
+   defines, and all seven display sites read through `exercise.preference?.…`. 487 tests green.
+   What remains is the two-row sheet (Weight Unit, Bar Type) and the `Preferences` item in the
+   per-exercise `⋯` menu — the eighth and last item, still deliberately absent rather than
+   disabled.
+   > **Nothing creates a preference row yet, and that is correct.** The write path,
+   > `ExercisePreference.current(for:in:)`, has no caller in the app: the sheet is its only caller
+   > and the sheet is the work above. The table is sparse by construction (`06-sync.md`) — a read
+   > site that created a row would write pure defaults for every exercise on screen, which is the
+   > 43-fabricated-discards shape. Do not add a caller to make the write path feel used.
+   > **The prediction in this file held exactly.** "The change is what those four call sites PASS,
+   > not a hunt for screens that resolved the unit their own way" — it was seven sites rather than
+   > four (`barType` feeds the warm-up floor in two more places), and every one of them was a
+   > one-word edit. That is what `WeightUnits.displayUnit(override:global:)` was built for, and it
+   > is the strongest evidence yet for routing every screen through one resolver.
+   > **A PREFERENCE SET IN THE GYM DOES NOT BACK UP YET.** `ExercisePreference` deliberately does
+   > not conform to `Syncable` — see item 3, which is the same one fix. Until then it is on the
+   > phone and nowhere else.
 2. **Settings screen, units rows only**, off the profile page — reference screenshots are in
    `Settings accessed from profile page/`. This is what makes canonical storage visible: without it
    nobody can change the unit, **so the conversion is still only ever exercised in one direction.**
    Every weight is stored in kilograms today and every screen renders pounds; the kg path is covered
    by tests and has never been seen on a screen. `SetRow` already reacts to a unit change
    (`.onChange(of: unit)`), and this screen is what proves that works.
-3. **Sync `AppSettings`.** It carries the sync columns and deliberately does NOT conform to
-   `Syncable` — there is no Postgres table yet (`05-database.md`). One row per user means the key is
-   `user_id`, which is the same per-entity conflict-target work `06-sync.md` specifies for
-   `exercise_preferences`; do it once for both.
+3. **Sync `AppSettings` — and `ExercisePreference`, which is now waiting on exactly the same
+   thing.** Both carry the sync columns and deliberately do NOT conform to `Syncable`. `AppSettings`
+   has no Postgres table yet (`05-database.md`); `exercise_preferences` has had one since the first
+   migration. What they share is that neither is keyed on `id`: one row per user means `user_id`,
+   and a preference means `(user_id, exercise_id)`. `SyncClient.upsert` hard-codes
+   `onConflict: "id"`, so making the conflict target a per-entity fact on `SyncEntity` is one
+   change that unblocks both.
+   > **This is now the item that decides whether a bar type survives losing the phone**, which it
+   > was not when it was written. Turning either conformance on before the conflict target moves
+   > would abort the whole sync run on the first push, not just fail that table.
+   > **The wire row for `exercise_preferences` has no `id` to decode.** Its id must be derived from
+   > `exercise_id` on the way in — see the correction in `06-sync.md`.
    > **`StoreMigrations` must NOT be swept up in this.** It sits next to `AppSettings` and looks
    > like more of the same. It is the opposite: a device-local record of which data migrations this
    > STORE has run. Syncing it would let one device tell another that its weights are already

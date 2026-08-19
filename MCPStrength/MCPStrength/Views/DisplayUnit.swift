@@ -29,9 +29,10 @@
 //  this is only the `global` half. The override is per-exercise and belongs to
 //  whatever exercise the row is showing, so it cannot come from the
 //  environment — the same environment value is in scope for every exercise on
-//  the screen. Call sites pass `exercise.weightUnitOverride` alongside; that
-//  argument becomes `preference.weightUnit` when the four fields move off
-//  `Exercise` (docs/06-sync.md).
+//  the screen. Call sites pass `exercise.preference?.weightUnitOverride`
+//  alongside. The same reasoning that rejected a per-screen `@Query` for
+//  the global unit applies here: the relationship is how the override is
+//  found, not a hunt.
 //
 
 import SwiftUI

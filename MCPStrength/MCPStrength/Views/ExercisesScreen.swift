@@ -240,16 +240,16 @@ private struct ExerciseRow: View {
     let context = container.mainContext
 
     let samples: [Exercise] = [
-        Exercise(name: "Back Squat", aliases: ["Squat"], bodyPart: .legs, category: .barbell, focusMetric: .totalVolume),
-        Exercise(name: "Bench Press", aliases: ["Flat Bench"], bodyPart: .chest, category: .barbell, focusMetric: .totalVolume),
-        Exercise(name: "Deadlift", aliases: ["Conventional Deadlift"], bodyPart: .back, category: .barbell, focusMetric: .totalVolume),
-        Exercise(name: "Overhead Press", aliases: ["OHP", "Military Press"], bodyPart: .shoulders, category: .barbell, focusMetric: .totalVolume),
-        Exercise(name: "Dumbbell Lateral Raise", aliases: ["Lateral Raise"], bodyPart: .shoulders, category: .dumbbell, focusMetric: .totalVolume),
-        Exercise(name: "Pull Up", bodyPart: .back, category: .weightedBodyweight, focusMetric: .totalReps),
-        Exercise(name: "Leg Press", bodyPart: .legs, category: .machineOther, focusMetric: .totalVolume),
-        Exercise(name: "Cable Fly", aliases: ["Pec Fly"], bodyPart: .chest, category: .machineOther, focusMetric: .totalVolume),
-        Exercise(name: "Plank", bodyPart: .core, category: .repsOnly, focusMetric: .totalReps),
-        Exercise(name: "Rowing", aliases: ["Erg"], bodyPart: .cardio, category: .cardio, focusMetric: .totalReps),
+        Exercise(name: "Back Squat", aliases: ["Squat"], bodyPart: .legs, category: .barbell),
+        Exercise(name: "Bench Press", aliases: ["Flat Bench"], bodyPart: .chest, category: .barbell),
+        Exercise(name: "Deadlift", aliases: ["Conventional Deadlift"], bodyPart: .back, category: .barbell),
+        Exercise(name: "Overhead Press", aliases: ["OHP", "Military Press"], bodyPart: .shoulders, category: .barbell),
+        Exercise(name: "Dumbbell Lateral Raise", aliases: ["Lateral Raise"], bodyPart: .shoulders, category: .dumbbell),
+        Exercise(name: "Pull Up", bodyPart: .back, category: .weightedBodyweight),
+        Exercise(name: "Leg Press", bodyPart: .legs, category: .machineOther),
+        Exercise(name: "Cable Fly", aliases: ["Pec Fly"], bodyPart: .chest, category: .machineOther),
+        Exercise(name: "Plank", bodyPart: .core, category: .repsOnly),
+        Exercise(name: "Rowing", aliases: ["Erg"], bodyPart: .cardio, category: .cardio),
     ]
     for exercise in samples {
         context.insert(exercise)

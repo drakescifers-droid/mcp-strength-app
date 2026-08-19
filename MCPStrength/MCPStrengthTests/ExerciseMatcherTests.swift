@@ -11,21 +11,18 @@ import Foundation
 /// stored properties, so we build small in-memory arrays of `Exercise` values directly.
 struct ExerciseMatcherTests {
 
-    // A tiny helper to keep test bodies readable. `focusMetric` is required by the model and
-    // irrelevant to matching, so it gets a default.
+    // A tiny helper to keep test bodies readable.
     private func make(
         _ name: String,
         aliases: [String] = [],
         bodyPart: BodyPart,
-        category: ExerciseCategory = .machineOther,
-        focusMetric: FocusMetric = .totalVolume
+        category: ExerciseCategory = .machineOther
     ) -> Exercise {
         Exercise(
             name: name,
             aliases: aliases,
             bodyPart: bodyPart,
-            category: category,
-            focusMetric: focusMetric
+            category: category
         )
     }
 

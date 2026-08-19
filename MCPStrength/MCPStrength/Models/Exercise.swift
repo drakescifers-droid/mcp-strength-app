@@ -97,10 +97,19 @@ final class Exercise {
     var bodyPart: BodyPart
     var category: ExerciseCategory
     var isCustom: Bool
-    var weightUnitOverride: WeightUnit?
-    var barType: BarType?
-    var focusMetric: FocusMetric
-    var notes: String?
+
+    /// Per-user settings for this exercise. Nil until the user sets one —
+    /// the table stays sparse by construction (docs/06-sync.md).
+    ///
+    /// Optional on both sides so adding this to a store that already has
+    /// `Exercise` rows is a lightweight migration. A non-optional
+    /// relationship would kill the app on launch. The inverse lives
+    /// here because `Exercise` is the parent: every other parent in
+    /// this codebase (`Workout`, `Template`, `MeasurementType`)
+    /// declares `@Relationship(inverse:)`, and display sites start
+    /// from the exercise (`exercise.preference?.weightUnitOverride`).
+    @Relationship(inverse: \ExercisePreference.exercise)
+    var preference: ExercisePreference?
 
     init(
         id: UUID = UUID(),
@@ -108,11 +117,7 @@ final class Exercise {
         aliases: [String] = [],
         bodyPart: BodyPart,
         category: ExerciseCategory,
-        isCustom: Bool = false,
-        weightUnitOverride: WeightUnit? = nil,
-        barType: BarType? = nil,
-        focusMetric: FocusMetric,
-        notes: String? = nil
+        isCustom: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -120,9 +125,5 @@ final class Exercise {
         self.bodyPart = bodyPart
         self.category = category
         self.isCustom = isCustom
-        self.weightUnitOverride = weightUnitOverride
-        self.barType = barType
-        self.focusMetric = focusMetric
-        self.notes = notes
     }
 }

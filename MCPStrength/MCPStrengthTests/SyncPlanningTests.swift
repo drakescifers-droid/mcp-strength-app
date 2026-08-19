@@ -253,7 +253,7 @@ struct SyncPlanningTests {
         // fails the whole run on a row the user has never heard of.
         let seeded = Exercise(
             name: "Bench Press (Barbell)", bodyPart: .chest,
-            category: .barbell, isCustom: false, focusMetric: .totalVolume
+            category: .barbell, isCustom: false
         )
         #expect(seeded.needsSync, "the fixture is clean, so this would pass vacuously")
         #expect(!PushFilter.shouldPush(seeded))
@@ -262,7 +262,7 @@ struct SyncPlanningTests {
     @Test func aCustomExerciseIsPushed() {
         let custom = Exercise(
             name: "Reverse Nordic", bodyPart: .legs,
-            category: .repsOnly, isCustom: true, focusMetric: .totalReps
+            category: .repsOnly, isCustom: true
         )
         #expect(PushFilter.shouldPush(custom))
     }
@@ -273,7 +273,7 @@ struct SyncPlanningTests {
         // through it, the filter is decorative.
         let seeded: any Syncable = Exercise(
             name: "Squat (Barbell)", bodyPart: .legs,
-            category: .barbell, isCustom: false, focusMetric: .totalVolume
+            category: .barbell, isCustom: false
         )
         #expect(!PushFilter.shouldPush(seeded))
     }
@@ -283,9 +283,9 @@ struct SyncPlanningTests {
         // it ships with and will never send.
         let rows: [any Syncable] = [
             Exercise(name: "Bench Press (Barbell)", bodyPart: .chest,
-                     category: .barbell, isCustom: false, focusMetric: .totalVolume),
+                     category: .barbell, isCustom: false),
             Exercise(name: "Reverse Nordic", bodyPart: .legs,
-                     category: .repsOnly, isCustom: true, focusMetric: .totalReps),
+                     category: .repsOnly, isCustom: true),
             TemplateFolder(name: "Q2 2026", order: 0),
         ]
         #expect(PushFilter.pendingCount(rows) == 2)

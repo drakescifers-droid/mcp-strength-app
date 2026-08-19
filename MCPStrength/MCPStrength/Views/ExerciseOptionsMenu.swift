@@ -25,11 +25,12 @@
 //  ONE of the eight items from the reference app is still absent, and that is
 //  a decision rather than an oversight:
 //
-//    * **Preferences** edits the per-exercise Weight Unit and Bar Type. Those
-//      fields exist on `Exercise` today but are moving to their own
-//      `ExercisePreference` model first — see docs/06-sync.md § "Per-exercise
-//      preferences get their own local model" for why the sync does not work
-//      without that split.
+//    * **Preferences** edits the per-exercise Weight Unit and Bar Type. The
+//      model it needs now EXISTS — the four fields moved off `Exercise` onto
+//      `ExercisePreference` (docs/06-sync.md § "Per-exercise preferences get
+//      their own local model"), and `ExercisePreference.current(for:in:)` is
+//      the write path waiting for this item to call it. What is left is the
+//      sheet, which is the last of the reference app's eight items.
 //
 //  Showing it disabled would be worse than omitting it: a permanently grey row
 //  reads as a broken feature.

@@ -41,7 +41,7 @@ struct SoftDeleteTests {
 
     private func makeFixture() throws -> Fixture {
         let schema = Schema([
-            Exercise.self, TemplateFolder.self, Template.self,
+            Exercise.self, ExercisePreference.self, TemplateFolder.self, Template.self,
             TemplateExercise.self, TemplateSet.self, ProgramDay.self,
             Workout.self, WorkoutExercise.self, WorkoutSet.self,
             MeasurementType.self, MeasurementEntry.self,
@@ -265,7 +265,7 @@ struct SoftDeleteTests {
         // deleted set answering it is a fabricated number.
         let f = try makeFixture()
         let exercise = Exercise(
-            name: "Bench Press", bodyPart: .chest, category: .barbell, focusMetric: .totalVolume
+            name: "Bench Press", bodyPart: .chest, category: .barbell
         )
         f.context.insert(exercise)
 

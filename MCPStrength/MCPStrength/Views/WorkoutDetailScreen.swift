@@ -132,7 +132,7 @@ private struct ExerciseDetailBlock: View {
     /// logging screens' blocks — see `Views/DisplayUnit.swift`.
     private var displayUnit: WeightUnit {
         WeightUnits.displayUnit(
-            override: workoutExercise.exercise?.weightUnitOverride,
+            override: workoutExercise.exercise?.preference?.weightUnitOverride,
             global: globalWeightUnit
         )
     }

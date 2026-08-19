@@ -537,14 +537,14 @@ struct ActiveWorkoutScreen: View {
         // out. `WarmupSets` explains why it is the one calculation that leaves
         // canonical kilograms: a plate increment is a fact about a gym.
         let unit = WeightUnits.displayUnit(
-            override: exercise.exercise?.weightUnitOverride,
+            override: exercise.exercise?.preference?.weightUnitOverride,
             global: globalWeightUnit
         )
         let plan = WarmupSets.plan(
             forWorkingWeight: working?.weight.map {
                 WeightUnits.displayed(from: $0, in: unit)
             },
-            barWeight: exercise.exercise?.barType?.weight(in: unit),
+            barWeight: exercise.exercise?.preference?.barType?.weight(in: unit),
             in: unit
         )
         guard !plan.isEmpty else { return }
@@ -826,12 +826,12 @@ private struct ExerciseBlock: View {
     /// The unit every weight in THIS block is read and written in.
     ///
     /// Resolved once per block rather than per row, because the override is a
-    /// property of the exercise and every set under it is the same lift. When
-    /// the four preference fields move onto `ExercisePreference`
-    /// (docs/06-sync.md) this is the line that changes, and it is the only one.
+    /// property of the exercise and every set under it is the same lift. The
+    /// override lives on `ExercisePreference`; `nil` (no row, or a row whose
+    /// override is unset) follows the global setting.
     private var displayUnit: WeightUnit {
         WeightUnits.displayUnit(
-            override: workoutExercise.exercise?.weightUnitOverride,
+            override: workoutExercise.exercise?.preference?.weightUnitOverride,
             global: globalWeightUnit
         )
     }
@@ -1317,8 +1317,7 @@ private struct RestControlsSheet: View {
     let exercise = Exercise(
         name: "Back Squat",
         bodyPart: .legs,
-        category: .barbell,
-        focusMetric: .totalVolume
+        category: .barbell
     )
     context.insert(exercise)
 

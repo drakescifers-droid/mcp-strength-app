@@ -153,8 +153,8 @@ struct WarmupSetsTests {
     }
 
     // BarType.dumbbell.weight and .other.weight are 0. A caller that
-    // forwards `exercise.barType?.weight` will pass 0, not nil. That 0
-    // must not become a floor.
+    // forwards `exercise.preference?.barType?.weight` will pass 0, not nil.
+    // That 0 must not become a floor.
     @Test func aZeroBarWeightIsNotAFloor() {
         let plan = WarmupSets.plan(forWorkingWeight: 65, barWeight: 0, in: .lbs)
         #expect(plan.map(\.weight) == [35, 40, 50])

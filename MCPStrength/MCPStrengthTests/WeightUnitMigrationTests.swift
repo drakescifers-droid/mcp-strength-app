@@ -30,6 +30,7 @@ struct WeightUnitMigrationTests {
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([
             Exercise.self,
+            ExercisePreference.self,
             TemplateFolder.self,
             Template.self,
             TemplateExercise.self,
@@ -58,8 +59,7 @@ struct WeightUnitMigrationTests {
         let exercise = Exercise(
             name: "Bench Press (Barbell)",
             bodyPart: .chest,
-            category: .barbell,
-            focusMetric: .totalVolume
+            category: .barbell
         )
         context.insert(exercise)
 
@@ -129,8 +129,7 @@ struct WeightUnitMigrationTests {
         let exercise = Exercise(
             name: "Back Squat (Barbell)",
             bodyPart: .legs,
-            category: .barbell,
-            focusMetric: .totalVolume
+            category: .barbell
         )
         context.insert(exercise)
         let template = Template(name: "Leg Day", order: 0)

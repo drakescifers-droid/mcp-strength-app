@@ -277,7 +277,7 @@ struct TemplateEditorScreen: View {
             forWorkingWeight: working?.weight.map {
                 WeightUnits.displayed(from: $0, in: unit)
             },
-            barWeight: exercises[index].exercise.barType?.weight(in: unit),
+            barWeight: exercises[index].exercise.preference?.barType?.weight(in: unit),
             in: unit
         )
         guard !plan.isEmpty else { return }
@@ -481,11 +481,11 @@ struct TemplateEditorScreen: View {
     ///
     /// Per exercise rather than per screen, because the override is a property
     /// of the lift. Same resolution as the live workout screen's
-    /// `ExerciseBlock.displayUnit`, and both become a lookup on
-    /// `ExercisePreference` when those fields move (docs/06-sync.md).
+    /// `ExerciseBlock.displayUnit`. The override lives on
+    /// `ExercisePreference`; `nil` follows the global setting.
     private func displayUnit(for exercise: Exercise) -> WeightUnit {
         WeightUnits.displayUnit(
-            override: exercise.weightUnitOverride,
+            override: exercise.preference?.weightUnitOverride,
             global: globalWeightUnit
         )
     }
@@ -513,8 +513,7 @@ struct TemplateEditorScreen: View {
                         exercise: tx.exercise ?? Exercise(
                             name: "Unknown Exercise",
                             bodyPart: .other,
-                            category: .repsOnly,
-                            focusMetric: .totalVolume
+                            category: .repsOnly
                         ),
                         defaultRestSeconds: tx.defaultRestSeconds,
                         note: tx.note,
@@ -793,7 +792,7 @@ struct TemplateEditorScreen: View {
     )
     let context = container.mainContext
 
-    let exercise = Exercise(name: "Back Squat", bodyPart: .legs, category: .barbell, focusMetric: .totalVolume)
+    let exercise = Exercise(name: "Back Squat", bodyPart: .legs, category: .barbell)
     context.insert(exercise)
 
     let template = Template(name: "Leg Day", order: 0)

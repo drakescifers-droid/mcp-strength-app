@@ -57,7 +57,7 @@ struct SyncableTests {
         // so a type added to the conformance list without the properties, or
         // with the wrong default, is caught.
         let syncables: [any Syncable] = [
-            Exercise(name: "Back Squat", bodyPart: .legs, category: .barbell, focusMetric: .totalVolume),
+            Exercise(name: "Back Squat", bodyPart: .legs, category: .barbell),
             TemplateFolder(name: "Q2 2026", order: 0),
             Template(name: "Push A", order: 0),
             TemplateExercise(order: 0),
@@ -171,7 +171,7 @@ struct SyncableTests {
         // property SwiftData refuses outright, which would otherwise surface as
         // a fatalError on launch rather than a test failure.
         let schema = Schema([
-            Exercise.self, TemplateFolder.self, Template.self,
+            Exercise.self, ExercisePreference.self, TemplateFolder.self, Template.self,
             TemplateExercise.self, TemplateSet.self, ProgramDay.self,
             Workout.self, WorkoutExercise.self, WorkoutSet.self,
             MeasurementType.self, MeasurementEntry.self,
@@ -200,7 +200,7 @@ struct SyncableTests {
         // would need rethinking — so it is worth proving once, here, before
         // thirty call sites depend on it.
         let schema = Schema([
-            Exercise.self, TemplateFolder.self, Template.self,
+            Exercise.self, ExercisePreference.self, TemplateFolder.self, Template.self,
             TemplateExercise.self, TemplateSet.self, ProgramDay.self,
             Workout.self, WorkoutExercise.self, WorkoutSet.self,
             MeasurementType.self, MeasurementEntry.self,

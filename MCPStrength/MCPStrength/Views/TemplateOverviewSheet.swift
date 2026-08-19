@@ -141,7 +141,7 @@ struct TemplateOverviewSheet: View {
     )
     let context = container.mainContext
 
-    let raise = Exercise(name: "Lateral Raise (Machine)", bodyPart: .shoulders, category: .machineOther, focusMetric: .totalVolume)
+    let raise = Exercise(name: "Lateral Raise (Machine)", bodyPart: .shoulders, category: .machineOther)
     context.insert(raise)
 
     let template = Template(name: "F Shoulders", order: 0, lastPerformedAt: Date(timeIntervalSinceNow: -86400))
