@@ -44,18 +44,21 @@ extension ButtonStyle where Self == TintedButtonStyle {
 
 // MARK: - Primary action
 //
-// A solid saturated fill with white text — the affirmative path. "Finish" is
-// the reference instance, in `success`.
+// A solid saturated fill with `onSolid` text — the affirmative path.
+// "Finish" is the reference instance, in `success`.
 
 /// A solid-fill button for the primary affirmative action (e.g. "Finish").
-/// Solid `success` fill, white text.
+/// Solid `success` fill, `onSolid` text.
 struct PrimaryActionButtonStyle: ButtonStyle {
     var fill: Color = Theme.success
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(Typography.button)
-            .foregroundStyle(Theme.textPrimary)
+            // `onSolid`, not `textPrimary`. Identical on every dark palette;
+            // the difference only shows up on Blush, where the title colour
+            // would vanish into a solid green fill.
+            .foregroundStyle(Theme.onSolid)
             .frame(maxWidth: .infinity)
             .padding(.vertical, Spacing.buttonVertical)
             .background(fill, in: .rect(cornerRadius: Radius.button))

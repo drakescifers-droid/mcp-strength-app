@@ -37,23 +37,35 @@ struct ThemeSampler: View {
     }
 
     private var swatchGrid: some View {
-        VStack(spacing: Spacing.compact) {
-            swatchRow("surface", Theme.surface, "#293136")
-            swatchRow("fieldFill", Theme.fieldFill, "#1F252A")
-            swatchRow("accent", Theme.accent, "#35A7FF")
-            swatchRow("accentFill", Theme.accentFill, "#2C4E68")
-            swatchRow("success", Theme.success, "#2ECD70")
-            swatchRow("destructive", Theme.destructive, "#FF5964")
-            swatchRow("destructiveFill", Theme.destructiveFill, "#3E353A")
-            swatchRow("textPrimary", Theme.textPrimary, "#FFFFFF")
-            swatchRow("textSecondary", Theme.textSecondary, "#94989A")
-            swatchRow("warmup", Theme.warmup, "#FFA13B")
-            swatchRow("dropSet", Theme.dropSet, "#8826FC")
-            swatchRow("notice", Theme.notice, "#ECC12E")
-            swatchRow("noticeText", Theme.noticeText, "#251E0A")
+        // Hexes are READ from the live palette, never typed in beside the
+        // token. A caption that has to be kept in step with a colour is a
+        // caption that will eventually lie — and this screen exists to be
+        // believed.
+        let p = Theme.palette
+        return VStack(spacing: Spacing.compact) {
+            swatchRow("surface", p.surface)
+            swatchRow("fieldFill", p.fieldFill)
+            swatchRow("keypadKey", p.keypadKey)
+            swatchRow("accent", p.accent)
+            swatchRow("accentFill", p.accentFill)
+            swatchRow("success", p.success)
+            swatchRow("destructive", p.destructive)
+            swatchRow("destructiveFill", p.destructiveFill)
+            swatchRow("textPrimary", p.textPrimary)
+            swatchRow("textSecondary", p.textSecondary)
+            swatchRow("onSolid", p.onSolid)
+            swatchRow("warmup", p.warmup)
+            swatchRow("dropSet", p.dropSet)
+            swatchRow("restPause", p.restPause)
+            swatchRow("notice", p.notice)
+            swatchRow("noticeText", p.noticeText)
             // failure is an alias of destructive — show it aliased, not duplicated.
-            swatchRow("failure (= destructive)", Theme.failure, "#FF5964")
+            swatchRow("failure (= destructive)", p.destructive)
         }
+    }
+
+    private func swatchRow(_ name: String, _ token: PaletteColor) -> some View {
+        swatchRow(name, token.color, token.hexString)
     }
 
     private func swatchRow(_ name: String, _ color: Color, _ hex: String) -> some View {
@@ -177,6 +189,7 @@ struct ThemeSampler: View {
                 SetTypeBadge(setType: .normal, setNumber: 2)
                 SetTypeBadge(setType: .normal, setNumber: 3)
                 SetTypeBadge(setType: .dropSet, setNumber: 0)
+                SetTypeBadge(setType: .restPause, setNumber: 0)
                 SetTypeBadge(setType: .failure, setNumber: 0)
             }
             Text("Failure badge uses Theme.failure, an alias of destructive — "

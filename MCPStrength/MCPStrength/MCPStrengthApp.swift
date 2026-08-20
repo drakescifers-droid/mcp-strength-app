@@ -130,6 +130,10 @@ struct MCPStrengthApp: App {
     /// having been scheduled.
     @State private var restPresenter = RestNotificationPresenter()
 
+    /// Which look the app is wearing. Owned here, like `auth` and `sync`, so it
+    /// survives every view rebuild — including the one it causes itself.
+    @State private var themeStore = ThemeStore()
+
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -145,12 +149,23 @@ struct MCPStrengthApp: App {
                 .environment(sync)
                 .optionalEnvironment(engine)
                 .optionalEnvironment(health)
-                // The design tokens are a dark-only palette, sampled from the dark reference
-                // app (see Design/Theme.swift). System-provided chrome — navigation titles,
-                // pickers, keyboards — takes its colours from the environment colour scheme,
-                // NOT from our tokens, so without this the title renders black on #293136.
-                // Remove this only when a light palette actually exists.
-                .preferredColorScheme(.dark)
+                .environment(themeStore)
+                // System-provided chrome — navigation titles, pickers, keyboards,
+                // the status bar — takes its colours from the environment colour
+                // scheme and NEVER from our tokens. This used to be pinned to
+                // `.dark` because every token was dark; it follows the palette
+                // now, which is what lets Blush render a dark title on cream
+                // instead of a black one on a black bar.
+                .preferredColorScheme(themeStore.palette.colorScheme)
+                // `Theme`'s tokens are plain statics, so SwiftUI has no
+                // dependency on them and would happily keep the old colours on
+                // screen after a switch. Re-keying the tree forces one rebuild,
+                // at the only moment it can happen: somebody tapping a theme.
+                //
+                // It is applied to AuthGate and NOT to the App's own `@State`
+                // above, so sign-in, sync status and the running engine all
+                // survive a repaint — only view state is discarded.
+                .id(themeStore.selected)
                 .task {
                     // Idempotent — guarded inside, so the re-run SwiftUI may
                     // perform on reattach cannot start a second observer.

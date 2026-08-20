@@ -100,7 +100,10 @@ struct NumberKeypad: View {
                 Button(action: onNext) {
                     Text("Next")
                         .font(Typography.button)
-                        .foregroundStyle(.white)
+                        // `onSolid`, not `textPrimary`: this label sits on a
+                        // saturated accent fill, and on a light palette the two
+                        // want opposite values.
+                        .foregroundStyle(Theme.onSolid)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Theme.accent, in: .rect(cornerRadius: Radius.chip))
                 }

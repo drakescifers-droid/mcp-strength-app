@@ -1061,6 +1061,49 @@ ringer `docs/MODEL-NOTES.md`.
 
 ---
 
+## Themes — four looks, and Slate is gone
+
+**Shipped 2026-08-20.** The app wears one of four palettes, chosen in Settings → Appearance and
+stored per device. **Gunmetal is the default and Slate — the original palette — no longer exists**;
+Gunmetal is its descendant (blacker ground, deeper blue, a wider step between a card and its screen)
+with every set-type badge unchanged, so nothing anybody learned about W / D / R / F was invalidated.
+The other three are **Bunker** (warm olive graphite, bone text), **Orchid** (plum ground, orchid
+accent) and **Blush** (the light one).
+
+**Nothing outside `Design/` changed to make this work.** Every screen still says `Theme.accent`;
+the tokens now resolve through a `Palette` instead of holding literals. That indirection was built
+in Phase 1 on the bet that a second palette would arrive one day, and it paid in full.
+
+Three things are worth knowing before touching this:
+
+- **`onSolid` is a new token, and it exists because of Blush.** `textPrimary` had been doing two
+  jobs — screen titles, and the label on a solid Save / Finish / Next / Delete fill. Every dark
+  palette gives both the same answer, which is why nothing noticed; a light palette pulls them
+  apart. The two places that used to say raw `.white` (keypad Next, the swipe-delete strip) say
+  `Theme.onSolid` now.
+- **The dark-chrome lock is off.** `preferredColorScheme` follows `palette.colorScheme` instead of
+  being pinned `.dark`. `Palette` declares it per look rather than inferring it, because system
+  chrome — navigation titles, pickers, keyboards — never reads our tokens.
+- **A theme switch rebuilds the view tree.** `Theme`'s tokens are plain statics, so SwiftUI has no
+  dependency on them; the root is keyed on the selection (`MCPStrengthApp`) and repaints once when
+  somebody picks a look. Deliberate trade against threading an environment value through 300-odd
+  call sites. Consequence: **picking a theme closes Settings**, which is why the picker previews
+  all four in their own palettes rather than making you switch to look. The App's own `@State`
+  (auth, sync, engine) sits above the `.id` and survives.
+
+**What makes a palette legal is arithmetic, and it is pinned.** `PaletteTests` runs every rule
+against every case of `AppTheme`: the three-step stack stays visible, text clears its contrast bar,
+labels survive their fills, and the badge alphabet stays ≥35° apart in hue — from each other and
+from the accent. That last rule is the reason Orchid is orchid: **a rose or hot-pink accent lands
+within ~25° of the F badge**, and a 28pt square cannot carry that distinction. Adding a fifth look
+means answering those questions rather than discovering them in a gym.
+
+The choice is **local, not synced** — `UserDefaults`, not `AppSettings`. Weight unit syncs because it
+changes what a number MEANS; a palette changes nothing about the data, and syncing it would mean a
+migration plus a phone repainting itself because an iPad was recoloured.
+
+---
+
 ## Deliberately deferred
 
 These are not oversights. Each was cut with a reason, and the reason is the point.
@@ -1085,6 +1128,13 @@ These are not oversights. Each was cut with a reason, and the reason is the poin
 ## Known loose ends
 
 Small, none blocking, roughly in the order I would do them.
+
+- **White on the Finish green is 2.08:1.** Below the 3:1 every other solid button clears, and
+  inherited rather than introduced — it is the green the app has always shipped, kept through the
+  theme work so "go" did not change colour in the same release that everything else did.
+  `success` at `#17A65A` reads 3.16:1 and is still unmistakably the same green; it is one value in
+  three dark palettes. `PaletteTests.finishButtonIsTheOneKnownWeakPair` pins the floor so it cannot
+  drift further down while the decision is open.
 
 - **Create Superset sets the data and draws nothing.** Both screens write `supersetGroupID`
   correctly (and the workout screen marks the rows dirty), but no view reads it except the menu

@@ -103,7 +103,10 @@ struct HistoryScreen: View {
                         }
                     }
             }
-            .preferredColorScheme(.dark)
+            // Follows the palette, not a hard-coded dark. A sheet inherits the
+            // window's scheme, but saying it here keeps this screen right when it
+            // is presented from somewhere that does not.
+            .preferredColorScheme(Theme.palette.colorScheme)
         }
     }
 

@@ -153,7 +153,9 @@ struct SetRow: View {
                 Text("Delete")
                     .font(Typography.secondary)
             }
-            .foregroundStyle(.white)
+            // On the red strip, not on the screen — `onSolid`, never
+            // `textPrimary`.
+            .foregroundStyle(Theme.onSolid)
             .frame(width: revealWidth)
             .frame(maxHeight: .infinity)
             .background(Theme.destructive)
@@ -262,7 +264,7 @@ struct SetRow: View {
 
     // MARK: - Set-type menu
 
-    // The leading badge is also a Menu: tapping it offers all four set types
+    // The leading badge is also a Menu: tapping it offers every set type
     // with a checkmark on the current value. Same idiom as `rpeField` below —
     // the badge itself is the menu's label so the row's look is unchanged.
     private var setTypeMenu: some View {
@@ -288,6 +290,7 @@ struct SetRow: View {
         case .normal:  return "Normal"
         case .warmup:  return "Warm up"
         case .dropSet: return "Drop set"
+        case .restPause: return "Rest-pause / Myo-rep"
         case .failure: return "Failure"
         }
     }

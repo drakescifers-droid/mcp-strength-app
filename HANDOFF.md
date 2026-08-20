@@ -39,6 +39,12 @@ both sides, warm-up ramp corrected to 40 / 60 / 80. Swift suite green, SQL suite
 
 > ✅ **THE KEYPAD IS COMMITTED.** Visual work, so it stayed here and did not go to Ringer.
 
+> 🎨 **THE APP HAS FOUR THEMES AND SLATE IS GONE.** Gunmetal (default), Bunker, Orchid, Blush —
+> Settings → Appearance, stored per device, not synced. Call sites did not change: `Theme.accent`
+> still, resolving through a `Palette` now. One new token, `onSolid`, and the dark-chrome lock is
+> off. `docs/04-status.md` § Themes has the rules and the one open decision (white on the Finish
+> green is 2.08:1 — the fix is one value, not yet taken). Visual work, so it stayed here too.
+
 > **THE APP IS IN HIS HAND AND HE TESTS IT.** That changes how you work — see
 > `AGENTS.md` § "DRAKE DOES THE UI TESTING". Build, install, hand over. Do not drive the simulator
 > to judge how something looks or feels; an afternoon of XCUITest runs cost ~$10 and settled
@@ -87,10 +93,12 @@ both sides, warm-up ramp corrected to 40 / 60 / 80. Swift suite green, SQL suite
    two real options). Deletes are soft, UUID-only, and annotated
    destructive; a program delete keeps its templates. `create_program` days
    may repeat (A, B, A). Linear progression is accepted as prose and
-   **not executed** — the response says `executed: false`. Matcher and
+   **not executed** — the response says `executed: false`. `set_type`
+   includes `restPause` (myo-reps use this; `rest_pause` / `myoRep` are
+   rejected). Matcher and
    `list_exercises` return `secondary_body_parts`; `create_exercise` still
    only *creates* a primary body part. **The `mcp` Edge Function was
-   redeployed 2026-08-20** with program create/delete and template delete.
+   redeployed 2026-08-20** with rest-pause as a set type.
 
    Deno tests for this folder need
    `deno test --allow-read --allow-net --allow-env supabase/functions/mcp`.

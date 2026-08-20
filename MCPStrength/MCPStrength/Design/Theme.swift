@@ -2,11 +2,21 @@
 //  Theme.swift
 //  MCPStrength
 //
-//  The design token layer. This is the only file in the app that is allowed to
-//  hold colour literals — every other screen says `Theme.accent`, never a hex
-//  value. Adding a light palette later means swapping the bodies of the `Color`
-//  properties below (e.g. to resolve from an asset catalog) without touching a
-//  single call site.
+//  The design token layer. This is the only file in the app that names a
+//  palette — every other screen says `Theme.accent`, never a hex value and
+//  never a palette.
+//
+//  The tokens are now RESOLVED, not fixed: each one reads through to whichever
+//  `Palette` is currently on (see Palette.swift, ThemeStore.swift). Call sites
+//  did not change when themes arrived, and will not change when a fifth look is
+//  added — that is the whole return on having had this indirection from day one.
+//
+//  A NOTE ON HOW A SWITCH ACTUALLY REPAINTS. These are plain statics, so SwiftUI
+//  has no dependency on them and will not re-run a body just because one
+//  changed. The root view is keyed on the selected theme instead
+//  (`MCPStrengthApp`), which rebuilds the tree once, on switch. That is a
+//  deliberate trade: one rebuild at the moment somebody picks a look, against
+//  threading an environment value through 300-odd call sites.
 //
 
 import SwiftUI
@@ -14,57 +24,84 @@ import SwiftUI
 // MARK: - Colour tokens
 
 /// Semantic colour namespace. Call sites read `Theme.accent`, `Theme.surface`,
-/// etc. — never a raw `Color(...)` or hex literal.
+/// etc. — never a raw `Color(...)`, a hex literal, or a `Palette`.
 enum Theme {
+
+    /// The palette every token below resolves through.
+    ///
+    /// `nonisolated(unsafe)` is honest rather than clever: this is written once
+    /// at launch and again only when somebody taps a theme in Settings, both on
+    /// the main actor, and read from view bodies which are also main-actor.
+    /// Marking `Theme` itself `@MainActor` would drag `ButtonStyle`'s
+    /// nonisolated statics along with it for no gain.
+    nonisolated(unsafe) private(set) static var palette: Palette = AppTheme.fallback.palette
+
+    /// Point every token at a different look. Called by `ThemeStore`; nothing
+    /// else should need it.
+    static func use(_ theme: AppTheme) {
+        palette = theme.palette
+    }
+
     // Surfaces
     /// Screen and sheet background.
-    static let surface = Color(red: 0.160784, green: 0.192157, blue: 0.211765)
-    /// Weight/reps entry chips — slightly darker than the surface.
-    static let fieldFill = Color(red: 0.121569, green: 0.145098, blue: 0.164706)
-    /// Custom number-keypad keys — lighter than `fieldFill` so they read as
-    /// buttons on the pad, not as more of the pad.
-    static let keypadKey = Color(red: 0.220, green: 0.247, blue: 0.271)
+    static var surface: Color { palette.surface.color }
+    /// Weight/reps entry chips — a step away from the surface, in whichever
+    /// direction the palette runs (darker on the dark looks, warmer on Blush).
+    static var fieldFill: Color { palette.fieldFill.color }
+    /// Custom number-keypad keys — a further step from `fieldFill` so they read
+    /// as buttons on the pad, not as more of the pad.
+    static var keypadKey: Color { palette.keypadKey.color }
 
     // Accents
     /// Exercise names, rest-timer text, links.
-    static let accent = Color(red: 0.207843, green: 0.654902, blue: 1.0)
+    static var accent: Color { palette.accent.color }
     /// Desaturated fill sitting behind accent-coloured text (tinted button idiom).
-    static let accentFill = Color(red: 0.172549, green: 0.305882, blue: 0.407843)
+    static var accentFill: Color { palette.accentFill.color }
 
     // Status
     /// The Finish button.
-    static let success = Color(red: 0.180392, green: 0.803922, blue: 0.439216)
+    static var success: Color { palette.success.color }
     /// Cancel Workout text — and, by alias, the failure-set badge.
-    static let destructive = Color(red: 1.0, green: 0.349020, blue: 0.392157)
+    static var destructive: Color { palette.destructive.color }
     /// Desaturated fill behind destructive-coloured text (tinted button idiom).
-    static let destructiveFill = Color(red: 0.243137, green: 0.207843, blue: 0.227451)
+    static var destructiveFill: Color { palette.destructiveFill.color }
 
     // Text
-    static let textPrimary = Color(red: 1.0, green: 1.0, blue: 1.0)
+    static var textPrimary: Color { palette.textPrimary.color }
     /// Dates, durations, column headers, "Previous" values.
-    static let textSecondary = Color(red: 0.580392, green: 0.596078, blue: 0.603922)
+    static var textSecondary: Color { palette.textSecondary.color }
+    /// The label ON a solid fill — Save, Start Workout, Finish, keypad Next,
+    /// the swipe-to-delete strip.
+    ///
+    /// Not the same job as `textPrimary`, even though every dark palette gives
+    /// them the same value. A title and a button label want opposite answers
+    /// the moment the screen goes light, and the two places that used to say
+    /// raw `.white` (keypad Next, delete strip) say this instead.
+    static var onSolid: Color { palette.onSolid.color }
 
     // Set-type badge hues
     /// The W set badge.
-    static let warmup = Color(red: 1.0, green: 0.631373, blue: 0.231373)
+    static var warmup: Color { palette.warmup.color }
     /// The D set badge.
-    static let dropSet = Color(red: 0.533333, green: 0.149020, blue: 0.988235)
+    static var dropSet: Color { palette.dropSet.color }
+    /// The R set badge (rest-pause / myo-rep). Teal, so it cannot be read as
+    /// warm-up orange, drop purple, failure red, or accent blue.
+    static var restPause: Color { palette.restPause.color }
 
     /// The Health backfill strip. Not `warmup`: that is a set-type badge, and
     /// a notice that reused it would look like a warm-up set sitting in
     /// Settings. Sampled from the reference (`IMG_2996.PNG`).
-    static let notice = Color(red: 0.925490, green: 0.756863, blue: 0.180392)
+    static var notice: Color { palette.notice.color }
     /// Text and the Add control on `notice`. Dark on yellow so the sentence
     /// stays readable; accent-blue on yellow would be the rest-timer bug
     /// (a control that cannot be told from the fill).
-    static let noticeText = Color(red: 0.145098, green: 0.117647, blue: 0.039216)
+    static var noticeText: Color { palette.noticeText.color }
 
     // MARK: Failure alias
     //
-    // The F set badge is the *same red* as `destructive`, verified across both
-    // reference screenshots (docs/01-data-model.md gives F as red; the sampled
-    // value is #FF5964). It is an alias, not a separate literal, so a future
-    // retune of the destructive red drags the failure badge with it.
+    // The F set badge is the *same red* as `destructive` in every palette. It
+    // is an alias, not a separate token, so retuning a red for one look drags
+    // the failure badge with it and the two can never drift apart.
     /// The F set badge — identical to `destructive` by design.
     static var failure: Color { destructive }
 }

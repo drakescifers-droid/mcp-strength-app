@@ -97,6 +97,10 @@ struct SettingsScreen: View {
     /// workout and then duplicate them.
     @State private var backfillPrompt: String?
     @State private var missingWorkouts: [Workout] = []
+    /// The look the app is wearing. Read here only to name it on the row —
+    /// the picker itself does the writing.
+    @Environment(ThemeStore.self) private var themeStore
+
     @State private var isAddingBackfill = false
 
     @State private var measurementWritePrompt: String?
@@ -150,6 +154,18 @@ struct SettingsScreen: View {
                         .foregroundStyle(Theme.textSecondary)
                         .padding(.horizontal, Spacing.screenMargin)
 
+                    section("Appearance") {
+                        NavigationLink {
+                            ThemePickerScreen()
+                        } label: {
+                            SettingsValueRow(
+                                title: "Theme",
+                                value: themeStore.selected.name
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+
                     healthSection
                 }
                 .padding(.vertical, Spacing.comfortable)
@@ -171,7 +187,10 @@ struct SettingsScreen: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        // Follows the palette, not a hard-coded dark. A sheet inherits the
+        // window's scheme, but saying it here keeps this screen right when it
+        // is presented from somewhere that does not.
+        .preferredColorScheme(Theme.palette.colorScheme)
         .task(id: backfillScanKey) {
             await refreshBackfill()
         }
@@ -949,6 +968,7 @@ struct WorkoutCalorieRatePickerScreen: View {
 #Preview {
     SettingsScreen()
         .modelContainer(for: AppSettings.self, inMemory: true)
+        .environment(ThemeStore())
 }
 
 #Preview("Picker") {

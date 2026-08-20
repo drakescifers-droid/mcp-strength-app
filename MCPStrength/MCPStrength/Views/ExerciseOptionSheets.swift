@@ -85,7 +85,10 @@ struct ExerciseNoteSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        // Follows the palette, not a hard-coded dark. A sheet inherits the
+        // window's scheme, but saying it here keeps this screen right when it
+        // is presented from somewhere that does not.
+        .preferredColorScheme(Theme.palette.colorScheme)
     }
 }
 
@@ -192,7 +195,10 @@ struct RestTimerSheet: View {
                     .background(Theme.surface)
             }
         }
-        .preferredColorScheme(.dark)
+        // Follows the palette, not a hard-coded dark. A sheet inherits the
+        // window's scheme, but saying it here keeps this screen right when it
+        // is presented from somewhere that does not.
+        .preferredColorScheme(Theme.palette.colorScheme)
     }
 }
 
@@ -345,7 +351,10 @@ struct ExercisePreferencesSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        // Follows the palette, not a hard-coded dark. A sheet inherits the
+        // window's scheme, but saying it here keeps this screen right when it
+        // is presented from somewhere that does not.
+        .preferredColorScheme(Theme.palette.colorScheme)
     }
 
     /// A bar's empty weight, or nothing at all for the two that have no bar.
