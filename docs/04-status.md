@@ -12,11 +12,12 @@ This is the one document that is expected to go stale, so it is deliberately nar
 | What is the MCP tool contract? | `03-mcp-tools.md` |
 | Why does the Postgres schema differ from the SwiftData one? | `05-database.md` |
 | How does sync work on the client, and how is it made visible? | `06-sync.md` |
+| Anthropic / ChatGPT directory listing, privacy pages, sequencing? | `07-compliance.md` |
 | Which worker models are good at what? | `~/ringer/docs/MODEL-NOTES.md` |
 | **What is built, what is half-built, and what did we skip on purpose?** | **this file** |
 
-Do not duplicate the other six here. If a design question is genuinely open, it belongs in
-`01`/`02`/`03`/`05`/`06` under their Open questions sections, not in this list.
+Do not duplicate the other docs here. If a design question is genuinely open, it belongs in
+`01`/`02`/`03`/`05`/`06`/`07` under their Open questions sections, not in this list.
 
 ---
 
@@ -141,8 +142,8 @@ check, not a blocker.
 >
 > **The bar on logging real workouts is LIFTED.** It existed only until the units conversion landed,
 > and it has: nothing about the local store is waiting on a migration any more. What is still true
-> is that there is **no App Store Connect app record**, so the build cannot be uploaded — see
-> "Shipping to a device".
+> is that the **App Store Connect app record now exists** (Drake, 2026-08-20), so a build
+> can be uploaded — see "Shipping to a device". Ask before any upload.
 >
 > ⚠️ **THE ORDERING RULE WAS BROKEN, BY ME, WITHIN AN HOUR OF WRITING IT DOWN.** Migration
 > `20260818120000_weights_to_kilograms.sql` says: apply it BEFORE running a build of this client
@@ -805,6 +806,10 @@ underneath never changed — only whether the screen described it honestly.
    Read entitlement and prompt are in. **Unverified on a Watch-on session**, including
    whether HealthKit lets an app attach samples another source owns.
 
+3. **AI directory listing is Phase 4**, after the leftover legal pages. Checklist
+   and sequencing: `07-compliance.md`. Custom connect already works; do not
+   rebuild OAuth to “qualify.”
+
 > ~~**A cleared field does not travel.**~~ **FIXED 2026-08-19, all thirteen row structs.** Kept
 > below only as the record of what it was.
 
@@ -879,8 +884,16 @@ This unblocks **Apple Health** — HealthKit is a restricted capability Apple do
 accounts at all — and **Sign in with Apple**, which is paid-only and carries the identity-linking
 work already flagged under "Not verified".
 
-What is NOT done: **no app record exists in App Store Connect**, so nothing can actually be
-uploaded yet. That record is Drake's to create (name, bundle id `us.aiagent4.MCPStrength`, SKU).
+The **App Store Connect app record exists** (Drake created it 2026-08-20, bundle id
+`us.aiagent4.MCPStrength`). TestFlight **1.0 build 1** uploaded 2026-08-20; **build 2**
+(deep links, Delete Account, onboarding) processed the same day. Public contact is
+**help@mcpstrength.com**, forwarded to Drake's inbox via Cloudflare Email Routing.
+Privacy / terms / how-to live under `web/` (`/privacy`, `/terms`, `/connect`). The
+barbell App Icon is still a placeholder until Drake sends a mark.
+`ITSAppUsesNonExemptEncryption = NO`. Confirmation email is **on** on the live
+project (`https://mcpstrength.com/auth/callback` plus `mcpstrength://auth/callback`).
+A throwaway signup still needs to prove the link opens the app. Ask before
+uploading — it is outward-facing.
 
 > **Two hours went into diagnosing this and the diagnosis was wrong twice**, so the reusable part is
 > how to read the output rather than the conclusion:
@@ -1047,9 +1060,11 @@ ringer `docs/MODEL-NOTES.md`.
   been**, and it is now the last completely unseen screen. `WarmupRampWalkthroughTests` is the
   worked example of how to photograph it; the editor's own `Add Warm-up Sets` path is the obvious
   thing to point it at next, since that half of the wiring has still only been reasoned about.
-- Creating an account, the confirmation email, and password reset — **email confirmation is
-  currently DISABLED on the project** because the confirmation link pointed at `localhost:3000`.
-  Must be re-enabled before launch, together with deep links.
+- Creating an account, the confirmation email, and password reset — deep links
+  land at `https://mcpstrength.com/auth/callback` and `mcpstrength://auth/callback`.
+  **Confirm email is on** as of 2026-08-20 (build 2). A throwaway signup still needs
+  to prove the link opens the app. Public mail: `help@mcpstrength.com` forwards to
+  Drake via Cloudflare Email Routing.
 
 > **When Apple/Google/Facebook sign-in is added, LINK the identity to the existing account.** Drake
 > intends to offer all three, which makes Sign in with Apple mandatory rather than optional (Apple
@@ -1057,7 +1072,8 @@ ringer `docs/MODEL-NOTES.md`.
 > A new provider treated as a fresh sign-up gives the user a second, empty account and their history
 > appears to have vanished.
 
-**Phases 3–4 — Phase 3 is next.** The real multi-user MCP server, then product.
+**Phases 3–4 — Phase 3 Connect is live; Phase 4 is product** (App Store, then
+directory listings — `07-compliance.md`).
 
 ---
 

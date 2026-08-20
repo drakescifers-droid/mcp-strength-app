@@ -1,0 +1,17 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "ZD2SRFJUPS.us.aiagent4.MCPStrength",
+        "paths": ["/auth/callback", "/auth/callback/*"]
+      },
+      {
+        "appIDs": ["ZD2SRFJUPS.us.aiagent4.MCPStrength"],
+        "components": [
+          { "/": "/auth/callback*" }
+        ]
+      }
+    ]
+  }
+}

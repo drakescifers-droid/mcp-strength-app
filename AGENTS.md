@@ -15,6 +15,7 @@ these files already explain, and do not duplicate them into new files:
 | `docs/04-status.md` | **What is built, what is half-built, what was skipped on purpose** |
 | `docs/05-database.md` | Why the Postgres schema differs from the SwiftData one |
 | `docs/06-sync.md` | How sync works on the client, and how it is made visible |
+| `docs/07-compliance.md` | Anthropic / ChatGPT directory listing, privacy pages, when in the phases |
 | `~/ringer/docs/MODEL-NOTES.md` | Which worker models are good at what |
 
 The app is `MCPStrength/` — a native iOS workout logger, SwiftData locally, syncing to Supabase.

@@ -9,28 +9,63 @@
 <body>
   <main class="wrap wide">
     <h1>Privacy</h1>
-    <p>MCP Strength is a workout logger. This page says what we store and who can see it. It is written to match the app as it works today, not a lawyer’s template.</p>
+    <p>MCP Strength is a workout logger for the iPhone. This page says what we store, who can see it, how long it lasts, and how to delete it. It is written to match the app as it works today, not a lawyer’s template. It is not medical advice and we are not a covered health-care provider.</p>
+    <p>Last updated 20 August 2026.</p>
+
+    <h2>Who we are</h2>
+    <p>MCP Strength is run by the person behind this product. Questions: <a href="mailto:help@mcpstrength.com">help@mcpstrength.com</a>.</p>
 
     <h2>What we store</h2>
-    <p>If you create an account: your email, and the workouts, templates, exercises, measurements, and settings you save. Those sync to our database so another device — or Claude, if you connect it — can see the same history.</p>
-    <p>The phone also keeps a copy locally. A workout you log in a gym with no signal is real on the phone first; it uploads when it can.</p>
+    <p>If you create an account we store:</p>
+    <ul>
+      <li>your email and an encrypted password (we cannot read the password back)</li>
+      <li>workouts (sets, weights, reps, rest, set type, RPE, notes, sticky notes, when you trained)</li>
+      <li>templates and programs you save</li>
+      <li>exercises you add, plus the shared exercise library</li>
+      <li>body measurements you record</li>
+      <li>settings such as weight units and Apple Health switches</li>
+    </ul>
+    <p>Those sync to our database (hosted with Supabase in the United States) so another of your devices — or an AI tool you connect — can see the same history. The phone also keeps a copy locally. A workout you log with no signal is real on the phone first; it uploads when it can.</p>
+
+    <h2>Why we store it</h2>
+    <p>To run the logger you asked for: so your training is backed up, so you can use more than one device, and so an AI you explicitly connect can read and write <em>your</em> templates and history — never anyone else’s.</p>
 
     <h2>Apple Health</h2>
-    <p>Health data stays under your control. The app only reads or writes Health types you allow, and only when the matching switch in Settings is on. We do not use Health data for advertising. Turning a switch off in the app, or revoking access in Apple’s Health app, stops that direction.</p>
+    <p>Health data stays under your control. The app only reads or writes Health types you allow, and only when the matching switch in Settings is on. Types we can touch, if you allow them: workouts and Active Energy, plus Weight, Body Fat %, calories eaten, and Waist. Other body-part measurements stay in this app; Apple Health has no type for them.</p>
+    <p>This is training data, not a medical chart. We do not use Health data for advertising. Turning a switch off in the app, or revoking access in Apple’s Health app, stops that direction.</p>
 
-    <h2>Claude and other AI tools</h2>
-    <p>Nothing is shared with an AI until you connect one here and tap Allow. That connection is to <em>your</em> account only. You can deny a request. Revoking connected apps from this site is coming; until then, you can change your password on the account to cut off old sessions, or ask us to revoke a client.</p>
+    <h2>Claude, ChatGPT, and other AI tools</h2>
+    <p>Nothing is shared with an AI until you connect one (the connector URL is <code>https://mcp.mcpstrength.com</code>) and tap Allow on this site. That connection is to <em>your</em> account only. You can deny a request. The AI then sees what the tools return — including notes and sticky notes on workouts and templates, if those tools are used.</p>
+    <p>There is no “revoke connected apps” button on this site yet. Change your password in the app, or delete the account, to cut off old sessions. We do not collect the chat log from Claude or ChatGPT.</p>
 
-    <h2>What we do not do</h2>
-    <p>We do not sell your training data. We do not put a made-up number in Apple Fitness (a zero for calories you did not earn). We do not read across accounts — the database refuses that even if our server misbehaves.</p>
+    <h2>Who else receives data</h2>
+    <ul>
+      <li><strong>Us</strong> — to operate the app and answer <a href="mailto:help@mcpstrength.com">help@mcpstrength.com</a>.</li>
+      <li><strong>Supabase</strong> — hosts the database and sign-in.</li>
+      <li><strong>Apple</strong> — if you allow Health, Apple holds those samples under your Apple ID. If you install via TestFlight or the App Store, Apple also sees what any App Store account sees.</li>
+      <li><strong>The AI client you connected</strong> — only after Allow, and only as that signed-in user.</li>
+    </ul>
+    <p>We do not sell your training data. We do not put a made-up number in Apple Fitness. The database refuses reads across accounts even if our server misbehaves.</p>
+
+    <h2>How long it lasts</h2>
+    <p>Your live rows stay until you delete them or delete the account. When you delete a workout or template in the app, we keep a hidden copy (a tombstone) for up to 90 days so another device that was offline can learn it was deleted instead of bringing it back. After that window the row is removed.</p>
+    <p>Deleting the whole account removes the login immediately and deletes your rows on the server. A phone that was offline may still show a local copy until it next opens; that copy is not an account.</p>
 
     <h2>Deleting</h2>
-    <p>You can delete workouts and templates in the app. Deleting the Apple ID / account entirely is not a button in the app yet; email from the address on the account and we will remove it. Apple requires an in-app account-deletion path before the App Store listing; that will land before we ship there.</p>
+    <p>You can delete individual workouts and templates in the app. To delete the whole account, open Profile and choose Delete Account. That signs you out, wipes the copy on that phone, and removes the login. You will not be able to sign in again with that account.</p>
+    <p>If you cannot open the app, email <a href="mailto:help@mcpstrength.com">help@mcpstrength.com</a> from the address on the account and we will delete it.</p>
+
+    <h2>Children</h2>
+    <p>MCP Strength is not directed at children under 13. Do not create an account for one.</p>
 
     <h2>Contact</h2>
-    <p>Questions about this page: the email you used to sign up reaches the person who runs MCP Strength.</p>
+    <p><a href="mailto:help@mcpstrength.com">help@mcpstrength.com</a></p>
     <nav>
       <a href="/">Home</a>
+      ·
+      <a href="/connect">How to connect</a>
+      ·
+      <a href="/terms">Terms</a>
     </nav>
   </main>
 </body>

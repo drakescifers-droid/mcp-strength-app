@@ -105,20 +105,47 @@ struct PaletteTests {
 
     /// **A KNOWN EXCEPTION, PINNED SO IT CANNOT GET WORSE.**
     ///
-    /// White on the Finish green is 2.08:1 on the dark palettes — below the 3:1
-    /// every other solid button clears. This is inherited, not introduced: it is
-    /// the exact green the app shipped with, and the four looks kept it so the
-    /// switch changed nothing about what "go" looks like.
+    /// White on the Finish green is 2.08:1 — below the 3:1 every other solid
+    /// button clears. Inherited, not introduced: it is the exact green the app
+    /// shipped with, kept so that "go" did not change colour in the same
+    /// release everything else did.
     ///
-    /// The fix, when it is wanted, is one value: `success` at `#17A65A` reads
-    /// 3.16:1 and is still unmistakably the same green. Until somebody decides
-    /// that, this test stops it drifting further down.
+    /// It survives on Gunmetal and Orchid only. **Blush** deepened the green
+    /// for a light ground (4.4:1) and **Bunker** darkened `onSolid` for its
+    /// chartreuse accent (8.45:1) — in both cases the fix fell out of the
+    /// palette rather than being applied to it. That is the shape of the
+    /// remaining fix too: one value, `success` at `#17A65A`, 3.16:1, still
+    /// unmistakably the same green.
     @Test(arguments: AppTheme.allCases)
     func finishButtonIsTheOneKnownWeakPair(theme: AppTheme) {
         let palette = theme.palette
         let name = palette.name
         let ratio = palette.onSolid.contrast(against: palette.success)
         #expect(ratio >= 2.0, "\(name): Finish label at \(ratio):1 — worse than the inherited 2.08")
+    }
+
+    @Test func bunkerAndBlushAlreadyClearTheFinishBar() {
+        // Pinned separately so the two palettes that DO get this right cannot
+        // quietly regress to the inherited 2.08 while the general floor stays
+        // at 2.0.
+        for palette in [Palette.bunker, Palette.blush] {
+            let ratio = palette.onSolid.contrast(against: palette.success)
+            #expect(ratio >= 3, "\(palette.name): Finish label at \(ratio):1")
+        }
+    }
+
+    @Test(arguments: AppTheme.allCases)
+    func theRestCountdownReadsOverBothHalvesOfItsBar(theme: AppTheme) {
+        let palette = theme.palette
+        let name = palette.name
+        // The bar is accent fill on the left, bare `fieldFill` track on the
+        // right, and the countdown sits across the boundary — so BOTH halves
+        // have to carry a label. `onSolid` handles the fill, `textPrimary` the
+        // track (see RestProgressBar, which draws the label twice).
+        let overFill = palette.onSolid.contrast(against: palette.accent)
+        let overTrack = palette.textPrimary.contrast(against: palette.fieldFill)
+        #expect(overFill >= 3, "\(name): countdown over the fill at \(overFill):1")
+        #expect(overTrack >= 4.5, "\(name): countdown over the empty track at \(overTrack):1")
     }
 
     // MARK: - The badge alphabet

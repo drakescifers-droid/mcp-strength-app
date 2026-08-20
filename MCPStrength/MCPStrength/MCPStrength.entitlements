@@ -13,5 +13,10 @@
 	     risk. -->
 	<key>com.apple.developer.healthkit</key>
 	<true/>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:mcpstrength.com</string>
+		<string>applinks:www.mcpstrength.com</string>
+	</array>
 </dict>
 </plist>

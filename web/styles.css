@@ -71,4 +71,22 @@ button, .button {
 .hidden { display: none; }
 .client { color: var(--text); margin: 16px 0; }
 ul { color: var(--muted); padding-left: 1.2em; }
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  color: var(--text);
+  word-break: break-all;
+}
 nav { margin-top: 32px; font-size: 0.9rem; }
+
+.wrap:has(.fixed-app) { padding-bottom: 120px; }
+.fixed-app {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 12px 24px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface);
+  box-shadow: 0 -12px 24px rgba(0, 0, 0, 0.35);
+}
+.fixed-app .button { margin-top: 0; max-width: 640px; margin-left: auto; margin-right: auto; }

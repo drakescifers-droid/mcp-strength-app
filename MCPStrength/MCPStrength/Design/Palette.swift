@@ -167,21 +167,39 @@ extension Palette {
         noticeText: PaletteColor(0x251E0A)
     )
 
-    /// Warm and matte. Olive-graphite ground, bone rather than pure white, and
-    /// a steel accent with the glare taken out — the one to reach for if a
-    /// bright blue on near-black is too much between sets.
+    /// Warm and matte, and the only look whose accent is not blue. A steel-blue
+    /// accent on olive was two temperatures arguing; the highlights are olive's
+    /// own family now — a muted chartreuse, closer to map markings than to
+    /// neon.
+    ///
+    /// TWO CONSEQUENCES, BOTH DELIBERATE.
+    ///
+    /// The accent hue is boxed in from both sides: it has to stay 40° clear of
+    /// the Finish green (145°) so the two affirmative buttons cannot collapse,
+    /// and 35° clear of warm-up orange (31°) so it cannot be read as a W badge.
+    /// That leaves 71°–105°, and this sits at 75°.
+    ///
+    /// `onSolid` goes DARK here, alone among the four. A green bright enough to
+    /// read as text on olive (7.95:1) is far too bright to carry white on top
+    /// — white on this is 2.1:1. Dark-on-chartreuse is 9.1:1, and the same
+    /// token then fixes Finish as a side effect: white on the green was
+    /// 2.08:1, this is 8.45:1. Bunker is the one palette where the Finish
+    /// button is not a known weak pair.
     static let bunker = Palette(
         name: "Bunker",
-        blurb: "Warm and matte. Olive graphite, bone text.",
+        blurb: "Warm and matte. Olive graphite, chartreuse highlights.",
         colorScheme: .dark,
         surface: PaletteColor(0x23261F),
         fieldFill: PaletteColor(0x171A14),
         keypadKey: PaletteColor(0x313629),
-        accent: PaletteColor(0x4E97D9),
-        accentFill: PaletteColor(0x24404F),
+        accent: PaletteColor(0xA9C64F),
+        accentFill: PaletteColor(0x2C3A18),
         textPrimary: PaletteColor(0xF5F3EC),
         textSecondary: PaletteColor(0x9A9C8C),
-        onSolid: PaletteColor(0xFFFFFF),
+        // Dark, not white — see the note above. Every other palette's label on
+        // a solid fill is white; this one's is nearly black, and that is the
+        // token doing its job rather than a mistake.
+        onSolid: PaletteColor(0x171A12),
         success: PaletteColor(0x2ECD70),
         destructive: PaletteColor(0xFF5964),
         destructiveFill: PaletteColor(0x362B28),

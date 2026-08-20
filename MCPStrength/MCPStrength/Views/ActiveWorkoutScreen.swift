@@ -1334,6 +1334,14 @@ private struct RestProgressBar: View {
         Int(timer.remaining(at: now).rounded())
     }
 
+    /// The countdown, in one colour. Drawn twice — see the overlay below.
+    private func timeLabel(_ color: Color) -> some View {
+        Text(formatTime(remainingSeconds))
+            .font(Typography.body.weight(.semibold))
+            .foregroundStyle(color)
+            .monospacedDigit()
+    }
+
     var body: some View {
         GeometryReader { proxy in
             let progress = timer.progress(at: now)
@@ -1356,10 +1364,27 @@ private struct RestProgressBar: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .clipShape(.rect(cornerRadius: Radius.chip))
             .overlay {
-                Text(formatTime(remainingSeconds))
-                    .font(Typography.body.weight(.semibold))
-                    .foregroundStyle(Theme.textPrimary)
-                    .monospacedDigit()
+                // TWO LAYERS, NOT ONE. The label sits across a boundary: the
+                // accent fill on the left, the bare track on the right, and the
+                // boundary moves under it as the rest drains. One colour
+                // therefore cannot be right for the whole label — on Blush the
+                // dark `textPrimary` disappeared into the plum fill, and plain
+                // white would disappear into the cream track a few seconds
+                // later.
+                //
+                // So: `textPrimary` over the track, `onSolid` over the fill,
+                // the second masked to exactly the fill's width. On every dark
+                // palette the two are the same white and this is invisible
+                // work; it only shows up where it is needed.
+                ZStack {
+                    timeLabel(Theme.textPrimary)
+                    timeLabel(Theme.onSolid)
+                        .mask(alignment: .leading) {
+                            Rectangle()
+                                .frame(width: proxy.size.width * progress)
+                                .animation(.linear(duration: 1), value: progress)
+                        }
+                }
             }
             .overlay {
                 // A RoundedRectangle, not a `Rectangle` clipped round: a square

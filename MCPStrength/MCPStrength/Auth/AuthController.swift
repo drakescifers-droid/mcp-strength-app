@@ -150,7 +150,8 @@ final class AuthController {
         await perform {
             let response = try await self.client.auth.signUp(
                 email: normalized,
-                password: password
+                password: password,
+                redirectTo: SupabaseConfig.authCallbackURL
             )
 
             switch response {
@@ -173,6 +174,25 @@ final class AuthController {
         }
     }
 
+    /// The confirmation (or reset) link landed in the app. The auth-state
+    /// stream is still the single path into `.signedIn`.
+    func handleIncomingURL(_ url: URL) async {
+        guard SupabaseConfig.isAuthCallback(url) else { return }
+        await perform {
+            _ = try await self.client.auth.session(from: url)
+        }
+    }
+
+    /// Account deletion already removed the user on the server. Sign-out can
+    /// fail because the session is already dead; the gate still has to close.
+    func clearSessionAfterAccountDeletion() async {
+        try? await client.auth.signOut()
+        state = .signedOut
+        errorMessage = nil
+    }
+
+    /// Return to the form from the confirmation notice — a mistyped address is
+
     func sendPasswordReset(email: String) async -> Bool {
         if let issue = AuthFormValidator.validateEmail(email) {
             errorMessage = issue.message
@@ -181,7 +201,8 @@ final class AuthController {
         var sent = false
         await perform {
             try await self.client.auth.resetPasswordForEmail(
-                AuthFormValidator.normalized(email: email)
+                AuthFormValidator.normalized(email: email),
+                redirectTo: SupabaseConfig.authCallbackURL
             )
             sent = true
         }
@@ -197,6 +218,12 @@ final class AuthController {
 
     func clearError() {
         errorMessage = nil
+    }
+
+    /// The live access token, for authenticated function calls. Nil if there
+    /// is no session.
+    func accessToken() async -> String? {
+        try? await client.auth.session.accessToken
     }
 
     // MARK: - Shared request wrapper

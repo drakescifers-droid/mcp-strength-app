@@ -120,6 +120,10 @@ both sides, warm-up ramp corrected to 40 / 60 / 80. Swift suite green, SQL suite
    - No existing samples → keep the flat-rate estimate.
    - If attaching **throws** → fall back to the estimate.
 
+3. **Anthropic / ChatGPT directory listing is Phase 4.** Do not start the
+   forms until the leftover pages in `docs/07-compliance.md` are done.
+   Custom connect already works. Do not rebuild OAuth to qualify.
+
 ~~**Apple Health — import measurements FROM Health.**~~ **COMMITTED 2026-08-19**
 (`e82f764`). Write, read toggle, both yellow banners. Still unverified on the
 phone — see Waiting on me.
@@ -241,8 +245,11 @@ phone — see Waiting on me.
   waiting on this any more.
 - **The app is ON my iPhone 14 and running** (installed 2026-08-18, direct install, no TestFlight
   needed). The units conversion is proven on a real pounds-era store — see `04-status.md`.
-- **The App Store Connect app record does not exist yet**, so nothing can be uploaded even though
-  the build is ready. Only I can create it. Ask before running any upload; it is outward-facing.
+- **The App Store Connect app record exists** (Drake, 2026-08-20). TestFlight 1.0 / 1
+  and **1.0 / 2** uploaded; build 2 is processed (deep links, Delete Account,
+  onboarding). Confirmation email is **on**. Mailbox: `help@mcpstrength.com`
+  forwards to Drake via Cloudflare Email Routing. Barbell icon is a placeholder
+  until a real logo arrives. Ask before uploading.
 - **The template editor has still never been looked at by anyone.** It is the last
   completely unseen screen. Build, install, open a template on the phone, and
   tell me. Do not drive XCUITest or the simulator as a camera — see
@@ -266,6 +273,10 @@ phone — see Waiting on me.
   the push order the whole run aborted. Migration `20260819140000` fixes it and is applied.
   **What is still unproven is a run that WORKS** — tap `Back Up Now` on the Profile tab and the
   card should go to "Backed up". If it fails again it will now say what the server said.
+- 🆕 **FIRST-RUN ONBOARDING is on build 2** (theme → units → Health → Claude URL).
+  Existing signed-in testers will see it once. Skip is allowed on Health and Claude.
+- 🆕 **Prove confirmation email** with a throwaway signup. Confirm email is on;
+  the link should open the app. `help@mcpstrength.com` already forwards.
 - **THE SETTINGS SCREEN needs a thumb — gear, top-left of Profile.** One row: Weight Unit. The
   case worth trying is switching to Metric **with a workout open**, because `SetRow` reacts with
   `.onChange(of: unit)` and nothing has ever been able to produce that change before. Every entry

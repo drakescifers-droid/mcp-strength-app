@@ -833,6 +833,7 @@ private struct SettingsValueRow: View {
 /// goes back — there is nothing else on this screen to do.
 struct WeightUnitPickerScreen: View {
     let current: WeightUnit
+    var popsOnSelect: Bool = true
     let onSelect: (WeightUnit) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -843,7 +844,9 @@ struct WeightUnitPickerScreen: View {
                 ForEach(Array(WeightUnit.allCases.enumerated()), id: \.element) { index, unit in
                     Button {
                         onSelect(unit)
-                        dismiss()
+                        if popsOnSelect {
+                            dismiss()
+                        }
                     } label: {
                         HStack {
                             Text(unit.settingsLabel)

@@ -24,13 +24,17 @@ struct ProfileTab: View {
     @Environment(AuthController.self) private var auth
     @Environment(SyncStatus.self) private var sync
     @Environment(SyncEngine.self) private var engine: SyncEngine?
+    @Environment(\.modelContext) private var modelContext
+    @Environment(OnboardingStore.self) private var onboarding
 
     @Query(filter: #Predicate<Workout> { $0.deletedAt == nil },
            sort: [SortDescriptor(\Workout.startedAt, order: .reverse)])
     private var allWorkouts: [Workout]
 
     @State private var confirmingSignOut = false
+    @State private var confirmingDeleteAccount = false
     @State private var showingSettings = false
+    @State private var deleteAccountMessage: String?
 
     private var completedWorkouts: [Workout] {
         WorkoutStats.completedWorkouts(from: allWorkouts)
@@ -86,6 +90,18 @@ struct ProfileTab: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text(sync.state.signOutMessage)
+            }
+            .confirmationDialog(
+                "Delete this account?",
+                isPresented: $confirmingDeleteAccount,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Account", role: .destructive) {
+                    Task { await deleteAccount() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This removes the login, your workouts, templates, and any Claude or ChatGPT connection. You cannot undo it.")
             }
         }
     }
@@ -147,6 +163,19 @@ struct ProfileTab: View {
             Button("Sign Out") { confirmingSignOut = true }
                 .buttonStyle(.tintedDestructive)
                 .disabled(auth.isBusy)
+
+            Button("Delete Account", role: .destructive) {
+                confirmingDeleteAccount = true
+            }
+            .font(Typography.secondary)
+            .foregroundStyle(Theme.destructive)
+            .disabled(auth.isBusy)
+
+            if let deleteAccountMessage {
+                Text(deleteAccountMessage)
+                    .font(Typography.secondary)
+                    .foregroundStyle(Theme.destructive)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Spacing.comfortable)
@@ -167,6 +196,22 @@ struct ProfileTab: View {
     private func syncNow() async {
         guard let engine, case .signedIn(let userID, _) = auth.state else { return }
         await engine.run(as: userID)
+    }
+
+    private func deleteAccount() async {
+        deleteAccountMessage = nil
+        guard let token = await auth.accessToken() else {
+            deleteAccountMessage = AccountDeletionPresenter.message(for: AccountDeletionError.notSignedIn)
+            return
+        }
+        do {
+            try await AccountDeletion.requestServerDeletion(accessToken: token)
+            try AccountDeletion.wipeLocalUserData(in: modelContext)
+            onboarding.reset()
+            await auth.clearSessionAfterAccountDeletion()
+        } catch {
+            deleteAccountMessage = AccountDeletionPresenter.message(for: error)
+        }
     }
 
     // MARK: - Backup state
@@ -272,6 +317,7 @@ struct ProfileTab: View {
     ProfileTab()
         .environment(AuthController())
         .environment(SyncStatus())
+        .environment(OnboardingStore())
         .modelContainer(for: [
             Exercise.self,
             TemplateFolder.self,

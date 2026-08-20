@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Opening MCP Strength</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="wrap">
+    <h1>Opening the app</h1>
+    <p id="status">If MCP Strength is installed, it should open now. You can close this tab.</p>
+    <p id="fallback" class="hidden">Nothing opened. Open MCP Strength on this phone and sign in — the account is confirmed once you do.</p>
+    <nav>
+      <a href="/">Home</a>
+    </nav>
+  </main>
+  <script>
+    (function () {
+      var dest = "mcpstrength://auth/callback" + window.location.search + window.location.hash;
+      window.location.replace(dest);
+      window.setTimeout(function () {
+        var el = document.getElementById("fallback");
+        if (el) el.classList.remove("hidden");
+      }, 1200);
+    })();
+  </script>
+</body>
+</html>

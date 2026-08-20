@@ -290,7 +290,9 @@ Edge Function at `supabase/functions/mcp`, Allow page at
 `spike/` stays frozen.
 
 **Phase 4 — product.**
-App Store, onboarding, pricing.
+App Store, onboarding, pricing, and listing the same MCP URL in Anthropic’s
+Connectors Directory and ChatGPT’s plugin directory. The checklist and
+sequencing live in `07-compliance.md` — do not duplicate it here.
 
 Phases 1 and 2 look like "build a worse Strong," which is why Phase 0 exists: it front-loads the
 question the rest of the project is betting on.

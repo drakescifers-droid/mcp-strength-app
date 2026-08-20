@@ -23,6 +23,7 @@ import SwiftUI
 /// Chooses between the sign-in flow and the app, based on session state.
 struct AuthGate: View {
     @Environment(AuthController.self) private var auth
+    @Environment(OnboardingStore.self) private var onboarding
 
     var body: some View {
         // DEBUG-only, and only with an explicit launch argument. See
@@ -46,7 +47,11 @@ struct AuthGate: View {
         case .awaitingConfirmation(let email):
             ConfirmationPendingView(email: email)
         case .signedIn:
-            ContentView()
+            if onboarding.isComplete {
+                ContentView()
+            } else {
+                OnboardingFlow()
+            }
         }
     }
 }
@@ -284,7 +289,7 @@ private struct ConfirmationPendingView: View {
                         .foregroundStyle(Theme.textSecondary)
                     Text(email)
                         .foregroundStyle(Theme.textPrimary)
-                    Text("Tap it, then come back and sign in.")
+                    Text("Tap it — it should open this app — then you can sign in.")
                         .foregroundStyle(Theme.textSecondary)
                 }
                 .font(Typography.secondary)

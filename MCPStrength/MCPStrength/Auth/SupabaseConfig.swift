@@ -36,6 +36,21 @@ enum SupabaseConfig {
 
     /// The publishable key — safe to ship, see the file comment.
     static let publishableKey = "sb_publishable_Br0kmmH0kncQRLuXxdl3EQ_M6liLV2S"
+
+    /// Where confirmation and password-reset links must land. The site page
+    /// hands the same URL to the app (`mcpstrength://auth/callback`).
+    static let authCallbackURL = URL(string: "https://mcpstrength.com/auth/callback")!
+
+    /// True for the HTTPS universal link and the custom-scheme fallback.
+    static func isAuthCallback(_ url: URL) -> Bool {
+        if url.scheme == "mcpstrength" {
+            return url.host == "auth"
+        }
+        guard url.host == "mcpstrength.com" || url.host == "www.mcpstrength.com" else {
+            return false
+        }
+        return url.path.hasPrefix("/auth/callback")
+    }
 }
 
 /// The app's single `SupabaseClient`.

@@ -163,10 +163,12 @@ enabled = true
 # confirmation is disabled on this project; if it is turned on, this URL
 # is also where confirmation links land.
 site_url = "http://127.0.0.1:54321/functions/v1"
+# Production confirmation / reset links redirect here (hosted project, not this
+# local file): https://mcpstrength.com/auth/callback
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+additional_redirect_urls = ["https://127.0.0.1:3000", "https://mcpstrength.com/auth/callback", "mcpstrength://auth/callback"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -422,6 +424,9 @@ verify_jwt = false
 
 [functions.oauth-consent]
 verify_jwt = false
+
+[functions.delete-account]
+verify_jwt = true
 
 # pg-delta is the schema diff engine for db diff / db pull / db remote commit.
 # Set enabled = false to fall back to the legacy migra engine.

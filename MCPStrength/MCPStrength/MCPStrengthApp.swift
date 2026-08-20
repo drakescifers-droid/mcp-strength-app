@@ -133,6 +133,7 @@ struct MCPStrengthApp: App {
     /// Which look the app is wearing. Owned here, like `auth` and `sync`, so it
     /// survives every view rebuild — including the one it causes itself.
     @State private var themeStore = ThemeStore()
+    @State private var onboardingStore = OnboardingStore()
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -150,6 +151,7 @@ struct MCPStrengthApp: App {
                 .optionalEnvironment(engine)
                 .optionalEnvironment(health)
                 .environment(themeStore)
+                .environment(onboardingStore)
                 // System-provided chrome — navigation titles, pickers, keyboards,
                 // the status bar — takes its colours from the environment colour
                 // scheme and NEVER from our tokens. This used to be pinned to
@@ -251,6 +253,13 @@ struct MCPStrengthApp: App {
                     if phase == .active {
                         triggerSyncIfSignedIn()
                     }
+                }
+                .onOpenURL { url in
+                    Task { await auth.handleIncomingURL(url) }
+                }
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    guard let url = activity.webpageURL else { return }
+                    Task { await auth.handleIncomingURL(url) }
                 }
         }
         .modelContainer(sharedModelContainer)

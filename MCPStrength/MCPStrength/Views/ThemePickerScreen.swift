@@ -21,6 +21,9 @@ struct ThemePickerScreen: View {
     @Environment(ThemeStore.self) private var store
     @Environment(\.dismiss) private var dismiss
 
+    /// Settings warns that a switch closes the sheet. Onboarding must not.
+    var showsSettingsFooter: Bool = true
+
     var body: some View {
         ScrollView {
             VStack(spacing: Spacing.comfortable) {
@@ -46,6 +49,7 @@ struct ThemePickerScreen: View {
         .navigationTitle("Appearance")
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
+            if showsSettingsFooter {
             // Said before it happens rather than discovered afterwards — the
             // same courtesy the weight-unit picker pays. Nothing is lost, but a
             // screen closing itself is alarming if it was not announced.
@@ -56,6 +60,7 @@ struct ThemePickerScreen: View {
                 .padding(.horizontal, Spacing.screenMargin)
                 .padding(.vertical, Spacing.comfortable)
                 .background(Theme.surface)
+            }
         }
     }
 }
