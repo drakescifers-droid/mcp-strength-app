@@ -86,6 +86,17 @@ struct TemplateEditorScreen: View {
     @State private var exercises: [DraftExercise] = []
     @State private var showingExercisePicker = false
 
+    // Same collapse-while-dragging as the live workout: a full set list is
+    // taller than the screen, so without collapsing you cannot drop onto an
+    // exercise two screens away. Save already treats a new array order as
+    // KEPT-with-new-index (`TemplateSaveDiff`); this state is only the gesture.
+    @State private var draggingExerciseID: UUID?
+
+    /// Where the dragged exercise would land. Separate from
+    /// `draggingExerciseID` (what was lifted) — the workout screen learned
+    /// that using one flag for both made the reorder blind.
+    @State private var dropTargetExerciseID: UUID?
+
     /// The custom number keypad. One session for the whole editor so Next can
     /// walk off the last set of one exercise onto the first of the next.
     @State private var keypad = NumberKeypadSession()
@@ -115,11 +126,42 @@ struct TemplateEditorScreen: View {
                 VStack(spacing: Spacing.spacious) {
                     nameField
 
-                    ForEach(Array(exercises.enumerated()), id: \.element.id) { index, _ in
+                    ForEach(Array(exercises.enumerated()), id: \.element.id) { index, draft in
                         exerciseBlock(at: index)
+                            .overlay(alignment: .top) {
+                                // Same marker as the live workout. Do not also
+                                // require `draggingExerciseID != draft.id` —
+                                // `isTargeted` may stamp that id onto the first
+                                // hovered block, which then never draws a line.
+                                if dropTargetExerciseID == draft.id {
+                                    Capsule()
+                                        .fill(Theme.accent)
+                                        .frame(height: 3)
+                                        .padding(.horizontal, Spacing.compact)
+                                        .offset(y: -Spacing.compact)
+                                        .transition(.opacity)
+                                }
+                            }
+                            .animation(.snappy(duration: 0.15), value: dropTargetExerciseID)
+                            .dropDestination(for: String.self) { items, _ in
+                                dropTargetExerciseID = nil
+                                return handleExerciseDrop(items, onto: draft.id)
+                            } isTargeted: { targeted in
+                                if targeted, draggingExerciseID == nil {
+                                    draggingExerciseID = draft.id
+                                }
+                                if targeted {
+                                    dropTargetExerciseID = draft.id
+                                } else if dropTargetExerciseID == draft.id {
+                                    dropTargetExerciseID = nil
+                                }
+                            }
                     }
 
+                    endOfListDropZone
+
                     addExercisesButton
+                        .opacity(isReordering ? 0.4 : 1)
                 }
                 .padding(.horizontal, Spacing.screenMargin)
                 .padding(.vertical, Spacing.spacious)
@@ -387,10 +429,48 @@ struct TemplateEditorScreen: View {
 
     // MARK: - Exercise block
 
+    private var isReordering: Bool { draggingExerciseID != nil }
+
+    /// Stands in for "past the last exercise" in `dropTargetExerciseID`.
+    private static let endOfListTargetID = UUID()
+
+    /// Dropping onto a block inserts BEFORE that block, so the last slot is
+    /// unreachable without a zone after the final exercise. Same as the live
+    /// workout. Only present while a drag is in flight so it cannot eat taps
+    /// meant for Add Exercises.
+    @ViewBuilder
+    private var endOfListDropZone: some View {
+        if isReordering {
+            ZStack(alignment: .top) {
+                Color.clear
+                if dropTargetExerciseID == Self.endOfListTargetID {
+                    Capsule()
+                        .fill(Theme.accent)
+                        .frame(height: 3)
+                        .padding(.horizontal, Spacing.compact)
+                }
+            }
+            .frame(height: 44)
+            .contentShape(Rectangle())
+            .animation(.snappy(duration: 0.15), value: dropTargetExerciseID)
+            .dropDestination(for: String.self) { items, _ in
+                dropTargetExerciseID = nil
+                return handleExerciseDropAtEnd(items)
+            } isTargeted: { targeted in
+                if targeted {
+                    dropTargetExerciseID = Self.endOfListTargetID
+                } else if dropTargetExerciseID == Self.endOfListTargetID {
+                    dropTargetExerciseID = nil
+                }
+            }
+        }
+    }
+
     // Built from the SHARED SetRow — identical structure to the workout screen's
     // ExerciseBlock: exercise name in accent, column headers (lock trailing),
     // set rows with editable weight and reps, rest dividers between sets, and an
-    // "+ Add Set" button.
+    // "+ Add Set" button. While a reorder drag is active the block collapses
+    // to the title row, same as the live workout.
     @ViewBuilder
     private func exerciseBlock(at index: Int) -> some View {
         let draft = exercises[index]
@@ -403,30 +483,47 @@ struct TemplateEditorScreen: View {
         let previousPositions = SetNumbering.positionsWithinKind(for: draft.sets.map(\.setType))
 
         VStack(alignment: .leading, spacing: Spacing.comfortable) {
+            // The name is the drag handle — long-pressing it starts a reorder —
+            // so the menu sits beside it. A Menu inside `.draggable` makes the
+            // two gestures fight (same lesson as the live workout).
             HStack(spacing: Spacing.compact) {
                 Text(draft.exercise.name)
                     .font(Typography.body.weight(.semibold))
                     .foregroundStyle(Theme.accent)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .draggable(draft.id.uuidString) {
+                        Text(draft.exercise.name)
+                            .font(Typography.body.weight(.semibold))
+                            .foregroundStyle(Theme.accent)
+                            .onAppear { draggingExerciseID = draft.id }
+                            .onDisappear {
+                                draggingExerciseID = nil
+                                dropTargetExerciseID = nil
+                            }
+                    }
 
-                ExerciseOptionsMenu(
-                    hasNote: !(draft.note ?? "").isEmpty,
-                    hasStickyNote: !(draft.stickyNote ?? "").isEmpty,
-                    isInSuperset: draft.supersetGroupID != nil,
-                    onSelect: { onOption(index, $0) }
-                )
+                if !isReordering {
+                    ExerciseOptionsMenu(
+                        hasNote: !(draft.note ?? "").isEmpty,
+                        hasStickyNote: !(draft.stickyNote ?? "").isEmpty,
+                        isInSuperset: draft.supersetGroupID != nil,
+                        onSelect: { onOption(index, $0) }
+                    )
+                }
             }
 
-            if let sticky = draft.stickyNote, !sticky.isEmpty {
+            if let sticky = draft.stickyNote, !sticky.isEmpty, !isReordering {
                 ExpandableNote(text: sticky, kind: .exercise, tint: Theme.warmup)
             }
 
-            SetRowColumnHeader(
-                trailingIcon: "lock.fill",
-                unit: displayUnit(for: draft.exercise)
-            )
+            if !isReordering {
+                SetRowColumnHeader(
+                    trailingIcon: "lock.fill",
+                    unit: displayUnit(for: draft.exercise)
+                )
 
-            VStack(spacing: 0) {
+                VStack(spacing: 0) {
                 ForEach(Array(draft.sets.enumerated()), id: \.element.id) { setIndex, set in
                     SetRow(
                         setID: set.id,
@@ -465,10 +562,11 @@ struct TemplateEditorScreen: View {
                             : nil
                     )
                 }
-            }
+                }
 
-            AddSetButton(label: "+ Add Set (\(formatMinutesSeconds(draft.defaultRestSeconds)))") {
-                addSet(to: index)
+                AddSetButton(label: "+ Add Set (\(formatMinutesSeconds(draft.defaultRestSeconds)))") {
+                    addSet(to: index)
+                }
             }
         }
     }
@@ -715,6 +813,45 @@ struct TemplateEditorScreen: View {
                 restSeconds: rest
             )
         )
+    }
+
+    /// Drop onto an exercise row: insert at that row's position after the
+    /// dragged id has been removed (the ListOrdering index convention).
+    private func handleExerciseDrop(_ items: [String], onto targetID: UUID) -> Bool {
+        defer { draggingExerciseID = nil }
+        guard let raw = items.first, let id = UUID(uuidString: raw) else { return false }
+        if id == targetID { return true }
+
+        let ids = exercises.map(\.id)
+        var dest = ids
+        dest.removeAll { $0 == id }
+        guard let index = dest.firstIndex(of: targetID) else { return false }
+
+        let result = ListOrdering.move(id, from: ids, to: ids, at: index)
+        applyExerciseOrder(result.destination)
+        return true
+    }
+
+    /// Drop past the last exercise. Shares `ListOrdering.move` with the
+    /// onto-a-block path so both routes leave the same order list.
+    private func handleExerciseDropAtEnd(_ items: [String]) -> Bool {
+        defer { draggingExerciseID = nil }
+        guard let raw = items.first, let id = UUID(uuidString: raw) else { return false }
+
+        let ids = exercises.map(\.id)
+        guard ids.contains(id) else { return false }
+        guard ids.last != id else { return true }
+
+        var dest = ids
+        dest.removeAll { $0 == id }
+        let result = ListOrdering.move(id, from: ids, to: ids, at: dest.count)
+        applyExerciseOrder(result.destination)
+        return true
+    }
+
+    private func applyExerciseOrder(_ ids: [UUID]) {
+        let byID = Dictionary(uniqueKeysWithValues: exercises.map { ($0.id, $0) })
+        exercises = ids.compactMap { byID[$0] }
     }
 
     // MARK: - Save

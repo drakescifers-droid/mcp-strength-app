@@ -1115,10 +1115,12 @@ Small, none blocking, roughly in the order I would do them.
 > column here: that shipped early because its design was settled and only its UI was deferred.
 > Design it, then build it. Share is out of scope.
 
-> **Exercises can be reordered inside a workout by dragging the title**, and every exercise
-> collapses to its title row while the drag is active — a workout is taller than the screen, so
-> without collapsing you cannot reach an exercise two screens away. The list-move rule is shared
-> with the template grid as `ListOrdering`.
+> **Exercises can be reordered inside a workout AND inside the template editor
+> by dragging the title.** Every exercise collapses to its title row while the
+> drag is active — a list is taller than the screen, so without collapsing you
+> cannot reach an exercise two screens away. The list-move rule is shared
+> with the template grid as `ListOrdering`. Template Save already treated a
+> new draft order as KEPT-with-new-index; the editor just never had the gesture.
 
 > **Templates can be dragged between folders and reordered within one.** `Template.order` now
 > means position within its folder rather than a global rank — documented at the declaration,
