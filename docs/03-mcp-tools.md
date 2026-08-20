@@ -280,7 +280,7 @@ explicit in the JSON Schema.
   "exercise_id": "uuid",          // or exercise_name for lookup
   "superset_group": "A",          // worked in spike, was undocumented
   "sets": [{
-    "set_type": "normal",         // enum: normal | warmup | drop_set | failure
+    "set_type": "normal",         // enum: normal | warmup | dropSet | restPause | failure
     "reps": 8,                    // optional when set_type == failure
     "rep_range_start": 6,         // NEW
     "rep_range_end": 8,           // NEW

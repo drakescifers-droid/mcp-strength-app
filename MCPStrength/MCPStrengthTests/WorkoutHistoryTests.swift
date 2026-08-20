@@ -414,6 +414,7 @@ struct WorkoutHistoryTests {
     @Test func previousTextAppendsSuffixForLetteredTypesOnly() {
         #expect(PreviousText.format(.init(weight: 135, reps: 8, setType: .warmup), in: .kg) == "135 kg × 8 (W)")
         #expect(PreviousText.format(.init(weight: 75, reps: 11, setType: .dropSet), in: .kg) == "75 kg × 11 (D)")
+        #expect(PreviousText.format(.init(weight: 80, reps: 12, setType: .restPause), in: .kg) == "80 kg × 12 (R)")
         #expect(PreviousText.format(.init(weight: 225, reps: 5, setType: .failure), in: .kg) == "225 kg × 5 (F)")
         #expect(PreviousText.format(.init(weight: 225, reps: 5, setType: .normal), in: .kg) == "225 kg × 5")
         #expect(PreviousText.format(.init(weight: 225, reps: 5), in: .kg) == "225 kg × 5")
@@ -424,6 +425,7 @@ struct WorkoutHistoryTests {
     @Test func previousTextKeepsEmDashWhenThereIsNoLoad() {
         #expect(PreviousText.format(nil, in: .kg) == "—")
         #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .dropSet), in: .kg) == "—")
+        #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .restPause), in: .kg) == "—")
         #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .warmup), in: .kg) == "—")
         #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .failure), in: .kg) == "—")
         #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .normal), in: .kg) == "—")

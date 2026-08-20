@@ -1247,6 +1247,7 @@ enum PreviousText {
         switch setType {
         case .warmup:  return " (W)"
         case .dropSet: return " (D)"
+        case .restPause: return " (R)"
         case .failure: return " (F)"
         case .normal:  return ""
         }

@@ -2,7 +2,7 @@
 // Notes, sticky notes, and workout.summary all travel — a history response
 // that omits them has thrown away the explanation for its own numbers
 // (docs/03-mcp-tools.md). Weights are kilograms, the stored unit.
-// set_type is dropSet, never drop_set.
+// set_type is dropSet / restPause, never drop_set / rest_pause.
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js";
 import {

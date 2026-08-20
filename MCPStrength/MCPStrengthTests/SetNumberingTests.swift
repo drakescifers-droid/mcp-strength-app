@@ -3,9 +3,9 @@
 //  MCPStrengthTests
 //
 //  Covers SetNumbering.workingNumbers — the rule that only `.normal` sets
-//  consume a working-set number, while `.warmup` / `.dropSet` / `.failure`
-//  render a letter and are skipped. Lives in Workout/ (no SwiftUI) so it can
-//  be tested in isolation; see docs/01-data-model.md § SetType.
+//  consume a working-set number, while `.warmup` / `.dropSet` / `.restPause`
+//  / `.failure` render a letter and are skipped. Lives in Workout/ (no SwiftUI)
+//  so it can be tested in isolation; see docs/01-data-model.md § SetType.
 //
 
 import Testing
@@ -36,7 +36,17 @@ struct SetNumberingTests {
     }
 
     @Test func allLettered() {
-        #expect(SetNumbering.workingNumbers(for: [.warmup, .dropSet, .failure]) == [nil, nil, nil])
+        #expect(
+            SetNumbering.workingNumbers(for: [.warmup, .dropSet, .restPause, .failure])
+            == [nil, nil, nil, nil]
+        )
+    }
+
+    @Test func restPauseConsumesNoNumber() {
+        #expect(
+            SetNumbering.workingNumbers(for: [.normal, .restPause, .normal])
+            == [1, nil, 2]
+        )
     }
 
     @Test func numberingContinuesPastLettered() {
@@ -44,5 +54,14 @@ struct SetNumberingTests {
             SetNumbering.workingNumbers(for: [.normal, .dropSet, .normal, .failure, .normal])
             == [1, nil, 2, nil, 3]
         )
+    }
+
+    @Test func theFiveLivePostgresCasesAreUnchanged() {
+        // Postgres can ADD a value; it cannot drop one without recreating
+        // the type. The Swift raw value IS the column value — a mapping
+        // table is how Phase 0 silently rewrote an unknown set_type.
+        #expect(SetType.allCases.map(\.rawValue) == [
+            "normal", "warmup", "dropSet", "restPause", "failure",
+        ])
     }
 }

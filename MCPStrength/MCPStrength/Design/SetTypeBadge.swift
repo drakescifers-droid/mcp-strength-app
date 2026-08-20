@@ -13,8 +13,10 @@ import SwiftUI
 // § SetType, confirmed across both screenshots):
 //   normal  -> the set number, in textSecondary
 //   warmup  -> "W", in warmup
-//   dropSet -> "D", in dropSet
-//   failure -> "F", in failure   (failure is an alias of destructive, never a
+//   dropSet   -> "D", in dropSet
+//   restPause -> "R", in restPause  (myo-reps use this type too — one
+//                                    protocol, not a second badge)
+//   failure   -> "F", in failure   (failure is an alias of destructive, never a
 //                                separate literal — see Theme.failure)
 
 /// A small rounded badge that renders the right glyph and colour for a set type.
@@ -39,6 +41,7 @@ struct SetTypeBadge: View {
         case .normal:  return setNumber.map { "\($0)" } ?? "-"
         case .warmup:  return "W"
         case .dropSet: return "D"
+        case .restPause: return "R"
         case .failure: return "F"
         }
     }
@@ -48,6 +51,7 @@ struct SetTypeBadge: View {
         case .normal:  return Theme.textSecondary
         case .warmup:  return Theme.warmup
         case .dropSet: return Theme.dropSet
+        case .restPause: return Theme.restPause
         case .failure: return Theme.failure
         }
     }

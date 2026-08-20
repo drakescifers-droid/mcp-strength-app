@@ -115,8 +115,9 @@ export function createMcpServer(
         "Return one template by UUID, including every exercise, set, note, " +
         "and sticky note. Weights are kilograms (the stored unit). There is " +
         "no name argument — call get_templates first if you only have a " +
-        "name. set_type is normal | warmup | dropSet | failure; drop_set " +
-        "is not a value.",
+        "name. set_type is normal | warmup | dropSet | restPause | " +
+        "failure; drop_set and rest_pause are not values. Myo-reps use " +
+        "restPause.",
       inputSchema: getTemplateInput,
       outputSchema: getTemplateOutput,
       annotations: {
@@ -140,7 +141,8 @@ export function createMcpServer(
         "same folder and returns that id for update_template. Weights need " +
         "weight_unit kg or lbs and are stored as kilograms. Notes and " +
         "sticky_note are coaching text, not optional trivia. set_type is " +
-        "normal | warmup | dropSet | failure — drop_set is rejected. " +
+        "normal | warmup | dropSet | restPause | failure — drop_set, " +
+        "rest_pause, and myoRep are rejected. Myo-reps use restPause. " +
         "Shorthand: set_count + reps for identical working sets.",
       inputSchema: createTemplateInput,
       annotations: {
@@ -182,8 +184,8 @@ export function createMcpServer(
         "returns the session note (instructions going in), the summary " +
         "(how it went), per-exercise notes and sticky notes, and every " +
         "set. Weights are kilograms. Unfinished sessions are not history. " +
-        "set_type is normal | warmup | dropSet | failure. Date window is " +
-        "from / to as YYYY-MM-DD or an ISO timestamp.",
+        "set_type is normal | warmup | dropSet | restPause | failure. " +
+        "Date window is from / to as YYYY-MM-DD or an ISO timestamp.",
       inputSchema: getWorkoutHistoryInput,
       outputSchema: getWorkoutHistoryOutput,
       annotations: {
@@ -206,7 +208,8 @@ export function createMcpServer(
         "not a downward trend. Name lookup returns candidates and no " +
         "series when several library rows match — the rebuilt library " +
         "has many equipment variants, so prefer the UUID from " +
-        "list_exercises. Weights are kilograms. dropSet not drop_set.",
+        "list_exercises. Weights are kilograms. dropSet not drop_set; " +
+        "restPause not rest_pause.",
       inputSchema: getExerciseProgressInput,
       outputSchema: getExerciseProgressOutput,
       annotations: {

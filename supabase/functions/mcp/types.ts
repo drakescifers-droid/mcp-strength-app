@@ -35,6 +35,7 @@ export const SET_TYPES = [
   "normal",
   "warmup",
   "dropSet",
+  "restPause",
   "failure",
 ] as const;
 

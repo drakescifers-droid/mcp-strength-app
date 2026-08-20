@@ -219,6 +219,8 @@ struct ActiveWorkoutTests {
     @Test func theSetTypeLetterSurvivesTheUnitLabel() {
         #expect(PreviousText.format(.init(weight: 60, reps: 8, setType: .dropSet), in: .kg)
                 == "60 kg × 8 (D)")
+        #expect(PreviousText.format(.init(weight: 60, reps: 8, setType: .restPause), in: .kg)
+                == "60 kg × 8 (R)")
         #expect(PreviousText.format(.init(weight: nil, reps: nil, setType: .warmup), in: .kg)
                 == "—", "no load recorded must not render a lone (W)")
     }

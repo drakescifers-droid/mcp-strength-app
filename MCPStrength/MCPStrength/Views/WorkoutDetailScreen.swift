@@ -252,6 +252,7 @@ private struct CompletedSetLine: View {
         case .normal:  return Theme.textPrimary
         case .warmup:  return Theme.warmup
         case .dropSet: return Theme.dropSet
+        case .restPause: return Theme.restPause
         case .failure: return Theme.failure
         }
     }

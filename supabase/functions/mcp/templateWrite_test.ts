@@ -166,6 +166,38 @@ Deno.test("drop_set is rejected, not coerced to dropSet or normal", () => {
   assertEquals(parsed.success, false);
 });
 
+Deno.test("rest_pause and myoRep are rejected, not coerced to restPause", () => {
+  const restPauseSnake = createTemplateInput.safeParse({
+    name: "Push",
+    weight_unit: "lbs",
+    exercises: [{
+      exercise_id: "bench",
+      sets: [{ set_type: "rest_pause", reps: 12 }],
+    }],
+  });
+  assertEquals(restPauseSnake.success, false);
+
+  const myoRep = createTemplateInput.safeParse({
+    name: "Push",
+    weight_unit: "lbs",
+    exercises: [{
+      exercise_id: "bench",
+      sets: [{ set_type: "myoRep", reps: 12 }],
+    }],
+  });
+  assertEquals(myoRep.success, false);
+
+  const restPause = createTemplateInput.safeParse({
+    name: "Push",
+    weight_unit: "kg",
+    exercises: [{
+      exercise_id: "6aaeeb2d-d324-4999-91fb-ceb5487fd80e",
+      sets: [{ set_type: "restPause", reps: 12 }],
+    }],
+  });
+  assertEquals(restPause.success, true);
+});
+
 Deno.test("same name in the same folder collides; different folder does not", () => {
   const rows = [
     { id: "1", name: "Push Day", folder_id: null },

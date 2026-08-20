@@ -11,7 +11,7 @@ enum FolderKind: String, Codable, CaseIterable, Sendable {
 }
 
 enum SetType: String, Codable, CaseIterable, Sendable {
-    case normal, warmup, dropSet, failure
+    case normal, warmup, dropSet, restPause, failure
 }
 
 @Model

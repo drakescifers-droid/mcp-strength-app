@@ -17,8 +17,9 @@ export const templateSetInput = z
       .enum(SET_TYPES)
       .optional()
       .describe(
-        "normal | warmup | dropSet | failure. drop_set and drop are not " +
-          "values and are rejected, not coerced. Omit for a working set " +
+        "normal | warmup | dropSet | restPause | failure. drop_set, " +
+          "rest_pause, and myoRep are not values and are rejected, not " +
+          "coerced. Myo-reps use restPause. Omit for a working set " +
           "(normal). Omit reps when set_type is failure.",
       ),
     reps: z

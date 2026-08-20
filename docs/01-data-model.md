@@ -223,6 +223,7 @@ Hevy's enum. This is how "leave one or two in the tank" survives the trip.
 | Normal | `1`, `2`, `3`… | Numbered independently of warmups |
 | Warm up | `W` (orange) | Excluded from working-set numbering and PR calculations |
 | Drop set | `D` (purple) | |
+| Rest-pause / Myo-rep | `R` (teal) | One type, both names on the menu. Stored as `restPause`. |
 | Failure | `F` (red) | |
 
 ### Rest timers

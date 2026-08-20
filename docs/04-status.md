@@ -58,7 +58,8 @@ sessions only, notes + summary + sticky notes, kilograms, `dropSet`.
 `create_program` / `delete_program` / `delete_template` landed the same day:
 soft deletes, UUID-only, repeating day slots, linear progression recorded
 as prose and not executed. **No `log_workout`** — Drake, 2026-08-20: logging
-from chat defeats the purpose of the app. GitHub is
+from chat defeats the purpose of the app. A fifth set type, `restPause`
+(badge R; myo-reps use the same type), landed 2026-08-20. GitHub is
 `https://github.com/drakescifers-droid/mcp-strength-app`.
 What remains of Phase 2 is proving Watch-attach on a real session — a gym
 check, not a blocker.
@@ -423,6 +424,15 @@ right.**
   UUID-only, `destructiveHint: true`. A program delete keeps its templates
   (SoftDelete.folder's nullify). A plain folder is refused. 71 Deno tests
   green. **Live as of the 2026-08-20 `mcp` Edge Function deploy.**
+
+- **REST-PAUSE SET TYPE — 2026-08-20.** Fifth `SetType`: stored `restPause`
+  (camelCase, same wire value as Swift / Postgres). Badge **R**, teal
+  (`Theme.restPause`), lettered like W / D / F so it consumes no working-set
+  number. Menu label is "Rest-pause / Myo-rep". There is no
+  `myoRep`. `rest_pause` is rejected, not coerced. Migration
+  `20260820140000` is on the live project (dump contains `'restPause'`).
+  `mcp` Edge Function redeployed the same day. On the phone, waiting on
+  Drake to thumb the badge and menu.
 
 - **CUSTOM NUMBER KEYPAD — on the phone 2026-08-19, Drake approved it after two layout fixes.**
   Chip + pinned keypad (`Views/NumberKeypad.swift` + `Workout/NumberKeypadEditing.swift`), not

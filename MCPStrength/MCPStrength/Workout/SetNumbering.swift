@@ -3,8 +3,8 @@
 //  MCPStrength
 //
 //  Working-set numbering for a set list. Per docs/01-data-model.md § SetType,
-//  only `.normal` sets are numbered (1, 2, 3 …); `.warmup`, `.dropSet`, and
-//  `.failure` render a letter (W / D / F) and CONSUME NO NUMBER, so the
+//  only `.normal` sets are numbered (1, 2, 3 …); `.warmup`, `.dropSet`,
+//  `.restPause`, and `.failure` render a letter (W / D / R / F) and CONSUME NO NUMBER, so the
 //  numbering of subsequent `.normal` sets continues past them. This file owns
 //  that pure rule so it can be unit-tested without a view and shared by every
 //  badge call site — the moment set types become editable, passing the raw
@@ -16,7 +16,7 @@ import Foundation
 enum SetNumbering {
     /// Returns an array parallel to `types`. For each `.normal` entry, the
     /// next working-set number (1-based, counting only `.normal` entries, in
-    /// order). For `.warmup`, `.dropSet`, and `.failure`, `nil`.
+    /// order). For `.warmup`, `.dropSet`, `.restPause`, and `.failure`, `nil`.
     static func workingNumbers(for types: [SetType]) -> [Int?] {
         var next = 0
         return types.map { type in
@@ -47,7 +47,7 @@ enum SetNumbering {
     ///
     /// A drop set and a failure set count as working, not as warm-ups: they are
     /// real performances at that point in the sequence, and `PreviousText`
-    /// already annotates them with (D) / (F) when last time's set at that
+    /// already annotates them with (D) / (R) / (F) when last time's set at that
     /// position was one.
     static func positionsWithinKind(for types: [SetType]) -> [Int] {
         var nextWarmup = 0

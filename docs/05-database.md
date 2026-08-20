@@ -23,7 +23,7 @@ reasoning at the point of edit; this file carries the reasoning that spans files
 ## Naming
 
 **Enum values are the Swift raw values, character for character** — `fullBody`, `machineOther`,
-`dropSet`, `healthKit`. Not snake_case. Column *names* are snake_case because that is Postgres, but
+`dropSet`, `restPause`, `healthKit`. Not snake_case. Column *names* are snake_case because that is Postgres, but
 enum values are **data that crosses the wire** to the app and, in Phase 3, to the MCP server. Two
 spellings of the same value means a mapping layer, and a mapping layer is a place for a value to
 get silently rewritten — which is the exact failure Phase 0 produced.
