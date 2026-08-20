@@ -38,13 +38,13 @@ insert into public.template_exercises (id, user_id, template_id, exercise_id, so
 
 -- The seeded library is present and global ------------------------------------
 
--- 301 LIVE global exercises after the 2026-08-20 rebuild
+-- 302 LIVE global exercises after the 2026-08-20 rebuild + the Lat Prayer grips
 -- (20260820120000_library_rebuild.sql), plus the 10 rows that rebuild retired
 -- and TOMBSTONED rather than deleted. 311 rows total, 301 of them live.
 select tests.assert(
   (select count(*) from public.exercises
-    where user_id is null and deleted_at is null) = 301,
-  'expected 301 live global seeded exercises'
+    where user_id is null and deleted_at is null) = 302,
+  'expected 302 live global seeded exercises'
 );
 
 -- The retired rows must still EXIST, tombstoned. A hard delete cannot reach a

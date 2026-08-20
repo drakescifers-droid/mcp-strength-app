@@ -62,11 +62,11 @@ select tests.assert(
 
 -- The reference-table rule: the shared library plus your own customs, and
 -- nobody else's.
--- 301 live + 10 tombstoned by the 2026-08-20 library rebuild = 311 global rows.
+-- 302 live + 10 tombstoned by the 2026-08-20 library work = 312 global rows.
 -- Counted WITHOUT a deleted_at filter on purpose: this is the visibility rule,
 -- not the tombstone rule, and RLS must not hide a global row either way.
 select tests.assert(
-  (select count(*) from public.exercises where user_id is null) = 311,
+  (select count(*) from public.exercises where user_id is null) = 312,
   'user A cannot see the seeded library'
 );
 

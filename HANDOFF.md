@@ -175,9 +175,14 @@ phone — see Waiting on me.
   > Strength)` or `Single Arm Row (Hammer Strength)` under a third name; and `Cable Curl` /
   > `Bicep Curl (Cable)` are both in the library as separate exercises. Say the word and either
   > gets merged.
-  > **Four names I could not identify and left exactly as written**: `Baby Shark`, `Baby Shark Ab
-  > Circuit`, `Massbuilder Back`, `Lat Wide Prayer`. They are in the library with guessed body
-  > parts; tell me what they are and I will fix them properly.
+  > **Names I could not identify and left exactly as written**: `Baby Shark`, `Baby Shark Ab
+  > Circuit`, `Massbuilder Back`. They are in the library with guessed body parts; tell me what
+  > they are and I will fix them properly.
+  > ✅ **`Lat Wide Prayer` is resolved** — renamed to `Lat Prayer Wide Grip` and joined by a new
+  > `Lat Prayer Narrow Grip` (2026-08-20, `20260820130000_lat_prayer_grips.sql`, library now 302).
+  > The rename kept the exercise's original id, verified in place on the live project by checking
+  > the row kept its original `created_at`. Both are Back / Machine — say so if the narrow-grip one
+  > should be anything else.
 - ✅ **OAUTH ON THE LIVE PROJECT, dashboard 2026-08-19.** OAuth 2.1 on, dynamic
   registration on. MCP function deployed. Allow page is the site in `web/`.
 - ✅ **MCPSTRENGTH.COM LIVE, 2026-08-19.** Pages on Cloudflare, nameservers

@@ -97,6 +97,17 @@ Two properties of that data are load-bearing.
 > an existing exercise comes back with a *new* UUID, every user's history for that movement silently
 > detaches. So IDs must be **baked into the seed list itself**, never generated at import time.
 > Cheap on day one; there is no good fix afterwards.
+>
+> ⚠️ **A RENAME MUST KEEP THE ID, and the 2026-08-20 rebuild left a trap around exactly that.**
+> The 286 ids minted in that rebuild came from `uuid5(namespace, name)` — convenient for minting a
+> few hundred at once, and a landmine if anyone ever RE-DERIVES an id that way. Renaming
+> `Lat Wide Prayer` → `Lat Prayer Wide Grip` (2026-08-20) changes the name-derived uuid, so a
+> re-mint would have silently created a second row and orphaned the first.
+> **It is safe today because nothing re-derives**: the ids are literal values in
+> `exercise-seed.json`, and `generate_library_seed.py` copies `row["id"]` verbatim. Keep it that
+> way — mint a uuid5 for a genuinely NEW exercise if you like, but never for one that already has
+> an id. The rename was verified in place on the live project by checking the row kept its original
+> `created_at`, which an insert-instead-of-update would have reset.
 
 **Aliases are not unique, and that is the point.** They exist so that names sharing no spelling with
 the library entry still resolve — "pec deck" → `Chest Fly (Machine)`. If an alias lands on

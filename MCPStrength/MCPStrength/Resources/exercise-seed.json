@@ -859,6 +859,18 @@
     "category": "repsOnly"
   },
   {
+    "id": "35660f3c-b099-50ed-9161-989dff56d642",
+    "name": "Lat Prayer Narrow Grip",
+    "bodyPart": "back",
+    "category": "machineOther"
+  },
+  {
+    "id": "56a09936-1e5f-50ca-afd4-870fb5ceec38",
+    "name": "Lat Prayer Wide Grip",
+    "bodyPart": "back",
+    "category": "machineOther"
+  },
+  {
     "id": "294f1423-ba24-517e-b534-13fb25a675e3",
     "name": "Lat Pulldown (Cable)",
     "bodyPart": "back",
@@ -903,12 +915,6 @@
   {
     "id": "14d40c65-f183-5b22-948e-7e38f8cd178b",
     "name": "Lat Pulldown Stomach",
-    "bodyPart": "back",
-    "category": "machineOther"
-  },
-  {
-    "id": "56a09936-1e5f-50ca-afd4-870fb5ceec38",
-    "name": "Lat Wide Prayer",
     "bodyPart": "back",
     "category": "machineOther"
   },

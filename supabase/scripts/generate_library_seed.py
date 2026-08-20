@@ -27,15 +27,22 @@ import sys
 REPO = pathlib.Path(__file__).resolve().parents[2]
 RESOURCES = REPO / "MCPStrength" / "MCPStrength" / "Resources"
 
-# The LIBRARY REBUILD migration, not the original 20260815120300 seed.
+# **BUMP THIS FILENAME EVERY TIME THE LIBRARY DATA CHANGES.**
 #
-# **A migration that has already been applied cannot be edited into effect.**
-# `supabase db push` tracks versions, so rewriting 20260815120300 changes what a
-# FRESH database gets and does nothing at all to the live project. The original
-# stays frozen as history (it still seeds the old 25 on a fresh database); this
-# file then rebuilds the library on top of it, which is the same order a fresh
-# database and the live project both see.
-OUT = REPO / "supabase" / "migrations" / "20260820120000_library_rebuild.sql"
+# A migration that has already been applied cannot be edited into effect:
+# `supabase db push` tracks versions, so regenerating over an applied file
+# changes what a FRESH database gets and does nothing at all to the live
+# project — while leaving the repo looking as though it did. Every library
+# change therefore gets its OWN migration and the previous ones stay frozen as
+# history. The statements are idempotent upserts keyed on id, so a fresh
+# database replaying all of them in order lands in exactly the same place the
+# live project did.
+#
+# Regenerating without bumping is safe but USELESS, which is the dangerous
+# combination — it produces a clean diff that will never reach the server.
+# `supabase migration list` is the check: the newest local version must also be
+# the newest remote one.
+OUT = REPO / "supabase" / "migrations" / "20260820130000_lat_prayer_grips.sql"
 
 # Ids retired by the 2026-08-20 rebuild: exercises whose NAME did not survive
 # Drake's review, almost all of them generic names ("Lat Pulldown", "Dip") that
@@ -122,14 +129,20 @@ def main() -> None:
     add = lines.append
 
     add("-- ============================================================================")
-    add("-- The seeded library, REBUILT 2026-08-20 (global rows, user_id IS NULL)")
+    add("-- The seeded library, in full (global rows, user_id IS NULL)")
     add("--")
-    add("-- Supersedes 20260815120300's 25-exercise seed, which stays frozen as history.")
-    add("-- Drake reviewed a 310-name list and this is the result: generic names dropped")
-    add("-- in favour of equipment-specific ones (\"Lat Pulldown\" -> Cable / Machine),")
-    add("-- duplicates merged, Hammer Strength named the way every other variant already")
-    add("-- is. Safe to rebuild wholesale because NO workout history existed yet —")
-    add("-- verified by dumping the project's data, not assumed.")
+    add("-- THE WHOLE LIBRARY, not a delta — every row, upserted by id. One of these is")
+    add("-- emitted per library change (see OUT in the generator); earlier ones stay")
+    add("-- frozen as history because an applied migration cannot be edited into effect.")
+    add("-- Replaying them all in order lands where the live project is, since every")
+    add("-- statement is an idempotent upsert.")
+    add("--")
+    add("-- The 2026-08-20 rebuild (20260820120000) is the one that took the library from")
+    add("-- 25 exercises to 301: generic names dropped in favour of equipment-specific")
+    add("-- ones (\"Lat Pulldown\" -> Cable / Machine), duplicates merged, Hammer Strength")
+    add("-- named like every other variant. Safe wholesale only because NO workout")
+    add("-- history existed — verified by dumping the project's data, not assumed.")
+    add("-- docs/01-data-model.md § The seeded library carries the naming rules.")
     add("--")
     add("-- GENERATED FILE — do not edit by hand.")
     add("--   source: MCPStrength/MCPStrength/Resources/{exercise,measurement}-seed.json")
