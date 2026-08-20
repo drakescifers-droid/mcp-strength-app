@@ -176,8 +176,14 @@ phone — see Waiting on me.
   > `Bicep Curl (Cable)` are both in the library as separate exercises. Say the word and either
   > gets merged.
   > **Names I could not identify and left exactly as written**: `Baby Shark`, `Baby Shark Ab
-  > Circuit`, `Massbuilder Back`. They are in the library with guessed body parts; tell me what
-  > they are and I will fix them properly.
+  > Circuit`. They are in the library with guessed body parts; tell me what they are and I will
+  > fix them properly.
+  > ✅ **`Massbuilder Back` is confirmed** (Drake, 2026-08-20): a back machine at his gym. Already
+  > filed Back / Machine, so nothing changed — the guess was right. Kept as `Massbuilder Back`
+  > rather than forced into the `Movement (Equipment)` convention, because the MOVEMENT is still
+  > unknown; `Row (Massbuilder)` or `Pulldown (Massbuilder)` would be the convention-consistent
+  > name IF he says which it is. Not a Hammer-Strength-style category: that one earned its own
+  > category because the loading style spans brands, where this is one machine.
   > ✅ **`Lat Wide Prayer` is resolved** — renamed to `Lat Prayer Wide Grip` and joined by a new
   > `Lat Prayer Narrow Grip` (2026-08-20, `20260820130000_lat_prayer_grips.sql`, library now 302).
   > The rename kept the exercise's original id, verified in place on the live project by checking
