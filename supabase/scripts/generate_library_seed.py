@@ -34,7 +34,7 @@ BODY_PARTS = {
 }
 CATEGORIES = {
     "barbell", "dumbbell", "machineOther", "weightedBodyweight",
-    "assistedBodyweight", "repsOnly", "cardio", "duration",
+    "assistedBodyweight", "repsOnly", "cardio", "duration", "hammerStrength",
 }
 GROUPS = {"core", "bodyPart"}
 

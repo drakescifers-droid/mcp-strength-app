@@ -100,7 +100,7 @@ struct OneRepMaxTests {
     // MARK: - Category rules
 
     @Test func loadedCategoriesSupportAnEstimate() {
-        for category in [ExerciseCategory.barbell, .dumbbell, .machineOther] {
+        for category in [ExerciseCategory.barbell, .dumbbell, .machineOther, .hammerStrength] {
             #expect(OneRepMax.supportsEstimate(category), "\(category) should support 1RM")
         }
     }
@@ -122,7 +122,7 @@ struct OneRepMaxTests {
         for category in ExerciseCategory.allCases {
             _ = OneRepMax.supportsEstimate(category)
         }
-        #expect(ExerciseCategory.allCases.count == 8)
+        #expect(ExerciseCategory.allCases.count == 9)
     }
 
     // MARK: - The per-set convenience

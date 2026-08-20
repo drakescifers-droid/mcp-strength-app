@@ -58,12 +58,11 @@ struct BarTypeTests {
         ])
     }
 
+    // The ninth case, landed 2026-08-19 once real Hammer Strength / iso-lateral
+    // exercises showed up in the library-refresh list. docs/05-database.md §
+    // Naming: the Swift raw value IS the column value, no mapping table — a
+    // mapping table is how Phase 0 silently rewrote an unknown set_type.
     @Test func hammerStrengthRawValueMatchesThePostgresEnum() {
-        // docs/05-database.md § Naming: the Swift raw value IS the
-        // column value. A mapping table between the two is how Phase 0
-        // silently rewrote an unknown set_type. The ninth *case* is
-        // blocked by OneRepMax.supportsEstimate (owned-path limit);
-        // the spelling is still pinned so the companion cannot drift.
-        #expect(ExerciseCategory.hammerStrength == "hammerStrength")
+        #expect(ExerciseCategory.hammerStrength.rawValue == "hammerStrength")
     }
 }

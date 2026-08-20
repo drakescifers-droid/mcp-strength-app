@@ -155,13 +155,21 @@ phone — see Waiting on me.
   2026-08-19 — an exercise can train more than one body part now. Postgres migration applied and
   verified against the live project.
 - 🆕 **THE EXERCISE REVIEW SPREADSHEET (`exercise-library-refresh/exercise-review.xlsx`, also in
-  `~/Downloads`) GAINED A COLUMN mid-review — re-open it if you already had it open.** "Secondary
-  Body Part", with the posterior-chain movements (Romanian/Stiff-Leg/Sumo Deadlift, Good Morning,
-  Rack Pull, Zercher Squat, and a few others) pre-filled as suggestions, colored light blue —
-  confirm or clear them like everything else on the sheet. Nothing else on it changed. Still
-  waiting on your review pass generally: the Hammer Strength blocker (9 exercises — say if you
-  want the Swift enum case added now that real Hammer Strength names are in the list), and ~26
-  flagged likely duplicates against the 25 exercises already in the app.
+  `~/Downloads`) CHANGED TWICE MORE — re-open it if you already had it open.** "Secondary Body
+  Part" column added, with the posterior-chain movements (Romanian/Stiff-Leg/Sumo Deadlift, Good
+  Morning, Rack Pull, Zercher Squat, and a few others) pre-filled as suggestions, light blue —
+  confirm or clear them like everything else on the sheet.
+  > ✅ **AND THE HAMMER STRENGTH BLOCKER IS GONE — the category is unblocked and all 11 rows are
+  > retagged and renamed.** All 9 `HS`-named rows plus the two `Iso-Lateral` ones (confirmed as
+  > Hammer Strength too) now read like `Bench Press (Hammer Strength)` instead of `HS Bench
+  > Press` — matching the naming pattern every other equipment variant in this list already uses.
+  > **One is worth a second look: #130 `Row (Hammer Strength)`** (renamed from `Iso-Lateral Row
+  > (Machine)`) is fairly generic next to #94 `Seated Low Row (Hammer Strength)` and #96 `Single
+  > Arm Row (Hammer Strength)` — it may be the same machine under a third name, or it may be a
+  > genuinely different row station. You'd know, I don't.
+  Still waiting on your review pass generally: ~26 flagged likely duplicates against the 25
+  exercises already in the app, and the handful of "please confirm" rows the sheet flags Low
+  confidence.
 - ✅ **OAUTH ON THE LIVE PROJECT, dashboard 2026-08-19.** OAuth 2.1 on, dynamic
   registration on. MCP function deployed. Allow page is the site in `web/`.
 - ✅ **MCPSTRENGTH.COM LIVE, 2026-08-19.** Pages on Cloudflare, nameservers
@@ -247,8 +255,10 @@ phone — see Waiting on me.
   **The reference app appears to always know the bar.** Two ways to match it: default barbell-category
   exercises to an Olympic bar, or floor at the bar whenever the category is a barbell one. Neither
   is built — tell me which you want, or whether you would rather set bar types by hand.
-- **Hammer Strength exercises.** The category is live in the app and the database; the actual
-  movements land with the bigger exercise-library refresh I'm doing separately. Don't seed them.
+- ~~**Hammer Strength exercises.**~~ **UNBLOCKED 2026-08-19** — the category is live everywhere
+  now (app, database, AI server) and the 11 real Hammer Strength rows in the review spreadsheet
+  are retagged and renamed. The actual seed-file merge still lands with the bigger
+  exercise-library refresh, once your review pass on the spreadsheet is done.
 - **Signing out with unpushed changes** (`06-sync.md`, Open question) is still undecided. The
   engine takes the only safe reading — it refuses to push if a DIFFERENT account signs in on a
   device that already claimed one. That is a refusal, not an answer. Ask before building on it.

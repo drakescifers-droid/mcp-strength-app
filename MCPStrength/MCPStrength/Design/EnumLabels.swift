@@ -49,13 +49,9 @@ extension ExerciseCategory {
         case .repsOnly:            "Reps Only"
         case .cardio:              "Cardio"
         case .duration:            "Duration"
+        case .hammerStrength:      "Hammer Strength"
         }
     }
-
-    /// Label for the Postgres `hammerStrength` value. Not a switch case:
-    /// the Swift enum cannot grow that case until `OneRepMax.supportsEstimate`
-    /// is updated (out of scope for this change).
-    static var hammerStrengthDisplayName: String { "Hammer Strength" }
 }
 
 extension BarType {

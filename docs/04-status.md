@@ -693,8 +693,25 @@ underneath never changed — only whether the screen described it honestly.
   > sent to Drake for review, not yet merged) gained a "Secondary Body Part" column** with the
   > posterior-chain candidates pre-filled (Romanian/Stiff-Leg/Sumo Deadlift, Good Morning, Rack
   > Pull, Zercher Squat, and others) — flagged, not silently decided. Still open from that review:
-  > the Hammer Strength Swift-enum blocker (9 exercises) and ~26 likely duplicates against the
-  > existing 25. See `HANDOFF.md`.
+  > ~26 likely duplicates against the existing 25. See `HANDOFF.md`.
+- ~~**`ExerciseCategory.hammerStrength` — deferred as a string constant, no real case.**~~
+  **UNBLOCKED 2026-08-19**, once real Hammer Strength / iso-lateral exercises showed up in Drake's
+  library-refresh list and he confirmed the naming ("Bench Press (Hammer Strength)", not "HS Bench
+  Press" — matches how every other equipment variant in the list is already named). The blocker
+  really was exactly one line: `OneRepMax.supportsEstimate`'s exhaustive switch, extended to treat
+  `.hammerStrength` the same as `.machineOther` (plate-loaded, has a real total load). Bar types
+  already carry a weight per unit (`BarType.weight(in:)`, above); this is the matching move for the
+  category enum.
+  > The Postgres enum value and the AI server's TypeScript types have both had `hammerStrength`
+  > since `20260817120000_hammer_strength_category.sql` and Phase 3's build — only the Swift app
+  > was missing the case, so this closes a three-system gap in one line rather than opening a new
+  > one, unlike `secondaryBodyParts` above.
+  > **11 rows in the review spreadsheet retagged and renamed**: the 9 `HS`-named ones, plus 2
+  > `Iso-Lateral` ones Drake confirmed are the same brand. `generate_library_seed.py`'s validation
+  > set gained `"hammerStrength"` too, so the eventual seed-file merge won't reject them.
+  > `BarTypeTests` and `OneRepMaxTests` both updated — `ExerciseCategory.allCases.count == 9`, not
+  > 8. **The bundled 25-exercise seed file still asserts exactly 8 categories present** — true and
+  > unchanged, since no Hammer Strength exercise has actually been merged into it yet.
 
 ### What is left, in order
 

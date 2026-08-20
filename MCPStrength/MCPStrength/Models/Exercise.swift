@@ -12,16 +12,19 @@ enum BodyPart: String, Codable, CaseIterable, Sendable {
 
 enum ExerciseCategory: String, Codable, CaseIterable, Sendable {
     case barbell, dumbbell, machineOther, weightedBodyweight, assistedBodyweight, repsOnly, cardio, duration
-
     /// Spelled identically to the Postgres enum value added by
-    /// `20260817120000_hammer_strength_category.sql`. A ninth `case` is
-    /// the right model — `rawValue` would then be the column value, with
-    /// no mapping table (docs/05-database.md § Naming) — but
-    /// `OneRepMax.supportsEstimate` is an exhaustive switch this change
-    /// is not allowed to edit, and swiftc will not emit the module with
-    /// an unhandled case. The category exists on the server; associating
-    /// a Swift `Exercise` with it waits on that one-line companion.
-    static var hammerStrength: String { "hammerStrength" }
+    /// `20260817120000_hammer_strength_category.sql` — the raw value IS the
+    /// column value, no mapping table (docs/05-database.md § Naming).
+    ///
+    /// **This case was DEFERRED, not missing, until 2026-08-19.** The server
+    /// has carried it since the migration above; nothing associated a Swift
+    /// `Exercise` with it because `OneRepMax.supportsEstimate`'s exhaustive
+    /// switch had to be extended in the same change or the module would not
+    /// compile — a one-line companion, done alongside this case rather than
+    /// separately. Landed once real Hammer Strength / iso-lateral exercises
+    /// showed up in Drake's library-refresh list, which is what made the
+    /// deferral no longer free.
+    case hammerStrength
 }
 
 enum FocusMetric: String, Codable, CaseIterable, Sendable {

@@ -72,7 +72,10 @@ enum OneRepMax {
     /// estimated from.
     static func supportsEstimate(_ category: ExerciseCategory) -> Bool {
         switch category {
-        case .barbell, .dumbbell, .machineOther:
+        // Hammer Strength / iso-lateral machines are plate-loaded like any
+        // other machine — same total-load shape as .machineOther, just a
+        // different mechanism for applying it.
+        case .barbell, .dumbbell, .machineOther, .hammerStrength:
             true
         case .weightedBodyweight, .assistedBodyweight, .repsOnly, .cardio, .duration:
             false
