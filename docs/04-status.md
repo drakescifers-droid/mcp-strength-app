@@ -51,7 +51,10 @@ on the live project. Claude's connector URL is **https://mcp.mcpstrength.com**.
 `get_templates` and `get_template` landed 2026-08-19 (notes included, weights
 in kg, `dropSet` not `drop_set`). `create_template` / `update_template` landed
 the same day: all-or-nothing, lbs→kg, name collision returns the existing id,
-notes + sticky notes. Remaining: history, logging, programs.
+notes + sticky notes. A later session (2026-08-19) added `secondaryBodyParts`
+and unblocked `hammerStrength` in Swift — see landed bullets below. Remaining
+MCP tools: history, logging, programs. GitHub is
+`https://github.com/drakescifers-droid/mcp-strength-app`.
 What remains of Phase 2 is proving Watch-attach on a real session — a gym
 check, not a blocker.
 
@@ -715,14 +718,14 @@ underneath never changed — only whether the screen described it honestly.
 
 ### What is left, in order
 
-1. **Phase 3 — remaining MCP tools, then Claude Connect.** Scaffold is in:
-   `supabase/functions/mcp` (Streamable HTTP, user-scoped client,
-   `list_exercises`, `create_exercise`, `get_templates`, `get_template`) and the site in `web/` (home, privacy,
-   Allow at `/oauth/consent`). Contract for the rest is `03-mcp-tools.md`.
-   `spike/` is frozen. Live Site URL is `https://mcpstrength.com`,
-   authorization path `/oauth/consent`. Claude Connect URL is
-   `https://mcp.mcpstrength.com`. Next tools: history (must return notes),
-   `log_workout`, programs.
+1. **Phase 3 — remaining MCP tools.** Connect is live at
+   `https://mcp.mcpstrength.com`. Scaffold is in `supabase/functions/mcp`
+   (Streamable HTTP, user-scoped client, exercise + template tools) and the
+   site in `web/`. Contract for the rest is `03-mcp-tools.md`. `spike/` is
+   frozen. Next: `get_workout_history` / `get_exercise_progress` (must return
+   notes), `log_workout`, programs. Redeploy `mcp` if the live connector
+   does not yet return `secondary_body_parts`. GitHub:
+   `https://github.com/drakescifers-droid/mcp-strength-app`.
 
 2. **Prove Watch-attach on a real session — gym check, does not block Phase 3.**
    Wired 2026-08-19: rate none → nothing;

@@ -19,18 +19,20 @@ state, the traps, the decisions and the reasoning behind them. Don't re-derive f
 those files already explain, and don't duplicate them into new files.
 
 The one-line state: **the app is on Drake's phone, he is training on it, Phase 2's remaining
-build work is DONE, and Phase 3 has started.** The MCP server is an Edge Function
-(`supabase/functions/mcp`) with OAuth discovery, exercise tools, and
-template read/write (`create_template` / `update_template`). Claude connects at
-`https://mcp.mcpstrength.com`. Remaining tools: history, logging, programs. Sync is proven both ways against the live
-project. Apple Health writes workouts (Watch energy preferred, backfill for what
-permission missed) and the four HealthKit measurement types travel both ways. The custom
-keypad is done. What Phase 2 still needs is a gym check, not a build: Watch-attach on a real
-session. Canonical units done, gym-found bugs fixed, Preferences and the units setting SYNC,
-calorie rate on both sides, warm-up ramp corrected to 40 / 60 / 80. Swift suite green, SQL
-suite green.
+build work is DONE, Phase 3 Connect is LIVE, and Claude can already write templates.** Claude
+connects at `https://mcp.mcpstrength.com`. Tools in: `list_exercises`, `create_exercise`,
+`get_templates`, `get_template`, `create_template`, `update_template`. Remaining MCP tools:
+history (must return notes), `log_workout`, programs. After that connect landed, a later
+session added `secondaryBodyParts` (Deadlift is back + legs) and unblocked
+`ExerciseCategory.hammerStrength` in Swift (`6066f49`, `a8a1207`). Sync is proven both ways.
+Apple Health writes workouts (Watch energy preferred, backfill for what permission missed)
+and the four HealthKit measurement types travel both ways. The custom keypad is done. What
+Phase 2 still needs is a gym check, not a build: Watch-attach on a real session. Canonical
+units done, gym-found bugs fixed, Preferences and the units setting SYNC, calorie rate on
+both sides, warm-up ramp corrected to 40 / 60 / 80. Swift suite green, SQL suite green.
 
-> **There is no GitHub / internet copy of this repo.** This Mac is the save. Do not `git push`.
+> **GitHub is live:** `https://github.com/drakescifers-droid/mcp-strength-app`.
+> Commits go to `master`. Push to `origin` after committing — do not force-push.
 
 > ✅ **THE KEYPAD IS COMMITTED.** Visual work, so it stayed here and did not go to Ringer.
 
@@ -60,25 +62,30 @@ suite green.
 
 ## Next piece of work, in order
 
-1. **Phase 3 — remaining MCP tools, then the live OAuth click.** Scaffold landed
-   2026-08-19. Transport fits Edge Functions (Streamable HTTP is POST-per-message;
-   the long-lived-connection fallback is closed). `list_exercises` is the first
-   tool. **Read `docs/03-mcp-tools.md` for the rest of the contract and
+1. **Phase 3 — remaining MCP tools.** Connect is done; do not re-do OAuth or
+   the site. **Read `docs/03-mcp-tools.md` for the contract and
    `docs/02-architecture.md` § Auth for how OAuth is wired.** `spike/` is frozen
-   and is not a starting point.
+   and is not a starting point. The server still queries Postgres **as the
+   user**; never `supabaseAdmin`.
 
-   Next tools: history and progress (must return notes), `log_workout`,
-   `create_program` / `delete_program` / `delete_template`. Strict
-   validation, UUID writes, no silent coercion.
-   `list_exercises`, `create_exercise`, `get_templates`, `get_template`,
-   `create_template`, and `update_template` are already in. Claude Connect
-   is live at `https://mcp.mcpstrength.com`.
+   Next tools, in the order `03` lists them: `get_workout_history` /
+   `get_exercise_progress` (**must return notes**), `log_workout`,
+   `create_program` / `delete_program` / `delete_template`. Strict validation,
+   UUID writes, no silent coercion. `dropSet` not `drop_set`. Weights on
+   writes need `weight_unit` `kg` or `lbs` and are stored as kilograms.
 
-   Live project (Drake, dashboard): Authentication → OAuth Server → Site URL
-   `https://mcpstrength.com`, Authorization Path `/oauth/consent`. URL
-   Configuration: allow `https://mcpstrength.com/**`. Do not try Claude
-   Connect until the domain is live on Pages. The server still queries
-   Postgres **as the user**; never `supabaseAdmin`.
+   Already in: `list_exercises`, `create_exercise`, `get_templates`,
+   `get_template`, `create_template`, `update_template`. Matcher and
+   `list_exercises` now return `secondary_body_parts`; `create_exercise` still
+   only *creates* a primary body part. **Redeploy the `mcp` Edge Function**
+   if the live connector does not yet show `secondary_body_parts` on Deadlift
+   — the TypeScript change is committed (`6066f49`) but a functions deploy
+   is a separate step from `git push`.
+
+   Deno tests for this folder need
+   `deno test --allow-read --allow-net --allow-env supabase/functions/mcp`.
+   A bare `deno test` reports five failures that are missing permissions,
+   not a regression.
 
 2. **Prove Watch-attach on a real session — a gym check, not a build.** Wired
    2026-08-19. Do not block Phase 3 on it. Decision is `HealthEnergyAction` /
@@ -178,7 +185,8 @@ phone — see Waiting on me.
   `https://mcpstrength.com/oauth/consent`. Claude's connector URL is
   **https://mcp.mcpstrength.com**. Tools so far: `list_exercises`,
   `create_exercise`, `get_templates`, `get_template`, `create_template`,
-  `update_template`.
+  `update_template`. GitHub:
+  `https://github.com/drakescifers-droid/mcp-strength-app`.
 - 🆕 **WATCH-ATTACH ON A REAL SESSION.** Wear the Watch, finish a real-length
   session, look at Apple Fitness: one energy number, not our estimate sitting
   on top of the Watch's. Does not block Phase 3.
@@ -204,9 +212,10 @@ phone — see Waiting on me.
   needed). The units conversion is proven on a real pounds-era store — see `04-status.md`.
 - **The App Store Connect app record does not exist yet**, so nothing can be uploaded even though
   the build is ready. Only I can create it. Ask before running any upload; it is outward-facing.
-- **The template editor has still never been looked at by anyone.** It is the last completely
-  unseen screen — and it no longer needs your hands: point
-  `MCPStrengthUITests/WarmupRampWalkthroughTests` at it and read the screenshots.
+- **The template editor has still never been looked at by anyone.** It is the last
+  completely unseen screen. Build, install, open a template on the phone, and
+  tell me. Do not drive XCUITest or the simulator as a camera — see
+  `AGENTS.md` § "DRAKE DOES THE UI TESTING".
 - ✅ **SYNC IS PROVEN IN BOTH DIRECTIONS against the live project** (2026-08-19). A settings
   change uploaded — `POST /rest/v1/app_settings → 200` — and a full pull of all thirteen tables
   came back 200. Read out of the project's own request logs, not inferred from the UI.
@@ -268,20 +277,22 @@ phone — see Waiting on me.
 **Create Superset writes the data and draws nothing.** Recorded in `04-status.md` with both possible
 resolutions. I chose to leave it and note it.
 
-## Driving the simulator — this cost real time, three times now
+## Driving the simulator — retired as a way to see the app
 
-- **Do not spend a third session on taps. Write an XCUITest.** `WarmupRampWalkthroughTests` is the
-  worked example: it drives the screen from inside the app and attaches a screenshot at each step,
-  so the only thing left for a human is looking. `04-status.md` has the two commands.
-- **The iOS Simulator MCP panel crash-loops and stays dead.** `xcrun simctl` still works for
-  boot / install / launch / screenshot, so you can always SEE.
-- **Computer-use taps no longer land, and quitting the overlay apps does not help.** The click
-  reaches the Simulator WINDOW — macOS hit-testing agrees, the app is frontmost, and keyboard
-  shortcuts to it still work — but it never becomes a touch in the device. Wispr Flow was quit and
-  nothing changed. Diagnosing this is not the fastest route to seeing a screen; the walkthrough
-  test is.
-- **Type digits as individual `key` presses** if you do drive it by hand. The `type` action is
-  interpreted as press-and-hold and opens the accent picker.
+**Drake tests on the phone.** Build, install, hand over. Do not drive the
+simulator or write XCUITest to judge how something looks or feels — see
+`AGENTS.md` § "DRAKE DOES THE UI TESTING". An afternoon of XCUITest runs
+cost ~$10 and settled nothing; the install loop is about a minute.
+
+What is still true if you ever *do* touch the simulator:
+
+- **The iOS Simulator MCP panel crash-loops and stays dead.** `xcrun simctl`
+  still works for boot / install / launch.
+- **Computer-use taps do not become touches.** The click reaches the Simulator
+  window and never lands in the device. Do not diagnose this; install to the
+  phone instead.
+- **Type digits as individual `key` presses** if you ever type into it. The
+  `type` action is interpreted as press-and-hold and opens the accent picker.
 
 ## If you route anything to Ringer
 
