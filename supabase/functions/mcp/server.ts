@@ -24,6 +24,12 @@ import {
   getExerciseProgressOutput,
 } from "./getExerciseProgress.ts";
 import type { GetExerciseProgressInput } from "./getExerciseProgress.ts";
+import { createProgram, createProgramInput } from "./createProgram.ts";
+import type { CreateProgramInput } from "./createProgram.ts";
+import { deleteTemplate, deleteTemplateInput } from "./deleteTemplate.ts";
+import type { DeleteTemplateInput } from "./deleteTemplate.ts";
+import { deleteProgram, deleteProgramInput } from "./deleteProgram.ts";
+import type { DeleteProgramInput } from "./deleteProgram.ts";
 
 // Built per request so the user-scoped client cannot leak across callers.
 // Never pass supabaseAdmin in here — RLS is the authorization model.
@@ -211,6 +217,66 @@ export function createMcpServer(
       },
     },
     async (args: GetExerciseProgressInput) => getExerciseProgress(supabase, args),
+  );
+
+  server.registerTool(
+    "create_program",
+    {
+      title: "Create program",
+      description:
+        "Create an ordered rotation of templates (a folder with kind " +
+        "Program plus its day list). Days may repeat the same template " +
+        "(A, B, A). This is a cycle, not a calendar. Errors on a duplicate " +
+        "folder name. Linear progression is accepted as prose and is NOT " +
+        "executed — the response says so. Put exotic rules in template " +
+        "notes. Templates are filed into the program; they stay usable on " +
+        "their own.",
+      inputSchema: createProgramInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (args: CreateProgramInput) => createProgram(supabase, userId, args),
+  );
+
+  server.registerTool(
+    "delete_template",
+    {
+      title: "Delete template",
+      description:
+        "Soft-delete a template by UUID. History performed from it is " +
+        "kept. There is no delete-by-name. Look up with get_templates first.",
+      inputSchema: deleteTemplateInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (args: DeleteTemplateInput) => deleteTemplate(supabase, args),
+  );
+
+  server.registerTool(
+    "delete_program",
+    {
+      title: "Delete program",
+      description:
+        "Soft-delete a program by UUID. Templates it pointed at survive " +
+        "and become unfiled; only the rotation is removed. There is no " +
+        "delete-by-name, and a plain folder is refused.",
+      inputSchema: deleteProgramInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (args: DeleteProgramInput) => deleteProgram(supabase, args),
   );
 
   return server;

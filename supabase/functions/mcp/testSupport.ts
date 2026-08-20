@@ -3,11 +3,27 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js";
 export type Row = Record<string, unknown>;
 
 export class Query {
+  private db: Record<string, Row[]>;
+  private table: string;
   rows: Row[];
-  constructor(rows: Row[]) {
-    this.rows = rows.slice();
+  private patch: Row | null = null;
+
+  constructor(db: Record<string, Row[]>, table: string) {
+    this.db = db;
+    this.table = table;
+    this.rows = (db[table] ?? []).slice();
   }
   select() {
+    return this;
+  }
+  insert(payload: Row | Row[]) {
+    const rows = Array.isArray(payload) ? payload : [payload];
+    this.db[this.table] = [...(this.db[this.table] ?? []), ...rows];
+    this.rows = rows;
+    return this;
+  }
+  update(patch: Row) {
+    this.patch = patch;
     return this;
   }
   is(column: string, value: unknown) {
@@ -52,21 +68,34 @@ export class Query {
     this.rows = this.rows.slice(0, n);
     return this;
   }
+  single() {
+    this.applyPatch();
+    const row = this.rows[0] ?? null;
+    return Promise.resolve({
+      data: row,
+      error: row === null ? { message: "not found" } : null,
+    });
+  }
   then(
     onFulfilled?: (value: { data: Row[]; error: null }) => unknown,
     onRejected?: (reason: unknown) => unknown,
   ) {
+    this.applyPatch();
     return Promise.resolve({ data: this.rows, error: null }).then(
       onFulfilled,
       onRejected,
     );
+  }
+  private applyPatch() {
+    if (this.patch === null) return;
+    for (const row of this.rows) Object.assign(row, this.patch);
   }
 }
 
 export function clientWith(db: Record<string, Row[]>): SupabaseClient {
   return {
     from(table: string) {
-      return new Query(db[table] ?? []);
+      return new Query(db, table);
     },
   } as unknown as SupabaseClient;
 }

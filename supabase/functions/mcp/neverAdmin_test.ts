@@ -21,6 +21,9 @@ Deno.test("the MCP function never uses the service-role client", async () => {
     "./getWorkoutHistory.ts",
     "./getExerciseProgress.ts",
     "./workoutRead.ts",
+    "./createProgram.ts",
+    "./deleteTemplate.ts",
+    "./deleteProgram.ts",
     "./oauthResource.ts",
   ];
   for (const file of files) {

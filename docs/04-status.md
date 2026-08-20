@@ -54,8 +54,10 @@ the same day: all-or-nothing, lbs→kg, name collision returns the existing id,
 notes + sticky notes. A later session (2026-08-19) added `secondaryBodyParts`
 and unblocked `hammerStrength` in Swift — see landed bullets below.
 `get_workout_history` / `get_exercise_progress` landed 2026-08-20: completed
-sessions only, notes + summary + sticky notes, kilograms, `dropSet`. Remaining
-MCP tools: logging, programs. GitHub is
+sessions only, notes + summary + sticky notes, kilograms, `dropSet`.
+`create_program` / `delete_program` / `delete_template` landed the same day:
+soft deletes, UUID-only, repeating day slots, linear progression recorded
+as prose and not executed. Remaining MCP tool: `log_workout`. GitHub is
 `https://github.com/drakescifers-droid/mcp-strength-app`.
 What remains of Phase 2 is proving Watch-attach on a real session — a gym
 check, not a blocker.
@@ -398,7 +400,7 @@ right.**
   connector URL is `https://mcp.mcpstrength.com` (Worker in
   `workers/mcp-proxy/`, `MCP_RESOURCE_URL` matches). The `oauth-consent`
   function is leftover and not the live Allow page.
-  Remaining tools are logging and programs.
+  Remaining tool is `log_workout`.
 
 - **WORKOUT HISTORY MCP TOOLS — 2026-08-20.** `get_workout_history` (date-filtered
   completed sessions, newest first) and `get_exercise_progress` (per-exercise
@@ -409,6 +411,16 @@ right.**
   library rows (`Lat Pulldown` after the rebuild) return candidates and no
   series rather than picking a winner. 57 Deno tests green. **Live as of
   the 2026-08-20 `mcp` Edge Function deploy.**
+
+- **PROGRAM AND DELETE MCP TOOLS — 2026-08-20.** `create_program` writes a
+  `template_folders` row with `kind: program` plus `program_days` that may
+  repeat a template (A, B, A). Referenced templates are filed into the folder.
+  Linear progression is accepted and echoed with `executed: false` — the app
+  still has no rules engine, and lying about that is how a caller would think
+  the load will auto-increase. `delete_template` / `delete_program` are soft,
+  UUID-only, `destructiveHint: true`. A program delete keeps its templates
+  (SoftDelete.folder's nullify). A plain folder is refused. 71 Deno tests
+  green. **Live as of the 2026-08-20 `mcp` Edge Function deploy.**
 
 - **CUSTOM NUMBER KEYPAD — on the phone 2026-08-19, Drake approved it after two layout fixes.**
   Chip + pinned keypad (`Views/NumberKeypad.swift` + `Workout/NumberKeypadEditing.swift`), not
@@ -770,9 +782,8 @@ underneath never changed — only whether the screen described it honestly.
    `https://mcp.mcpstrength.com`. Scaffold is in `supabase/functions/mcp`
    (Streamable HTTP, user-scoped client, exercise + template tools) and the
    site in `web/`. Contract for the rest is `03-mcp-tools.md`. `spike/` is
-   frozen. Next: `log_workout`, then programs (`create_program` /
-   `delete_program` / `delete_template`). History tools are live on `mcp`
-   as of 2026-08-20. GitHub:
+   frozen. Next: `log_workout`. Programs and template delete are live on
+   `mcp` as of 2026-08-20. GitHub:
    `https://github.com/drakescifers-droid/mcp-strength-app`.
 
 2. **Prove Watch-attach on a real session — gym check, does not block Phase 3.**
