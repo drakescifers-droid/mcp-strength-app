@@ -228,7 +228,7 @@ Refines the sketch in `02`. Changes from that sketch are marked.
 > **Phase 0 already lost these once.** The silent-field-discard row in the
 > findings table above is a set-level `note` vanishing while the call returned
 > success. That was the cheap version of this mistake.
-| `log_workout` | Conversational logging | Unchanged |
+| ~~`log_workout`~~ | Conversational logging | **Cut 2026-08-20.** Drake: it defeats the purpose of the app. Claude plans and reads history; the phone is how a session is recorded. Do not add this tool. |
 | `create_program` | Ordered multi-week plan | **New.** Creates a folder with `kind: Program` plus its `ProgramDay` sequence — see `01` § Programs. Day slots reference templates by UUID and **may repeat** (a 3-day A/B split needs `A, B, A`) |
 | `delete_template` | Remove a plan | **New.** Soft, UUID-only, destructive-annotated — see below |
 | `delete_program` | Remove a block | **New.** Same rules. Deletes the program and its `ProgramDay` rows; the templates it pointed at survive |
@@ -236,13 +236,17 @@ Refines the sketch in `02`. Changes from that sketch are marked.
 ### Deletion scope
 
 **Decided: AI can delete templates and programs. Nothing else.**
+**Decided 2026-08-20: AI can also not CREATE workouts.** Same table, other direction.
+Logging is the app. A `log_workout` tool would let someone train in chat and never open the
+phone — which is the product failing, not a missing feature. `02`'s symmetry principle
+("anything the app can do, AI can do") does not apply here; this is the exception.
 
 | Entity | AI can delete? | Reasoning |
 |---|---|---|
 | Template | **Yes** | AI creates these, so AI should be able to clean them up. `02`'s symmetry principle also applies — anything the app can do, AI can do |
 | Program | **Yes** | Same. Removing the program leaves its templates intact; only the sequence and position go |
 | Exercise | **No** | Referenced by every workout ever logged against it. Deleting a library entry orphans history, and history is the point of the app |
-| Workout | **No** | Irreplaceable. A template rebuilds in thirty seconds; the fact that you squatted 140kg on a Tuesday in March does not. Correcting a mistyped set is an update, not a delete |
+| Workout | **No** | Irreplaceable, and not AI-created either. A template rebuilds in thirty seconds; the fact that you squatted 140kg on a Tuesday in March does not. Correcting a mistyped set is an update, not a delete. There is no `log_workout` |
 | Measurement | **No** | Append-only time series |
 
 Three rules govern the two tools that exist:

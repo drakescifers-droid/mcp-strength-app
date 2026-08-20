@@ -57,7 +57,8 @@ and unblocked `hammerStrength` in Swift — see landed bullets below.
 sessions only, notes + summary + sticky notes, kilograms, `dropSet`.
 `create_program` / `delete_program` / `delete_template` landed the same day:
 soft deletes, UUID-only, repeating day slots, linear progression recorded
-as prose and not executed. Remaining MCP tool: `log_workout`. GitHub is
+as prose and not executed. **No `log_workout`** — Drake, 2026-08-20: logging
+from chat defeats the purpose of the app. GitHub is
 `https://github.com/drakescifers-droid/mcp-strength-app`.
 What remains of Phase 2 is proving Watch-attach on a real session — a gym
 check, not a blocker.
@@ -400,7 +401,8 @@ right.**
   connector URL is `https://mcp.mcpstrength.com` (Worker in
   `workers/mcp-proxy/`, `MCP_RESOURCE_URL` matches). The `oauth-consent`
   function is leftover and not the live Allow page.
-  Remaining tool is `log_workout`.
+  Phase 3's MCP write/read surface is complete. **There is no `log_workout`
+  and there must not be one** (Drake, 2026-08-20).
 
 - **WORKOUT HISTORY MCP TOOLS — 2026-08-20.** `get_workout_history` (date-filtered
   completed sessions, newest first) and `get_exercise_progress` (per-exercise
@@ -778,12 +780,12 @@ underneath never changed — only whether the screen described it honestly.
 
 ### What is left, in order
 
-1. **Phase 3 — remaining MCP tools.** Connect is live at
+1. **Phase 3 MCP surface is complete.** Connect is live at
    `https://mcp.mcpstrength.com`. Scaffold is in `supabase/functions/mcp`
-   (Streamable HTTP, user-scoped client, exercise + template tools) and the
-   site in `web/`. Contract for the rest is `03-mcp-tools.md`. `spike/` is
-   frozen. Next: `log_workout`. Programs and template delete are live on
-   `mcp` as of 2026-08-20. GitHub:
+   (Streamable HTTP, user-scoped client, exercise + template + program +
+   history tools) and the site in `web/`. Contract is `03-mcp-tools.md`.
+   `spike/` is frozen. **`log_workout` is deliberately absent** — logging
+   from chat defeats the purpose of the app (Drake, 2026-08-20). GitHub:
    `https://github.com/drakescifers-droid/mcp-strength-app`.
 
 2. **Prove Watch-attach on a real session — gym check, does not block Phase 3.**
@@ -1059,6 +1061,7 @@ These are not oversights. Each was cut with a reason, and the reason is the poin
 | **Personal records / PR counts** | Real feature (compare against all prior history, per exercise, per rep count). Nothing computes them, and a hardcoded "0 PRs" reads as *you set no records* rather than *not implemented*. |
 | **Progression rules beyond linear** | One structured rule (hit all reps → add X) covers most intermediate programs. Percentage-of-training-max, RPE autoregulation and waves turn a field into a small programming language. |
 | **RIR** | Same information as RPE on an inverted scale. One scale is easier to coach against than two. |
+| **`log_workout` (conversational logging)** | Drake, 2026-08-20: it defeats the purpose of the app. Claude plans and coaches; the phone is how a session is recorded. An explicit exception to `02`'s symmetry principle. |
 | **Supersets, plate calculator, exercise artwork, per-exercise overflow menus, calendar view, widget dashboard, accounts/avatars** | Scope. None block the core loop. |
 
 > **The Program schema is the exception worth watching.** Its UI is post-launch, but

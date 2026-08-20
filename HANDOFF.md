@@ -23,10 +23,11 @@ build work is DONE, Phase 3 Connect is LIVE, and Claude can write templates, bui
 delete programs, and read history.** Claude connects at `https://mcp.mcpstrength.com`. Tools in:
 `list_exercises`, `create_exercise`, `get_templates`, `get_template`, `create_template`,
 `update_template`, `delete_template`, `create_program`, `delete_program`,
-`get_workout_history`, `get_exercise_progress`. Remaining MCP tool: `log_workout`. After that connect
-landed, a later session added `secondaryBodyParts` (Deadlift is back + legs) and unblocked
-`ExerciseCategory.hammerStrength` in Swift (`6066f49`, `a8a1207`). The exercise library
-was rebuilt 2026-08-20 (25 → 302). Sync is proven both ways.
+`get_workout_history`, `get_exercise_progress`. **There is no `log_workout` and there
+must not be one** — Drake, 2026-08-20: logging from chat defeats the purpose of the app.
+After that connect landed, a later session added `secondaryBodyParts` (Deadlift is back + legs)
+and unblocked `ExerciseCategory.hammerStrength` in Swift (`6066f49`, `a8a1207`). The exercise
+library was rebuilt 2026-08-20 (25 → 302). Sync is proven both ways.
 Apple Health writes workouts (Watch energy preferred, backfill for what permission missed)
 and the four HealthKit measurement types travel both ways. The custom keypad is done. What
 Phase 2 still needs is a gym check, not a build: Watch-attach on a real session. Canonical
@@ -64,15 +65,16 @@ both sides, warm-up ramp corrected to 40 / 60 / 80. Swift suite green, SQL suite
 
 ## Next piece of work, in order
 
-1. **Phase 3 — remaining MCP tools.** Connect is done; do not re-do OAuth or
+1. **Phase 3 MCP surface is complete.** Connect is done; do not re-do OAuth or
    the site. **Read `docs/03-mcp-tools.md` for the contract and
    `docs/02-architecture.md` § Auth for how OAuth is wired.** `spike/` is frozen
    and is not a starting point. The server still queries Postgres **as the
    user**; never `supabaseAdmin`.
 
-   Next tool: `log_workout`. Strict validation, UUID writes, no silent
-   coercion. `dropSet` not `drop_set`. Weights on writes need `weight_unit`
-   `kg` or `lbs` and are stored as kilograms.
+   **Do not add `log_workout`.** Drake, 2026-08-20: logging a session from
+   chat defeats the purpose of the app. The phone is how training is recorded;
+   Claude plans (templates, programs) and coaches (history, progress). That is
+   a deliberate exception to `02`'s "anything the app can do, AI can do."
 
    Already in: `list_exercises`, `create_exercise`, `get_templates`,
    `get_template`, `create_template`, `update_template`, `delete_template`,

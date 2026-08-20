@@ -20,8 +20,8 @@ Decisions and their reasons. Companion to `01-data-model.md`.
 │                  │                    │                  │
 │  SwiftData       │                    │  list_exercises  │
 │  = local truth   │                    │  create_template │
-│  ─────────────   │                    │  log_workout     │
-│  sync engine     │                    │  get_history     │
+│  ─────────────   │                    │  get_history     │
+│  sync engine     │                    │  create_program  │
 └────────┬─────────┘                    └────────┬─────────┘
          │                                       │
          │            ┌──────────────┐           │
@@ -34,7 +34,8 @@ Decisions and their reasons. Companion to `01-data-model.md`.
 
 Three clients, one database. The iOS app and the MCP server are peers — neither is privileged.
 That symmetry is the whole point: anything the app can do, AI can do, because they're hitting
-the same schema through the same rules.
+the same schema through the same rules. **Exception, 2026-08-20:** AI does not log workouts.
+Sessions are recorded in the app; Claude plans and coaches. See the tool-surface sketch below.
 
 **The app is local-first.** SwiftData on device is what the UI reads and writes. The sync
 engine pushes to Postgres in the background. A workout logged in a basement gym is real the
@@ -185,7 +186,12 @@ The contract between AI and app. Roughly:
 | `create_template` / `update_template` | Write plans — the YouTube→template path |
 | `get_workout_history` | Read history, date-filtered — the reporting path |
 | `get_exercise_progress` | Per-exercise time series for coaching |
-| `log_workout` | Conversational logging |
+| `create_program` / `delete_program` / `delete_template` | Ordered blocks, and cleanup of what AI created |
+
+There is **no `log_workout`.** Sessions are logged in the app. Claude writes plans and
+reads how they went; putting the session itself in chat would make the phone optional,
+which is the product failing. Decided 2026-08-20; this is an exception to the symmetry
+line above (*"anything the app can do, AI can do"*).
 
 **The exercise library is the integrity constraint.** Without a seeded library and fuzzy
 matching on create, every AI-generated plan invents its own names and history fragments into
