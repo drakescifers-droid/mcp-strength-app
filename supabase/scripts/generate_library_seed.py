@@ -26,7 +26,37 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 RESOURCES = REPO / "MCPStrength" / "MCPStrength" / "Resources"
-OUT = REPO / "supabase" / "migrations" / "20260815120300_library_seed.sql"
+
+# The LIBRARY REBUILD migration, not the original 20260815120300 seed.
+#
+# **A migration that has already been applied cannot be edited into effect.**
+# `supabase db push` tracks versions, so rewriting 20260815120300 changes what a
+# FRESH database gets and does nothing at all to the live project. The original
+# stays frozen as history (it still seeds the old 25 on a fresh database); this
+# file then rebuilds the library on top of it, which is the same order a fresh
+# database and the live project both see.
+OUT = REPO / "supabase" / "migrations" / "20260820120000_library_rebuild.sql"
+
+# Ids retired by the 2026-08-20 rebuild: exercises whose NAME did not survive
+# Drake's review, almost all of them generic names ("Lat Pulldown", "Dip") that
+# the review replaced with equipment-specific ones. TOMBSTONED, never deleted —
+# a hard delete cannot reach a device that was offline when it happened, so the
+# row would come back on the next pull (AGENTS.md rule 1). Their common names
+# live on as aliases on the successor exercise, except where two or more kept
+# exercises were equally plausible successors and an alias would have silently
+# picked a winner.
+RETIRED_EXERCISE_IDS = [
+    ("5b3e00a2-b1bf-470e-9782-408984ab130e", "Barbell Row -> Bent Over Row (Barbell)"),
+    ("94bdcb4a-9469-448d-af17-b62e68f1abb5", "Dumbbell Row -> Bent Over Row (Dumbbell)"),
+    ("07fc8389-e0d3-45d3-af79-4dd97d777bd2", "Lat Pulldown -> Cable / Machine, no alias (two successors)"),
+    ("a7d8825a-ed41-49c8-9c49-406db9ea9a36", "Seated Cable Row -> Seated Row (Cable)"),
+    ("32b233a3-6633-4d88-94b7-15869ad6fc82", "Leg Extension -> Leg Extension (Machine)"),
+    ("7c4b861c-40ef-4b09-a6f8-25335ad18495", "Leg Curl (Machine) -> Lying / Seated, no alias (two successors)"),
+    ("0f13df5a-edf6-4935-a7dc-a3f08ac6298c", "Triceps Pushdown (Cable) -> Straight Bar / Rope, no alias (two successors)"),
+    ("f32d2257-6616-4b8e-9dbc-2765293a6e50", "Dip -> Triceps Dip"),
+    ("23ba51e7-0b8d-44ba-9a95-f55a6389af0c", "Assisted Pull Up -> Pull Up (Assisted)"),
+    ("e3e0ddfb-5f39-4a21-ad26-c8f146c5f355", "Assisted Dip -> Triceps Dip (Assisted)"),
+]
 
 BODY_PARTS = {
     "arms", "back", "cardio", "chest", "core",
@@ -92,7 +122,14 @@ def main() -> None:
     add = lines.append
 
     add("-- ============================================================================")
-    add("-- 0004 — The seeded library (global rows, user_id IS NULL)")
+    add("-- The seeded library, REBUILT 2026-08-20 (global rows, user_id IS NULL)")
+    add("--")
+    add("-- Supersedes 20260815120300's 25-exercise seed, which stays frozen as history.")
+    add("-- Drake reviewed a 310-name list and this is the result: generic names dropped")
+    add("-- in favour of equipment-specific ones (\"Lat Pulldown\" -> Cable / Machine),")
+    add("-- duplicates merged, Hammer Strength named the way every other variant already")
+    add("-- is. Safe to rebuild wholesale because NO workout history existed yet —")
+    add("-- verified by dumping the project's data, not assumed.")
     add("--")
     add("-- GENERATED FILE — do not edit by hand.")
     add("--   source: MCPStrength/MCPStrength/Resources/{exercise,measurement}-seed.json")
@@ -111,33 +148,65 @@ def main() -> None:
     add("-- is no good fix afterwards.")
     add("--")
     add("-- The upserts refresh only the LIBRARY-DEFINED fields (name, body_part,")
-    add("-- category, aliases), matching ExerciseSeedImporter on the device. Per-user")
-    add("-- settings live in exercise_preferences and are never touched by a re-seed.")
+    add("-- secondary_body_parts, category, aliases), matching ExerciseSeedImporter on")
+    add("-- the device. Per-user settings live in exercise_preferences and are never")
+    add("-- touched by a re-seed.")
     add("-- ============================================================================")
     add("")
     add(f"-- {len(exercises)} exercises")
     add("insert into public.exercises")
-    add("  (id, user_id, name, aliases, body_part, category, is_custom)")
+    add("  (id, user_id, name, aliases, body_part, secondary_body_parts, category, is_custom)")
     add("values")
 
     rows = []
     for row in exercises:
+        secondary = row.get("secondaryBodyParts") or []
+        secondary_sql = (
+            "'{}'::public.body_part[]"
+            if not secondary
+            else "array[" + ", ".join(quote(v) for v in secondary) + "]::public.body_part[]"
+        )
         rows.append(
-            "  ({id}, null, {name}, {aliases}, {body}::public.body_part, "
+            "  ({id}, null, {name}, {aliases}, {body}::public.body_part, {sec}, "
             "{cat}::public.exercise_category, false)".format(
                 id=uuid_literal(row["id"]),
                 name=quote(row["name"]),
                 aliases=array_literal(row.get("aliases") or []),
                 body=quote(row["bodyPart"]),
+                sec=secondary_sql,
                 cat=quote(row["category"]),
             )
         )
     add(",\n".join(rows))
     add("on conflict (id) do update set")
-    add("  name      = excluded.name,")
-    add("  body_part = excluded.body_part,")
-    add("  category  = excluded.category,")
-    add("  aliases   = excluded.aliases;")
+    add("  name                 = excluded.name,")
+    add("  body_part            = excluded.body_part,")
+    add("  secondary_body_parts = excluded.secondary_body_parts,")
+    add("  category             = excluded.category,")
+    add("  aliases              = excluded.aliases,")
+    # Un-tombstone on the upsert path: an id that comes BACK into the library
+    # must return, not stay invisible because a previous rebuild retired it.
+    add("  deleted_at           = null;")
+    add("")
+    add("")
+    add(f"-- {len(RETIRED_EXERCISE_IDS)} retired exercises — TOMBSTONED, not deleted")
+    add("--")
+    add("-- A hard delete cannot reach a device that was offline when it happened, so")
+    add("-- the row returns on that device's next pull. Setting deleted_at travels like")
+    add("-- any other edit and every @Query in the app already filters it out.")
+    add("-- AGENTS.md rule 1.")
+    add("--")
+    add("-- `updated_at` is bumped so last-write-wins actually prefers the tombstone")
+    add("-- over whatever timestamp the row is carrying locally.")
+    for eid, why in RETIRED_EXERCISE_IDS:
+        add(f"-- {why}")
+    add("update public.exercises")
+    add("set deleted_at = now(), updated_at = now()")
+    add("where user_id is null")
+    add("  and deleted_at is null")
+    add("  and id in (")
+    add(",\n".join(f"    {uuid_literal(eid)}" for eid, _ in RETIRED_EXERCISE_IDS))
+    add("  );")
     add("")
     add("")
     add(f"-- {len(measurements)} measurement types")

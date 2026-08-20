@@ -716,6 +716,42 @@ underneath never changed — only whether the screen described it honestly.
   > 8. **The bundled 25-exercise seed file still asserts exactly 8 categories present** — true and
   > unchanged, since no Hammer Strength exercise has actually been merged into it yet.
 
+- **THE EXERCISE LIBRARY, REBUILT — 25 exercises became 301** (`20260820120000_library_rebuild.sql`).
+  Drake reviewed a 310-name list across several passes; this is the merge. Applied to the live
+  project and verified by reading the rows back: **311 rows, 301 live, 10 tombstoned.** The rules
+  it settled are in `01-data-model.md` § The seeded library — the short version is that a name
+  which does not say its equipment does not belong in the library when specific versions exist,
+  with a deliberate exception for bodyweight movements whose bare name IS the exercise.
+  > **The rebuild was only safe because there was NO workout history — and that was CHECKED, not
+  > assumed.** Dumped the live project's data first and found zero `workouts` /
+  > `workout_exercises` / `workout_sets` rows. The seeded-ID contract makes this the load-bearing
+  > question: with history, re-minting an id detaches it silently and there is no good fix after
+  > the fact. 15 of the original 25 survived and kept their original UUIDs anyway; the 286 new ones
+  > get deterministic `uuid5(namespace, name)` ids, so regenerating the seed cannot silently
+  > re-mint one.
+  > **Retired rows are TOMBSTONED, not deleted** (AGENTS.md rule 1) — a hard delete cannot reach a
+  > device that was offline when it happened, so the row returns on that device's next pull. The
+  > upsert path also sets `deleted_at = null`, so an id that comes BACK into the library returns
+  > rather than staying invisible.
+  > **A retired name becomes an alias on its successor ONLY when there is exactly one successor.**
+  > `Barbell Row` → `Bent Over Row (Barbell)`. For `Lat Pulldown`, `Leg Curl (Machine)` and
+  > `Triceps Pushdown (Cable)` two kept exercises were equally plausible, so no alias was written:
+  > an alias pointing at one of several real options silently picks a winner, which is the same
+  > failure as keeping the generic row in the first place.
+  > **`Chin Up` is no longer an alias of `Pull Up`** — Drake, explicitly: they are different
+  > exercises. `Chin Up` is its own row with its own assisted / machine / weighted variants.
+  > **The generator now writes a NEW migration, not the original seed.** `20260815120300` is
+  > already applied, and rewriting an applied migration changes what a FRESH database gets while
+  > doing nothing at all to the live project. The original stays frozen as history; the rebuild
+  > layers on top, which is the order a fresh database and the live project both see.
+  > **Two SQL tests had to change, and one of them was testing the wrong thing.** The counts, and
+  > the "aliases are non-unique" test — which asserted that the shipped library happened to contain
+  > a shared alias (`row`, on three exercises). The rebuild dropped that alias deliberately: with
+  > ~15 `* Row *` exercises, aliasing three of them picks arbitrary winners and spelling similarity
+  > already surfaces them all. So a test of the DESIGN was failing for a change to the DATA. It now
+  > creates two rows sharing an alias and asserts the schema permits it — an ordinary library edit
+  > can no longer break it.
+
 ### What is left, in order
 
 1. **Phase 3 — remaining MCP tools.** Connect is live at

@@ -161,22 +161,23 @@ phone — see Waiting on me.
   "Back, Legs". This is a new feature (`secondaryBodyParts`), asked for directly and built
   2026-08-19 — an exercise can train more than one body part now. Postgres migration applied and
   verified against the live project.
-- 🆕 **THE EXERCISE REVIEW SPREADSHEET (`exercise-library-refresh/exercise-review.xlsx`, also in
-  `~/Downloads`) CHANGED TWICE MORE — re-open it if you already had it open.** "Secondary Body
-  Part" column added, with the posterior-chain movements (Romanian/Stiff-Leg/Sumo Deadlift, Good
-  Morning, Rack Pull, Zercher Squat, and a few others) pre-filled as suggestions, light blue —
-  confirm or clear them like everything else on the sheet.
-  > ✅ **AND THE HAMMER STRENGTH BLOCKER IS GONE — the category is unblocked and all 11 rows are
-  > retagged and renamed.** All 9 `HS`-named rows plus the two `Iso-Lateral` ones (confirmed as
-  > Hammer Strength too) now read like `Bench Press (Hammer Strength)` instead of `HS Bench
-  > Press` — matching the naming pattern every other equipment variant in this list already uses.
-  > **One is worth a second look: #130 `Row (Hammer Strength)`** (renamed from `Iso-Lateral Row
-  > (Machine)`) is fairly generic next to #94 `Seated Low Row (Hammer Strength)` and #96 `Single
-  > Arm Row (Hammer Strength)` — it may be the same machine under a third name, or it may be a
-  > genuinely different row station. You'd know, I don't.
-  Still waiting on your review pass generally: ~26 flagged likely duplicates against the 25
-  exercises already in the app, and the handful of "please confirm" rows the sheet flags Low
-  confidence.
+- ✅ **THE EXERCISE LIBRARY IS REBUILT AND ON YOUR PHONE — 25 exercises became 301** (2026-08-20,
+  `20260820120000_library_rebuild.sql`). Your spreadsheet review is merged and the review file has
+  done its job; `exercise-library-refresh/exercise-review.xlsx` is kept only as the record of what
+  was decided. Applied to the live project and verified by reading rows back: 311 rows, 301 live,
+  10 tombstoned.
+  > **What to check on the phone:** Exercises tab. Everything should be there, named consistently
+  > (`Bench Press (Hammer Strength)`, not `HS Bench Press`), with no generic leftovers — searching
+  > "Lat Pulldown" should offer Cable and Machine rather than one bare entry. **Chin Up and Pull Up
+  > are now separate exercises** and neither is an alias of the other.
+  > **Two I would still like your eyes on**, both flagged during the review and both kept as you
+  > left them: `Row (Hammer Strength)` may be the same machine as `Seated Low Row (Hammer
+  > Strength)` or `Single Arm Row (Hammer Strength)` under a third name; and `Cable Curl` /
+  > `Bicep Curl (Cable)` are both in the library as separate exercises. Say the word and either
+  > gets merged.
+  > **Four names I could not identify and left exactly as written**: `Baby Shark`, `Baby Shark Ab
+  > Circuit`, `Massbuilder Back`, `Lat Wide Prayer`. They are in the library with guessed body
+  > parts; tell me what they are and I will fix them properly.
 - ✅ **OAUTH ON THE LIVE PROJECT, dashboard 2026-08-19.** OAuth 2.1 on, dynamic
   registration on. MCP function deployed. Allow page is the site in `web/`.
 - ✅ **MCPSTRENGTH.COM LIVE, 2026-08-19.** Pages on Cloudflare, nameservers

@@ -38,9 +38,31 @@ insert into public.template_exercises (id, user_id, template_id, exercise_id, so
 
 -- The seeded library is present and global ------------------------------------
 
+-- 301 LIVE global exercises after the 2026-08-20 rebuild
+-- (20260820120000_library_rebuild.sql), plus the 10 rows that rebuild retired
+-- and TOMBSTONED rather than deleted. 311 rows total, 301 of them live.
 select tests.assert(
-  (select count(*) from public.exercises where user_id is null) = 25,
-  'expected 25 global seeded exercises'
+  (select count(*) from public.exercises
+    where user_id is null and deleted_at is null) = 301,
+  'expected 301 live global seeded exercises'
+);
+
+-- The retired rows must still EXIST, tombstoned. A hard delete cannot reach a
+-- device that was offline when it happened, so the row would come back on that
+-- device's next pull (AGENTS.md rule 1). Deleting them for tidiness is exactly
+-- the mistake this asserts against.
+select tests.assert(
+  (select count(*) from public.exercises
+    where user_id is null and deleted_at is not null) = 10,
+  'expected the 10 retired library exercises to be tombstoned, not deleted'
+);
+
+-- A retired id specifically: "Lat Pulldown", dropped because it named no
+-- equipment while Cable and Machine versions both exist.
+select tests.assert(
+  (select deleted_at is not null from public.exercises
+    where id = '07fc8389-e0d3-45d3-af79-4dd97d777bd2'),
+  'the retired generic Lat Pulldown should be tombstoned'
 );
 
 select tests.assert(
@@ -57,12 +79,31 @@ select tests.assert(
   'seeded uuid no longer maps to Chest Fly (Machine)'
 );
 
--- Aliases are deliberately non-unique — "row" lands on more than one exercise
--- and that produces ambiguity rather than a wrong answer.
+-- Aliases are deliberately non-unique: a collision produces AMBIGUITY, which
+-- the matcher handles by returning candidates and writing nothing.
+--
+-- **This asserts the SCHEMA permits it, using rows created here — it no longer
+-- asserts that the shipped library happens to contain a shared alias.** The old
+-- version keyed on "row" being an alias of three seeded exercises; the
+-- 2026-08-20 rebuild dropped the bare "row" alias (with ~15 "* Row *" exercises
+-- now in the library, aliasing three of them was picking arbitrary winners, and
+-- spelling similarity already surfaces them all). That made a test of the DESIGN
+-- fail for a change to the DATA — so it now tests the design directly and cannot
+-- be broken by an ordinary library edit again.
+insert into public.exercises (id, user_id, name, aliases, body_part, category, is_custom) values
+  ('eeee0000-0000-0000-0000-00000000000a', null, 'Alias Collision A',
+   array['shared alias']::text[], 'back', 'barbell', false),
+  ('eeee0000-0000-0000-0000-00000000000b', null, 'Alias Collision B',
+   array['shared alias']::text[], 'back', 'dumbbell', false);
+
 select tests.assert(
-  (select count(*) from public.exercises where 'row' = any (aliases)) > 1,
-  'expected the "row" alias to be shared, per the ambiguity design'
+  (select count(*) from public.exercises where 'shared alias' = any (aliases)) = 2,
+  'the schema must allow one alias on more than one exercise'
 );
+
+delete from public.exercises
+ where id in ('eeee0000-0000-0000-0000-00000000000a',
+              'eeee0000-0000-0000-0000-00000000000b');
 
 
 -- The sync trigger -------------------------------------------------------------

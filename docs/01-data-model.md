@@ -58,7 +58,37 @@ construct before it can write anything.
 
 The library ships with the app. It is **data, not architecture** — the schema above is what matters,
 and the app can be built against thirty exercises with the real list dropped in any time before
-launch. A row is: name, body part, category, and a few aliases.
+launch. A row is: name, body part, secondary body parts, category, and a few aliases.
+
+> **REBUILT 2026-08-20 — 25 exercises became 301** (`20260820120000_library_rebuild.sql`, generated
+> from `exercise-seed.json` by `supabase/scripts/generate_library_seed.py`). Drake reviewed a
+> 310-name list; the result is below, and the rules it settled are the reusable part:
+>
+> * **A name that does not say its equipment does not belong in the library**, whenever
+>   equipment-specific versions exist. `Lat Pulldown` retired in favour of `Lat Pulldown (Cable)` /
+>   `(Machine)`; likewise `Reverse Fly`, `Skullcrusher`, `Triceps Extension`, `Seated Calf Raise`.
+>   **The ambiguity is the point:** asked for a bare "Incline Bench Press", the matcher now returns
+>   every equipment variant as tied candidates and writes nothing, so an AI has to ask which one —
+>   rather than one arbitrary variant winning a coin-flip. Verified against the real matcher, not
+>   assumed.
+> * **The BODYWEIGHT exception.** `Pull Up`, `Push Up`, `Crunch`, `Plank` keep their bare names —
+>   there the unequipped version IS a specific exercise, not a placeholder for one.
+> * **Equipment goes in parentheses, last**: `Bench Press (Hammer Strength)`, never `HS Bench
+>   Press`. One shape for every variant of every movement.
+> * **A retired name becomes an ALIAS on its successor — but only when there is exactly one.**
+>   `Barbell Row` → `Bent Over Row (Barbell)`. Where two kept exercises were equally plausible
+>   (`Lat Pulldown`, `Leg Curl (Machine)`, `Triceps Pushdown (Cable)`), no alias was written at
+>   all: an alias pointing at one of several real options silently picks a winner the user never
+>   chose, which is the same failure as keeping the generic row.
+> * **Chin Up and Pull Up are DIFFERENT EXERCISES** (Drake, explicitly). `Pull Up` previously
+>   carried `chin up` as an alias; that alias is gone and `Chin Up` is its own row with its own
+>   assisted / machine / weighted variants.
+> * **Retired rows are TOMBSTONED, never deleted** — AGENTS.md rule 1. Verified on the live
+>   project: 311 rows, 301 live, 10 tombstoned.
+>
+> **Safe to rebuild wholesale only because NO workout history existed yet** — checked by dumping
+> the project's data first, not assumed. The seeded-ID contract below is unchanged and is why that
+> check came first: 15 of the original 25 survived and kept their original UUIDs.
 
 Two properties of that data are load-bearing.
 
@@ -69,10 +99,19 @@ Two properties of that data are load-bearing.
 > Cheap on day one; there is no good fix afterwards.
 
 **Aliases are not unique, and that is the point.** They exist so that names sharing no spelling with
-the library entry still resolve — "pec deck" → `Chest Fly (Machine)`. If an alias like "row" lands on
+the library entry still resolve — "pec deck" → `Chest Fly (Machine)`. If an alias lands on
 four exercises, that is not a bug: it produces *ambiguity*, and ambiguity is already handled
 correctly (return candidates, write nothing, let the caller choose). A sloppy alias degrades into
 "which one did you mean?" rather than into a wrong answer, so the list can stay small and informal.
+
+> **The 2026-08-20 rebuild sharpened this rather than contradicting it.** No alias in the shipped
+> library is currently shared, and the bare `row` alias — once deliberately on three exercises to
+> demonstrate ambiguity — was dropped: with ~15 `* Row *` exercises now in the library, aliasing
+> three of them was picking arbitrary winners, and spelling similarity already surfaces them all.
+> Non-uniqueness remains permitted and is still the correct behaviour when it happens; what changed
+> is that it is no longer manufactured on purpose. `01_schema_test.sql` now proves the schema
+> ALLOWS a shared alias using rows it creates itself, instead of asserting the shipped data happens
+> to contain one — a test of the design that an ordinary library edit can no longer break.
 
 ### Secondary body parts
 

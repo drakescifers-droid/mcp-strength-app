@@ -286,13 +286,13 @@ struct ExerciseSeedImporterTests {
         let lowerNames = rows.map { $0.name.lowercased() }
         #expect(Set(lowerNames).count == lowerNames.count)
 
-        // Every one of the eight categories is present.
+        // Every one of the NINE categories is present — `hammerStrength` joined
+        // them in the 2026-08-20 library rebuild, which is the first time real
+        // Hammer Strength exercises existed to carry it. Written as
+        // `allCases` rather than a hand-listed set so a tenth category cannot
+        // be added without either seeding one or deliberately editing this.
         let categories = Set(rows.map(\.category))
-        let allCategories: Set<ExerciseCategory> = [
-            .barbell, .dumbbell, .machineOther, .weightedBodyweight,
-            .assistedBodyweight, .repsOnly, .cardio, .duration,
-        ]
-        #expect(categories == allCategories)
+        #expect(categories == Set(ExerciseCategory.allCases))
 
         // The specific entries the rest of the app and the matcher's tests depend on.
         func find(_ name: String) -> ExerciseSeedRow? {
