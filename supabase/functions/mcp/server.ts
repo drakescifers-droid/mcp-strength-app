@@ -12,6 +12,18 @@ import { createTemplate, createTemplateInput } from "./createTemplate.ts";
 import type { CreateTemplateInput } from "./createTemplate.ts";
 import { updateTemplate, updateTemplateInput } from "./updateTemplate.ts";
 import type { UpdateTemplateInput } from "./updateTemplate.ts";
+import {
+  getWorkoutHistory,
+  getWorkoutHistoryInput,
+  getWorkoutHistoryOutput,
+} from "./getWorkoutHistory.ts";
+import type { GetWorkoutHistoryInput } from "./getWorkoutHistory.ts";
+import {
+  getExerciseProgress,
+  getExerciseProgressInput,
+  getExerciseProgressOutput,
+} from "./getExerciseProgress.ts";
+import type { GetExerciseProgressInput } from "./getExerciseProgress.ts";
 
 // Built per request so the user-scoped client cannot leak across callers.
 // Never pass supabaseAdmin in here — RLS is the authorization model.
@@ -153,6 +165,52 @@ export function createMcpServer(
       },
     },
     async (args: UpdateTemplateInput) => updateTemplate(supabase, userId, args),
+  );
+
+  server.registerTool(
+    "get_workout_history",
+    {
+      title: "Get workout history",
+      description:
+        "Read completed sessions, newest first. Must be used for coaching: " +
+        "returns the session note (instructions going in), the summary " +
+        "(how it went), per-exercise notes and sticky notes, and every " +
+        "set. Weights are kilograms. Unfinished sessions are not history. " +
+        "set_type is normal | warmup | dropSet | failure. Date window is " +
+        "from / to as YYYY-MM-DD or an ISO timestamp.",
+      inputSchema: getWorkoutHistoryInput,
+      outputSchema: getWorkoutHistoryOutput,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (args: GetWorkoutHistoryInput) => getWorkoutHistory(supabase, args),
+  );
+
+  server.registerTool(
+    "get_exercise_progress",
+    {
+      title: "Get exercise progress",
+      description:
+        "Time series for one exercise across completed sessions. Returns " +
+        "the session summary and both exercise notes so a bad night is " +
+        "not a downward trend. Name lookup returns candidates and no " +
+        "series when several library rows match — the rebuilt library " +
+        "has many equipment variants, so prefer the UUID from " +
+        "list_exercises. Weights are kilograms. dropSet not drop_set.",
+      inputSchema: getExerciseProgressInput,
+      outputSchema: getExerciseProgressOutput,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (args: GetExerciseProgressInput) => getExerciseProgress(supabase, args),
   );
 
   return server;

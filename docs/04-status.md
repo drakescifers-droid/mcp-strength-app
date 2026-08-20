@@ -52,8 +52,10 @@ on the live project. Claude's connector URL is **https://mcp.mcpstrength.com**.
 in kg, `dropSet` not `drop_set`). `create_template` / `update_template` landed
 the same day: all-or-nothing, lbs→kg, name collision returns the existing id,
 notes + sticky notes. A later session (2026-08-19) added `secondaryBodyParts`
-and unblocked `hammerStrength` in Swift — see landed bullets below. Remaining
-MCP tools: history, logging, programs. GitHub is
+and unblocked `hammerStrength` in Swift — see landed bullets below.
+`get_workout_history` / `get_exercise_progress` landed 2026-08-20: completed
+sessions only, notes + summary + sticky notes, kilograms, `dropSet`. Remaining
+MCP tools: logging, programs. GitHub is
 `https://github.com/drakescifers-droid/mcp-strength-app`.
 What remains of Phase 2 is proving Watch-attach on a real session — a gym
 check, not a blocker.
@@ -396,7 +398,17 @@ right.**
   connector URL is `https://mcp.mcpstrength.com` (Worker in
   `workers/mcp-proxy/`, `MCP_RESOURCE_URL` matches). The `oauth-consent`
   function is leftover and not the live Allow page.
-  Remaining tools are history, logging, and programs.
+  Remaining tools are logging and programs.
+
+- **WORKOUT HISTORY MCP TOOLS — 2026-08-20.** `get_workout_history` (date-filtered
+  completed sessions, newest first) and `get_exercise_progress` (per-exercise
+  time series). Both return the coaching channel: workout `note` (instructions
+  in), `summary` (how it went), per-exercise `note` and `sticky_note`. Weights
+  are kilograms. `dropSet` not `drop_set`. Unfinished sessions are not history.
+  Progress name-lookup uses the same matcher as `create_exercise`: several
+  library rows (`Lat Pulldown` after the rebuild) return candidates and no
+  series rather than picking a winner. 57 Deno tests green. **Live as of
+  the 2026-08-20 `mcp` Edge Function deploy.**
 
 - **CUSTOM NUMBER KEYPAD — on the phone 2026-08-19, Drake approved it after two layout fixes.**
   Chip + pinned keypad (`Views/NumberKeypad.swift` + `Workout/NumberKeypadEditing.swift`), not
@@ -758,9 +770,9 @@ underneath never changed — only whether the screen described it honestly.
    `https://mcp.mcpstrength.com`. Scaffold is in `supabase/functions/mcp`
    (Streamable HTTP, user-scoped client, exercise + template tools) and the
    site in `web/`. Contract for the rest is `03-mcp-tools.md`. `spike/` is
-   frozen. Next: `get_workout_history` / `get_exercise_progress` (must return
-   notes), `log_workout`, programs. Redeploy `mcp` if the live connector
-   does not yet return `secondary_body_parts`. GitHub:
+   frozen. Next: `log_workout`, then programs (`create_program` /
+   `delete_program` / `delete_template`). History tools are live on `mcp`
+   as of 2026-08-20. GitHub:
    `https://github.com/drakescifers-droid/mcp-strength-app`.
 
 2. **Prove Watch-attach on a real session — gym check, does not block Phase 3.**

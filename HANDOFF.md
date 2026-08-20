@@ -19,12 +19,14 @@ state, the traps, the decisions and the reasoning behind them. Don't re-derive f
 those files already explain, and don't duplicate them into new files.
 
 The one-line state: **the app is on Drake's phone, he is training on it, Phase 2's remaining
-build work is DONE, Phase 3 Connect is LIVE, and Claude can already write templates.** Claude
-connects at `https://mcp.mcpstrength.com`. Tools in: `list_exercises`, `create_exercise`,
-`get_templates`, `get_template`, `create_template`, `update_template`. Remaining MCP tools:
-history (must return notes), `log_workout`, programs. After that connect landed, a later
-session added `secondaryBodyParts` (Deadlift is back + legs) and unblocked
-`ExerciseCategory.hammerStrength` in Swift (`6066f49`, `a8a1207`). Sync is proven both ways.
+build work is DONE, Phase 3 Connect is LIVE, and Claude can already write templates and
+read history.** Claude connects at `https://mcp.mcpstrength.com`. Tools in: `list_exercises`,
+`create_exercise`, `get_templates`, `get_template`, `create_template`, `update_template`,
+`get_workout_history`, `get_exercise_progress`. Remaining MCP tools: `log_workout`,
+programs (`create_program` / `delete_program` / `delete_template`). After that connect
+landed, a later session added `secondaryBodyParts` (Deadlift is back + legs) and unblocked
+`ExerciseCategory.hammerStrength` in Swift (`6066f49`, `a8a1207`). The exercise library
+was rebuilt 2026-08-20 (25 → 302). Sync is proven both ways.
 Apple Health writes workouts (Watch energy preferred, backfill for what permission missed)
 and the four HealthKit measurement types travel both ways. The custom keypad is done. What
 Phase 2 still needs is a gym check, not a build: Watch-attach on a real session. Canonical
@@ -68,19 +70,23 @@ both sides, warm-up ramp corrected to 40 / 60 / 80. Swift suite green, SQL suite
    and is not a starting point. The server still queries Postgres **as the
    user**; never `supabaseAdmin`.
 
-   Next tools, in the order `03` lists them: `get_workout_history` /
-   `get_exercise_progress` (**must return notes**), `log_workout`,
+   Next tools, in the order `03` lists them: `log_workout`, then
    `create_program` / `delete_program` / `delete_template`. Strict validation,
    UUID writes, no silent coercion. `dropSet` not `drop_set`. Weights on
    writes need `weight_unit` `kg` or `lbs` and are stored as kilograms.
 
    Already in: `list_exercises`, `create_exercise`, `get_templates`,
-   `get_template`, `create_template`, `update_template`. Matcher and
-   `list_exercises` now return `secondary_body_parts`; `create_exercise` still
-   only *creates* a primary body part. **Redeploy the `mcp` Edge Function**
-   if the live connector does not yet show `secondary_body_parts` on Deadlift
-   — the TypeScript change is committed (`6066f49`) but a functions deploy
-   is a separate step from `git push`.
+   `get_template`, `create_template`, `update_template`, `get_workout_history`,
+   `get_exercise_progress`. History returns `note` (instructions in) and
+   `summary` (how it went), plus per-exercise notes and sticky notes — a
+   response without those cannot tell a bad night from a downward trend.
+   Name lookup on progress returns candidates and no series when several
+   library rows match (the rebuilt 302-exercise library makes `"Lat Pulldown"`
+   two real options). Matcher and `list_exercises` return
+   `secondary_body_parts`; `create_exercise` still only *creates* a primary
+   body part. **The `mcp` Edge Function was redeployed 2026-08-20** with the
+   history tools. Redeploy again after the next write tools land — a functions
+   deploy is a separate step from `git push`.
 
    Deno tests for this folder need
    `deno test --allow-read --allow-net --allow-env supabase/functions/mcp`.
@@ -197,7 +203,7 @@ phone — see Waiting on me.
   `https://mcpstrength.com/oauth/consent`. Claude's connector URL is
   **https://mcp.mcpstrength.com**. Tools so far: `list_exercises`,
   `create_exercise`, `get_templates`, `get_template`, `create_template`,
-  `update_template`. GitHub:
+  `update_template`, `get_workout_history`, `get_exercise_progress`. GitHub:
   `https://github.com/drakescifers-droid/mcp-strength-app`.
 - 🆕 **WATCH-ATTACH ON A REAL SESSION.** Wear the Watch, finish a real-length
   session, look at Apple Fitness: one energy number, not our estimate sitting
